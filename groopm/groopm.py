@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 ###############################################################################
 #                                                                             #
-#    groopm.py                                                                #
+#    cmd.py                                                                   #
 #                                                                             #
-#    Entry point code. Drops to shell or runs whole work flows                #
+#    Implements groopm shell and wraps coarse workflows                       #
 #                                                                             #
 #    Copyright (C) Michael Imelfort                                           #
 #                                                                             #
@@ -41,3 +41,115 @@ import argparse
 import sys
 from pprint import pprint
 
+import code
+import groopmUtils
+
+__author__ = "Michael Imelfort"
+__copyright__ = "Copyright 2012"
+__credits__ = ["Michael Imelfort"]
+__license__ = "GPL"
+__version__ = "0.0.1"
+__maintainer__ = "Michael Imelfort"
+__email__ = "mike@mikeimelfort.com"
+__status__ = "Development"
+
+###############################################################################
+# CLASSES
+###############################################################################
+
+class GroopMOptionsParser():
+    def __init__(self):
+        return
+    
+    def parseOptions(self, options ):
+        if(options.subparser_name == 'prompt'):
+            # drop to shell prompt
+            vars = globals().copy()
+            vars.update(locals())
+            interactive_shell = GroopMInteractiveConsole(vars)
+            interactive_shell.startConsole()
+        elif(options.subparser_name == 'batch'):
+            # run batch commands            
+            print "Batch mode..."
+            #batch_shell = cmd.GroopMBatchShell()
+            #batch_shell.run()
+        elif(options.subparser_name == 'parse'):
+            # parse raw input
+            print "Parse mode..."
+            project = groopmUtils.GMProj()
+            
+        elif(options.subparser_name == 'bin'):
+            # bin loaded input
+            print "Binning mode..."
+        elif(options.subparser_name == 'complete'):
+            print "Parse + Binning mode..."
+            
+        else:
+            print "[[GroopM]] - Use -i for interactive shell or -h for help"
+        return 0
+    
+
+class GroopMInteractiveConsole(code.InteractiveConsole):
+    "Wrapper around Python that can filter input/output to the shell"
+    def __init__(self, locals=None, filename="<console>"):
+        
+        self.shell_banner="""----------------------------------------------------------------
+ Welcome to the GroopM interactive console (%s)
+ Copyright (C) Michael Imelfort
+    
+ This program comes with ABSOLUTELY NO WARRANTY;
+ This is free software, and you are welcome to redistribute it
+ under certain conditions: See the source for more details.
+ 
+ Type "gmhelp" for help
+ 
+ This is a python interactive shell so
+ you can use python commands here too
+ To exit, press [CTRL]-D or type "exit()"
+
+----------------------------------------------------------------"""
+        
+        code.InteractiveConsole.__init__(self, locals)
+        return
+
+    def push(self,line):
+        """Intercept user input and react accordingly"""
+        # split the line on space
+        broken_cmd = line.split(" ")
+        if (broken_cmd[0] == "gmhelp"):
+            if(len(broken_cmd) == 1):
+                self.printHelp()
+            else:
+                self.printHelp(subHelp=broken_cmd[1])
+            return
+        
+        return code.InteractiveConsole.push(self,line)
+
+    def startConsole(self):
+        self.interact(banner=self.shell_banner % (__version__))
+        
+    def printHelp(self, subHelp=""):
+        """Print user help - quite helpful"""
+        subcomands = [["loadsams", "\nHelp on parsing samfiles", ""],
+                      ["loadcons", "\nHelp on parsing contig files", ""],
+                      ["loadsec", "\nHelp on parsing secondary data", ""],
+                      ["transform", "\nHelp on data transformations", ""],
+                      ["cluster", "\nHelp on initial clustering", ""],
+                      ["refine", "\nHelp on cluster refinement", ""],
+                      ["som", "\nHelp on GroopM's SOMs", ""],
+                      ["output", "\nHelp on printing / saving output", ""],
+                      ] 
+        
+        if("" == subHelp):
+            print """For help on a subtopic type "gmhelp subtopic"
+    
+    Subtopics:
+"""
+            for sub in subcomands:
+                print "\t",sub[0]
+        else:
+            for sub in subcomands:
+                if(subHelp == sub[0]):
+                    print sub[1]
+                    
+                    
