@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ###############################################################################
 #                                                                             #
-#    groopm_utils.py                                                          #
+#    groopmUtils.py                                                           #
 #                                                                             #
 #    Classes for heavy lifting of raw data + output methods                   #
 #                                                                             #
@@ -46,6 +46,7 @@ import sys
 import pysam
 import csv
 import os
+import numpy as np
 
 __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
@@ -68,6 +69,8 @@ class GMProj:
         self.dbName = "unset"
         self.contigsFile = "unset"
         self.bamFiles = None
+        self.numContigs = -1
+        self.numBamFiles = -1
         
     def loadDB(self, fileName):
         pass
@@ -78,15 +81,37 @@ class GMProj:
         self.dbName = dbName
         self.contigsFile = contigs
         self.bamFiles = str.split(bamFiles)
-        self.conParser = ContigParser(self.contigsFile)
-        self.bamParser = BamParser(self.bamFiles)
+        self.numBamFiles = len(self.bamFiles)
+        self.profileVals = profileVals
         
-        # parse the files
-        # TODO Thread this!
-        do_continue = self.bamParser.parse(self.dbName)
+        try:
+            self.conParser = ContigParser(self.contigsFile)
+        except:
+            print "Could not create ContigParser:", sys.exc_info()[0]
+        try:
+            self.bamParser = BamParser(self.bamFiles)
+        except:
+            print "Could not create BamParser:", sys.exc_info()[0]
+        
+        # parse bam files
+        do_continue = False
+        try:
+            do_continue = self.bamParser.parse(self.dbName)
+        except:
+            print "Error parsing bam files:", sys.exc_info()[0]
+        
+        # parse contigs 
         if(do_continue):
-            self.conParser.parse(self.dbName)
+            try:
+                self.numContigs = self.conParser.parse(self.dbName)
+            except:
+                print "Error parsing contigs:", sys.exc_info()[0]
         
+        if(self.numContigs == -1):
+            print "Something went wrong while parsing contigs"
+            return False
+        
+        self.bamParser.dumpCovTable(self.dbName)
 
 class ContigParser:
     """Main class for reading in and parsing contigs"""
@@ -98,16 +123,30 @@ class ContigParser:
             with open(dbName) as f: pass
         except IOError as e:
             print "Error: database:",dbName,"does not exist - perhaps you should call the bamParser first"
+        
+        return 3
 
+class Counter:
+    """Callback for counting aligned reads"""
+    counts = 0
+    def __call__(self, alignment):
+        self.counts += 1
+           
 class BamParser:
     """Parse multiple bam files and write the output to hdf5 """
 
     def __init__(self, bamFiles):
+        self.bamFiles = bamFiles[0].split(',')
+        self.numBamFiles = len(self.bamFiles)
+        self.bamColNames = []
         
-        self.bamFiles = split
-
+    def getBamDescriptor(self, fullPath):
+        """reduce a full path to just the file name minus extension"""
+        return os.path.splitext(os.path.basename(fullPath))[0]
+    
     def parse(self, dbName):
         """ parse multiple bam files and store the results in the main DB"""
+        # make sure we'r eonly overwriting existing DBs with the users consent
         try:
             with open('filename') as f:
                 option = raw_input("Warning: database:",dbName,"exists. Overwrite? (y,n)")
@@ -119,36 +158,88 @@ class BamParser:
         except IOError as e:
             print "Creating new database", dbName
             
-        # build a table template based on the number of bamfiles we have
-        db_desc = { 'cid' : StringCol(64) }
-        for bf in self.bamFiles:
-            db_desc[bf] = tables.FloatCol()
-        
-        # create the db
-        with tables.openFile(filename, mode = "w", title = "GroopM") as h5file:
-            # Create a new group under "/" (root)
-            group = h5file.createGroup("/", 'profile', 'Assembly profiles')
-            # Create one table on it
-            table = h5file.createTable(group, 'coverage', db_desc, "Bam based coverage")
-            # open the SAM/BAM
-            for bam_file in args:
-                
-                if (self.isBam):
-                    try:
-                        bamFile = pysam.Samfile(bam_file, 'rb')
-                    except:
-                        print "Unable to open BAM file -- did you supply a SAM file instead?"
-                        return False
-                else:
-                    try:
-                        bamFile = pysam.Samfile(bam_file, 'r')
-                    except:
-                        print "Unable to open SAM file -- did you supply a BAM file instead?"
-                        return False                
+        # parse the BAMs
+        tmp_storage = {}
+        bam_count = 0
+        try:
+            for bf in self.bamFiles:
+                bam_file = None
+                try:
+                    bam_file = pysam.Samfile(bf, 'rb')
+                except:
+                    print "Unable to open BAM file",bf,"-- did you supply a SAM file instead?"
+                    return False
 
-                for reference, length in zip(bamFile.references, bamFile.lengths):
-                    num_reads = bamFile.count(reference, 0, length)
-                    print num_reads, length
-                    tid = bamFile.gettid(reference)
-            table.flush()
+                try:
+                    for reference, length in zip(bam_file.references, bam_file.lengths):
+                        c = Counter()
+                        try:
+                            bam_file.fetch(reference, 0, length, callback = c )
+                            num_reads = c.counts
+                        except ValueError as e:
+                            print "Could not calculate num reads for:",reference,"in",bf,"\t",e
+                            return False
+                        except:
+                            print "Could not calculate num reads for:",reference,"in",bf, sys.exc_info()[0]
+                            return False
+                        
+                        this_bf = self.getBamDescriptor(bf)
+                        
+                        # save this guy into the tmp_storage
+                        if(reference not in tmp_storage):
+                            tmp_storage[reference] = np.zeros((self.numBamFiles+1))
+                            tmp_storage[reference][self.numBamFiles] = length
+                        # we need to divide the count by the length if we are going
+                        # to use a normalised coverage
+                        tmp_storage[reference][bam_count] = float(num_reads)/float(length)
+                except:
+                    print "Error parsing bam file:",bf, sys.exc_info()[0]
+                    return False
+                bam_count += 1
+        except:
+            print "Error parsing bam files:", sys.exc_info()[0]
+            return False
+
+        # create the db and write results
+        # build a table template based on the number of bamfiles we have
+        db_desc = { 'cid' : tables.StringCol(64) }
+        for bf in self.bamFiles:
+            # assume the file is called somethign like "fred.bam"
+            # we want to rip off the ".bam" part
+            bam_desc = self.getBamDescriptor(bf)
+            db_desc[bam_desc] = tables.FloatCol()
+            self.bamColNames.append(bam_desc)
+        db_desc['length'] = tables.FloatCol()
+        
+        try:        
+            with tables.openFile(dbName, mode = "w", title = "GroopM") as h5file:
+                # Create a new group under "/" (root)
+                group = h5file.createGroup("/", 'profile', 'Assembly profiles')
+                # Create one table on it
+                table = h5file.createTable(group, 'coverage', db_desc, "Bam based coverage")
+                # go through all the contigs sorted by name
+                for cid in sorted(tmp_storage.keys()):
+                    # make a new row
+                    cov_row = table.row
+                    # punch in the data
+                    cov_row['cid'] = cid
+                    for i in range(0,len(self.bamColNames)):
+                        cov_row[self.bamColNames[i]] = tmp_storage[cid][i]
+                    cov_row['length'] = tmp_storage[cid][self.numBamFiles]
+                    cov_row.append()
+                table.flush()
+        except:
+            print "Error saving results to DB"
+            return False
+
+        return True
+
+    def dumpCovTable(self, dbName):
+        with tables.openFile(dbName, mode = "r") as h5file:
+            table = h5file.root.profile.coverage
+            for row in table:
+                print row['cid'],",",
+                for i in range(0,len(self.bamColNames)):
+                    print row[self.bamColNames[i]],",",
+                print row['length']
 

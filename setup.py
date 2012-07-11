@@ -6,7 +6,7 @@ setup(
     author='Michael Imelfort',
     author_email='mike@mikeimelfort.com',
     packages=['groopm', 'groopm.test'],
-    scripts=['bin/groopm.py','bin/groopm_utils.py'],
+    scripts=['bin/groopm','bin/groopm_utils'],
 	url='http://pypi.python.org/pypi/GroopM/',
     license='LICENSE.txt',
     description='Metagenomic binning suite',
@@ -15,5 +15,7 @@ setup(
         "numpy >= 1.6.1",
         "scipy >= 0.10.1",
         "matplotlib >= 1.1.0",
+        "tables >= 2.3",
+        "pysam >= 0.3" 
     ],
 )

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ###############################################################################
 #                                                                             #
-#    cmd.py                                                                   #
+#    groopm.py                                                                   #
 #                                                                             #
 #    Implements groopm shell and wraps coarse workflows                       #
 #                                                                             #
@@ -75,9 +75,16 @@ class GroopMOptionsParser():
             #batch_shell.run()
         elif(options.subparser_name == 'parse'):
             # parse raw input
-            print "Parse mode..."
-            project = groopmUtils.GMProj()
-            
+            print "GroopM running in data parsing mode..."
+            try:
+                GMproject = groopmUtils.GMProj()
+            except:
+                print "Error creating new project:", sys.exc_info()[0]
+            try:
+                GMproject.createDB(options.bamfiles, options.reference, options.secprofile, options.dbname)
+            except:
+                print "Error creating new DB:", sys.exc_info()[0]
+                            
         elif(options.subparser_name == 'bin'):
             # bin loaded input
             print "Binning mode..."
