@@ -67,11 +67,12 @@ class GMProj:
     def __init__(self):
         self.conParser = None
         self.bamParser = None
-        self.dbName = "unset"
+        self.auxParser = None
         self.contigsFile = "unset"
-        self.bamFiles = None
+        self.bamFiles = []
+        self.dbName = "unset"
         self.bamColNames = []
-        self.numContigs = -1
+        self.contigNames = []
         
     def loadDB(self, fileName):
         pass
@@ -92,7 +93,11 @@ class GMProj:
         # make sure we're only overwriting existing DBs with the users consent
         try:
             with open(dbName) as f:
-                option = raw_input("Warning: database: "+dbName+" exists. Overwrite? (y,n)")
+                option = raw_input("****************************************************************\n"\
+                                   "    !!!WARNING!!! Database: "+dbName+" exists.\n" \
+                                   "    If you continue you *WILL* delete any previous analyses!\n" \
+                                   "****************************************************************\n"\
+                                   " Overwrite? (y,n)")
                 if(option.upper() != "Y"):
                     print "Operation cancelled"
                     return False
@@ -119,7 +124,7 @@ class GMProj:
                     bam_desc = getBamDescriptor(bf)
                     db_desc[bam_desc] = tables.FloatCol()
                     self.bamColNames.append(bam_desc)
-                db_desc['length'] = tables.FloatCol()
+                db_desc['length'] = tables.Int32Col()
                 try:
                     COV_table = h5file.createTable(group, 'coverage', db_desc, "Bam based coverage")
                     self.bamParser.parse(COV_table, self.bamFiles, self.bamColNames)
@@ -140,7 +145,7 @@ class GMProj:
                     raise
                 try:
                     f = open(self.contigsFile, "r")
-                    self.numContigs = self.conParser.parse(f, self.kse, TN_table)
+                    self.contigNames = self.conParser.parse(f, self.kse, TN_table)
                     f.close()
                 except:
                     print "Could not parse contig file:",self.contigsFile,sys.exc_info()[0]
@@ -162,21 +167,43 @@ class GMProj:
                     print "Could not parse the auxilary profile file:",self.contigsFile,sys.exc_info()[0]
                     raise
                 
+                #------------------------
+                # Add a table for the bins
+                #------------------------
+                db_desc = { 'cid' : tables.StringCol(64), 'bin' :  tables.Int32Col() }
+                try:
+                    BIN_table = h5file.createTable(group, 'bin', db_desc, "Bin IDs")
+                except:
+                    print "Error creating BIN table:", sys.exc_info()[0]
+                    raise
+                self.initBins(BIN_table)
         except:
             print "Error creating database:", dbName, sys.exc_info()[0]
             raise
-        
-        if(self.numContigs <= 0):
-            print "Something went wrong while parsing contigs"
-            return False
 
         if(dumpAll):
             with tables.openFile(dbName, mode = "r") as h5file:
                 self.bamParser.dumpCovTable(h5file.root.profile.coverage, self.bamColNames)
                 self.conParser.dumpTnTable(h5file.root.profile.tns, self.kse.kmerCols)
                 self.auxParser.dumpAUXTable(h5file.root.profile.aux)
-            
-        return True
+                
+    def initBins(self, table):
+        """Initialise the bins table
+        
+        set to 0 for no bin assignment
+        """
+        for cid in self.contigNames:
+            BIN_row = table.row
+            BIN_row['cid'] = cid
+            BIN_row['bin'] = 0
+        table.flush()
+    
+    def dumpBins(self, table):
+        print "-----------------------------------"
+        print "Bins table"
+        print "-----------------------------------"
+        for row in table:
+            print row['cid'],",",row['bin']
 
 ###############################################################################
 # AUX PARSING CLASSES
@@ -201,7 +228,6 @@ class AuxParser:
 
     def dumpAUXTable(self, table):
         """dump the guts of the AUX table"""
-
         print "-----------------------------------"
         print "Aux profile table"
         print "-----------------------------------"
@@ -250,10 +276,10 @@ class ContigParser:
     def parse(self, contigFile, kse, table):
         """Do the heavy lifting of parsing"""
         print "Parsing contigs"        
-        num_contigs = 0
+        con_names = []
         for cid,seq,qual in self.readfq(contigFile):
-            num_contigs += 1
-            sig = kse.getKSig(seq)
+            con_names.append(cid)
+            sig = kse.getKSig(seq.upper())
             # make a new row
             TN_row = table.row
             # punch in the data
@@ -262,7 +288,7 @@ class ContigParser:
                 TN_row[mer] = sig[mer]
             TN_row.append()
         table.flush()
-        return num_contigs
+        return con_names
 
     def dumpTnTable(self, table, kmerCols):
         """dump the guts of the TN table"""
@@ -348,6 +374,7 @@ class BamParser:
             bam_file = None
             try:
                 bam_file = pysam.Samfile(bf, 'rb')
+                print "Parsing",bamColNames[bam_count],"(",(bam_count+1),"of",len(bamColNames),")"
                 self.parseBam(bam_file, bam_count, len(bamColNames), tmp_storage)                
                 bam_count += 1
             except:
@@ -372,7 +399,6 @@ class BamParser:
 
     def parseBam(self, bamFile, bamCount, numBams, storage):
         """Parse the bam file handle and store the number of reads mapped"""
-        print "Parsing BAM",(bamCount+1),"of",numBams 
         for reference, length in zip(bamFile.references, bamFile.lengths):
             c = Counter()
             try:
