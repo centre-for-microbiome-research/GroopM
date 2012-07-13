@@ -87,7 +87,7 @@ class GroopMOptionsParser():
                 print "Error creating new project:", sys.exc_info()[0]
                 raise
             try:
-                GMproject.createDB(options.bamfiles, options.reference, options.secprofile, options.dbname)
+                GMproject.createDB(options.bamfiles, options.reference, options.secprofile, options.dbname, dumpAll=options.dump)
             except:
                 print "Error creating new DB:", sys.exc_info()[0]
                 raise

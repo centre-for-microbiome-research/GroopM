@@ -55,7 +55,8 @@ if __name__ == '__main__':
     parse_parser.add_argument('reference', help="fasta file containing bam reference sequences")
     parse_parser.add_argument('secprofile', help="csv file containing secondary profile (CUB, TN, etc...)")
     parse_parser.add_argument('dbname', help="name of the database being created")
-    
+    parse_parser.add_argument('-d', '--dump', action="store_true", default=False, help="Dump the contents of all tables to screen")
+        
     # load saved data and bin
     bin_parser = subparsers.add_parser('bin', help='command line mode - load saved data and bin')
     

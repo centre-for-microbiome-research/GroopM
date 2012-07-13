@@ -48,6 +48,7 @@ import csv
 import os
 import numpy as np
 import string
+import re
 
 __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
@@ -75,17 +76,18 @@ class GMProj:
     def loadDB(self, fileName):
         pass
     
-    def createDB(self, bamFiles, contigs, profileVals, dbName):
+    def createDB(self, bamFiles, contigs, aux, dbName, kmerSize=4, dumpAll=False):
         """Main wrapper for parsing all input files"""
         # load all the passed vars
         self.dbName = dbName
         self.contigsFile = contigs
         self.bamFiles = bamFiles.split(",")
-        self.profileVals = profileVals
+        self.auxFile = aux
         
+        self.kse = KmerSigEngine(kmerSize)
         self.conParser = ContigParser()
-        self.kse = KmerSigEngine(4)
         self.bamParser = BamParser()
+        self.auxParser = AuxParser()
 
         # make sure we're only overwriting existing DBs with the users consent
         try:
@@ -119,8 +121,8 @@ class GMProj:
                     self.bamColNames.append(bam_desc)
                 db_desc['length'] = tables.FloatCol()
                 try:
-                    cov_table = h5file.createTable(group, 'coverage', db_desc, "Bam based coverage")
-                    self.bamParser.parse(cov_table, self.bamFiles, self.bamColNames)
+                    COV_table = h5file.createTable(group, 'coverage', db_desc, "Bam based coverage")
+                    self.bamParser.parse(COV_table, self.bamFiles, self.bamColNames)
                 except:
                     print "Error creating coverage table:", sys.exc_info()[0]
                     raise
@@ -132,13 +134,13 @@ class GMProj:
                 for mer in self.kse.kmerCols:
                      db_desc[mer] = tables.FloatCol()
                 try:
-                    TM_table = h5file.createTable(group, 'tns', db_desc, "TetraNucl signature")
+                    TN_table = h5file.createTable(group, 'tns', db_desc, "TetraNucl signature")
                 except:
                     print "Error creating TNS table:", sys.exc_info()[0]
                     raise
                 try:
                     f = open(self.contigsFile, "r")
-                    self.numContigs = self.conParser.parse(f, self.kse, TM_table)
+                    self.numContigs = self.conParser.parse(f, self.kse, TN_table)
                     f.close()
                 except:
                     print "Could not parse contig file:",self.contigsFile,sys.exc_info()[0]
@@ -147,6 +149,18 @@ class GMProj:
                 #------------------------
                 # parse aux profile 
                 #------------------------
+                db_desc = { 'cid' : tables.StringCol(64), 'aux' :  tables.StringCol(64) }
+                try:
+                    AUX_table = h5file.createTable(group, 'aux', db_desc, "Secondary profile")
+                except:
+                    print "Error creating AUX table:", sys.exc_info()[0]
+                    raise
+                try:
+                    f = open(self.auxFile, "r")
+                    self.auxParser.parse(f, AUX_table)
+                except:
+                    print "Could not parse the auxilary profile file:",self.contigsFile,sys.exc_info()[0]
+                    raise
                 
         except:
             print "Error creating database:", dbName, sys.exc_info()[0]
@@ -156,12 +170,44 @@ class GMProj:
             print "Something went wrong while parsing contigs"
             return False
 
-        with tables.openFile(dbName, mode = "r") as h5file:
-            self.bamParser.dumpCovTable(h5file.root.profile.coverage, self.bamColNames)
-            self.conParser.dumpTnTable(h5file.root.profile.tns, self.kse.kmerCols)
+        if(dumpAll):
+            with tables.openFile(dbName, mode = "r") as h5file:
+                self.bamParser.dumpCovTable(h5file.root.profile.coverage, self.bamColNames)
+                self.conParser.dumpTnTable(h5file.root.profile.tns, self.kse.kmerCols)
+                self.auxParser.dumpAUXTable(h5file.root.profile.aux)
             
         return True
 
+###############################################################################
+# AUX PARSING CLASSES
+###############################################################################
+class AuxParser:
+    """Class for parsing auxilary profile values"""
+    def __init__(self): pass
+    
+    def parse(self, auxFile, table):
+        """Do the heavy lifting of parsing"""
+        print "Parsing auxilary profile"
+        search=re.compile(r"^['\"]").search # line starts with a quote char
+        for line in auxFile:
+            if(not search(line)):
+                fields = line.rstrip().split(",")
+                AUX_row = table.row
+                # punch in the data
+                AUX_row['cid'] = fields[0]
+                AUX_row['aux'] = fields[1]
+                AUX_row.append()
+        table.flush()
+
+    def dumpAUXTable(self, table):
+        """dump the guts of the AUX table"""
+
+        print "-----------------------------------"
+        print "Aux profile table"
+        print "-----------------------------------"
+        for row in table:
+            print row['cid'],",",row['aux']
+    
 ###############################################################################
 # CONTIG PARSING CLASSES
 ###############################################################################
@@ -203,6 +249,7 @@ class ContigParser:
                 
     def parse(self, contigFile, kse, table):
         """Do the heavy lifting of parsing"""
+        print "Parsing contigs"        
         num_contigs = 0
         for cid,seq,qual in self.readfq(contigFile):
             num_contigs += 1
@@ -325,7 +372,7 @@ class BamParser:
 
     def parseBam(self, bamFile, bamCount, numBams, storage):
         """Parse the bam file handle and store the number of reads mapped"""
-        
+        print "Parsing BAM",(bamCount+1),"of",numBams 
         for reference, length in zip(bamFile.references, bamFile.lengths):
             c = Counter()
             try:
