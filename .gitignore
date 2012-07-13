@@ -3,4 +3,5 @@ build/
 dist/
 groopm/__init__.pyc
 groopm/groopmUtils.pyc
+groopm/groopm.pyc
 pip-log.txt
