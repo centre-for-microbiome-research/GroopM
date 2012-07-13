@@ -83,7 +83,9 @@ class GroopMOptionsParser():
             #batch_shell.run()
         elif(options.subparser_name == 'parse'):
             # parse raw input
+            print "****************************************************************"
             print " >>> GroopM running in data parsing mode..."
+            print "****************************************************************"
             GMdata = mstore.GMDataManager()
             try:
                 GMdata.createDB(options.bamfiles,

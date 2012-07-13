@@ -16,6 +16,7 @@ setup(
         "scipy >= 0.10.1",
         "matplotlib >= 1.1.0",
         "tables >= 2.3",
-        "pysam >= 0.3" 
+        "pysam >= 0.3",
+        "pyfasta >= 0.3.9"
     ],
 )
