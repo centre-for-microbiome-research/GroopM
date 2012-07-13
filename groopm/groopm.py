@@ -42,6 +42,11 @@ import sys
 from pprint import pprint
 
 import code
+import readline 
+import rlcompleter 
+import os 
+import atexit
+
 import groopmUtils
 
 __author__ = "Michael Imelfort"
@@ -80,10 +85,12 @@ class GroopMOptionsParser():
                 GMproject = groopmUtils.GMProj()
             except:
                 print "Error creating new project:", sys.exc_info()[0]
+                raise
             try:
                 GMproject.createDB(options.bamfiles, options.reference, options.secprofile, options.dbname)
             except:
                 print "Error creating new DB:", sys.exc_info()[0]
+                raise
                             
         elif(options.subparser_name == 'bin'):
             # bin loaded input
@@ -114,6 +121,7 @@ class GroopMInteractiveConsole(code.InteractiveConsole):
  you can use python commands here too
  To exit, press [CTRL]-D or type "exit()"
 
+ Saving shell history to %s
 ----------------------------------------------------------------"""
         
         code.InteractiveConsole.__init__(self, locals)
@@ -133,7 +141,18 @@ class GroopMInteractiveConsole(code.InteractiveConsole):
         return code.InteractiveConsole.push(self,line)
 
     def startConsole(self):
-        self.interact(banner=self.shell_banner % (__version__))
+        # tab completion 
+        readline.parse_and_bind('tab: complete') 
+        
+        # history file 
+        histfile = os.path.join(os.environ['HOME'], '.GroopMhistory') 
+        try: 
+            readline.read_history_file(histfile) 
+        except IOError: 
+            pass 
+        atexit.register(readline.write_history_file, histfile) 
+
+        self.interact(banner=self.shell_banner % (__version__, os.path.join(os.environ['HOME'], '.GroopMhistory')))
         
     def printHelp(self, subHelp=""):
         """Print user help - quite helpful"""
