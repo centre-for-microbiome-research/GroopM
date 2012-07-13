@@ -71,6 +71,50 @@ import mstore
 ###############################################################################
 ###############################################################################
 ###############################################################################
+class ClusterEngine:
+    """Top level interface for clustering contigs"""
+    def __init__(self, plot=False, outFile=""):
+        self.doPlots = plot
+        self.outputFile = outFile
+        
+    def loadData(self, dbFileName):
+        """Load previouslt parsed data"""
+        pass
+    
+    def cluster(self):
+        """Cluster the contigs"""
+        # get a transformer
+        dt = DataTransformer()
+    
+        # transform the data
+        dt.transformData()
+    
+        # print top, front, side views
+        #dt.plotTransViews()
+        
+        # cluster and bin!
+        cl = ClusterBlob(dt.rowNames, dt.secValues, dt.secColors, dt.transformedData, dt.scaleFactor)
+        cl.clusterPoints()
+        return
+    
+        # cluster points
+        #if("" != options.secondary_data):
+        #    dt.clusterPoints()
+        #    dt.renderTransData("postclust.png")
+        
+        # write to the output file
+#        if("" != self.outputFile):
+#            dt.writeOutput(self.outputFile, dialect)
+    
+        # plot the transformed space (if we've been asked to...)
+        if(self.doPlots):
+            dt.renderTransData()
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
 class DataTransformer:
     """Munge raw profile data into a 3D coord system
     
