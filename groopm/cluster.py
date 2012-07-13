@@ -74,11 +74,26 @@ import mstore
 class ClusterEngine:
     """Top level interface for clustering contigs"""
     def __init__(self, plot=False, outFile=""):
+        # Data
+        self.dataManager = mstore.GMDataManager()
+        self.covProfiles = np.array([])
+        self.contigNames = np.array([])
+        self.contigLengths = np.array([])
+        self.auxProfiles = np.array([]) 
+        self.auxColors = np.array([])
+        
+        # associated classes
+        self.dataTransformer = DataTransformer()
+        self.clusterBlob = None
+
+        # misc
+        self.maxRows = maxRows # limit the number of rows we'll parse
         self.doPlots = plot
         self.outputFile = outFile
         
     def loadData(self, dbFileName):
-        """Load previouslt parsed data"""
+        """Load pre-parsed data"""
+        
         pass
     
     def cluster(self):
@@ -127,17 +142,16 @@ class DataTransformer:
         self.maxRows = maxRows                   # limit the number of rows we'll parse
         
         # primary data storage
-        self.primaryFileName = primaryFN         # the csv holding the coverage data
-        self.primaryData = np.array([])          # one big array to store all the data
-        self.rowNames = np.array([])             # column names
-        self.primaryRows = 0                     # rows and columns excluding header line
-        self.primaryCols = 0                     #  and row names
+        self.covProfiles = np.array([])          # one big array to store all the data
+        self.contigNames = np.array([])             # column names
+        self.covProfileRows = 0                     # rows and columns excluding header line
+        self.covProfileCols = 0                     #  and row names
         
         # secondary data storage
-        self.secondaryFileName = secondaryFN     # the csv holding the secondary (CU?) data
-        self.secValues = np.array([])            # secondary values 
-        self.secColors = np.array([])            # secondary values as colours
-        self.secRows = 0                         # rows in seconday data (Always use only 1 col)
+        self.auxondaryFileName = secondaryFN     # the csv holding the secondary (CU?) data
+        self.auxProfiles = np.array([])            # secondary values 
+        self.auxColors = np.array([])            # secondary values as colours
+        self.auxRows = 0                         # rows in seconday data (Always use only 1 col)
         
         # transformed data strorage
         self.radialVals = np.array([])           # for storing the distance from the origin to each 
@@ -157,31 +171,31 @@ class DataTransformer:
         # Update this guy now we know how big he has to be
         # do it this way because we may apply successive transforms to this
         # guy and this is a neat way of clearing the data 
-        s = (self.primaryRows,3)
+        s = (self.covProfileRows,3)
         self.transformedData = np.zeros(s)
         tmp_data = np.array([])
         
         # the radius of the mapping sphere
-        RX = np.amax(self.primaryData)
-        RD = np.median(self.primaryData)
+        RX = np.amax(self.covProfiles)
+        RD = np.median(self.covProfiles)
         
         # first we shift the edge values accordingly and then 
         # map each point onto the surface of a hyper-sphere
         print "Start radial mapping..."
-        for point in self.primaryData:
+        for point in self.covProfiles:
             norm = np.linalg.norm(point)
             self.radialVals = np.append(self.radialVals, norm)
             tmp_data = np.append(tmp_data, self.rotateVectorAndScale(point, RX, RD, phi_max=15))
 
         # reshape this guy
-        tmp_data = np.reshape(tmp_data, (self.primaryRows,self.primaryCols))
+        tmp_data = np.reshape(tmp_data, (self.covProfileRows,self.covProfileCols))
     
         # now we use PCA to map the surface points back onto a 
         # 2 dimensional plane, thus making the data usefuller
         index = 0
-        if(self.primaryCols == 2):
+        if(self.covProfileCols == 2):
             print "Skipping dimensionality reduction"
-            for point in self.primaryData:
+            for point in self.covProfiles:
                 self.transformedData[index,0] = tmp_data[index,0]
                 self.transformedData[index,1] = tmp_data[index,1]
                 self.transformedData[index,2] = math.log(self.radialVals[index])
@@ -293,8 +307,8 @@ class DataTransformer:
         """Write transformed data to file"""
         outCSV = csv.writer(open(CSVFileName, 'wb'), dialect)
         outCSV.writerow(["'name'","'x'","'y'","'z'"])
-        for index in range (0,self.primaryRows):
-            outCSV.writerow([self.rowNames[index], self.transformedData[index,0], self.transformedData[index,1], self.transformedData[index,2]])
+        for index in range (0,self.covProfileRows):
+            outCSV.writerow([self.contigNames[index], self.transformedData[index,0], self.transformedData[index,1], self.transformedData[index,2]])
 
     def plotTransViews(self, tag="fordens"):
         """Plot top, side and front views of the transformed data"""
@@ -305,7 +319,7 @@ class DataTransformer:
     def renderTransData(self, fileName="", show=True, elev=45, azim=45, all=False):
         """Plot transformed data in 3D"""
         fig = plt.figure()
-        if(self.secondaryFileName != ""):
+        if(self.auxondaryFileName != ""):
             if(all):
                 myAXINFO = {
                     'x': {'i': 0, 'tickdir': 1, 'juggled': (1, 0, 2),
@@ -317,7 +331,7 @@ class DataTransformer:
                 }
 
                 ax = fig.add_subplot(131, projection='3d')
-                ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.secColors, c=self.secColors, marker='.')
+                ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
                 ax.azim = 0
                 ax.elev = 0
                 for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
@@ -328,7 +342,7 @@ class DataTransformer:
                 ax.w_zaxis._AXINFO = myAXINFO
                 
                 ax = fig.add_subplot(132, projection='3d')
-                ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.secColors, c=self.secColors, marker='.')
+                ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
                 ax.azim = 90
                 ax.elev = 0
                 for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
@@ -339,7 +353,7 @@ class DataTransformer:
                 ax.w_zaxis._AXINFO = myAXINFO
                 
                 ax = fig.add_subplot(133, projection='3d')
-                ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.secColors, c=self.secColors, marker='.')
+                ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
                 ax.azim = 0
                 ax.elev = 90
                 for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
@@ -350,13 +364,13 @@ class DataTransformer:
                 ax.w_zaxis._AXINFO = myAXINFO
             else:
                 ax = fig.add_subplot(111, projection='3d')
-                ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.secColors, c=self.secColors, marker='.')
+                ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
                 ax.azim = azim
                 ax.elev = elev
                 ax.set_axis_off()
 
                 #ax = fig.add_subplot(122, projection='3d')
-                #ax.scatter(self.primaryData[:,0], self.primaryData[:,1], self.primaryData[:,2], edgecolors=self.secColors, c=self.secColors, marker='.')
+                #ax.scatter(self.covProfiles[:,0], self.covProfiles[:,1], self.covProfiles[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
                 #ax.azim = azim
                 #ax.elev = elev
                 #ax.set_axis_off()
@@ -392,9 +406,9 @@ class ClusterBlob:
     """    
     def __init__(self, rowNames, secValues, secColors, transformedData, scaleFactor):
         # See DataTransformer for details about these variables
-        self.rowNames = rowNames
-        self.secValues = secValues 
-        self.secColors = secColors
+        self.contigNames = rowNames
+        self.auxProfiles = secValues 
+        self.auxColors = secColors
         self.transformedData = transformedData
         self.scaleFactor = scaleFactor
 
@@ -417,7 +431,7 @@ class ClusterBlob:
 
         # When blurring the raw image maps I chose a radius to suit my data, you can vary this as you like
         self.blurRadius = 12
-        self.secWobble = 0.1            # amount the sec data can move about and still be in the same cluster
+        self.auxWobble = 0.1            # amount the sec data can move about and still be in the same cluster
         
         self.imageCounter = 1           # when we print many images
 
@@ -446,20 +460,20 @@ class ClusterBlob:
                 
                 # time to make a bin
                 self.numBins += 1
-                bin = Bin(center_indicies, self.secValues, self.numBins)
+                bin = Bin(center_indicies, self.auxProfiles, self.numBins)
                 self.bins[self.numBins] = bin
-                bin.makeBinDist(self.transformedData, self.secValues)                
-                bin.plotBin(self.transformedData, self.secColors, fileName="Image_"+str(self.imageCounter), tag="Initial")
+                bin.makeBinDist(self.transformedData, self.auxProfiles)                
+                bin.plotBin(self.transformedData, self.auxColors, fileName="Image_"+str(self.imageCounter), tag="Initial")
                 self.imageCounter += 1
         
                 # make the bin more gooder
-                bin.recruit(self.transformedData, self.secValues, self.mappedIndicies, self.binnedIndicies)
+                bin.recruit(self.transformedData, self.auxProfiles, self.mappedIndicies, self.binnedIndicies)
                 
                 # Plots
                 #bin.printContents()
-                bin.plotBin(self.transformedData, self.secColors, fileName="Image_"+str(self.imageCounter), tag="Recruited")
+                bin.plotBin(self.transformedData, self.auxColors, fileName="Image_"+str(self.imageCounter), tag="Recruited")
                 self.imageCounter += 1
-                print bin.dumpContigIDs(self.rowNames)
+                print bin.dumpContigIDs(self.contigNames)
 
                 self.plotHeat("3X3_"+str(self.roundNumber)+".png", max=max_blur_value)
                 
@@ -742,12 +756,12 @@ class ClusterBlob:
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
                             if index not in self.binnedIndicies:
-                                center_values = np.append(center_values, self.secValues[index])
+                                center_values = np.append(center_values, self.auxProfiles[index])
 
         cf = CenterFinder()
         sec_centroid = cf.findArrayCenter(center_values)                            
-        sec_lower = sec_centroid - self.secWobble
-        sec_upper = sec_centroid + self.secWobble
+        sec_lower = sec_centroid - self.auxWobble
+        sec_upper = sec_centroid + self.auxWobble
 
         # now scoot out around this point and soak up similar points
         # get all the real indicies of these points so we can use them in
@@ -760,7 +774,7 @@ class ClusterBlob:
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
                             if index not in self.binnedIndicies:
-                                if(self.secValues[index] > sec_lower and self.secValues[index] < sec_upper):
+                                if(self.auxProfiles[index] > sec_lower and self.auxProfiles[index] < sec_upper):
                                     self.maxMaps[0,x,y] = self.blurredMaps[0,x,y]
                                     self.maxMaps[1,z,y] = self.blurredMaps[1,z,y]
                                     self.maxMaps[2,z,self.scaleFactor-x] = self.blurredMaps[1,z,self.scaleFactor-x]                                
@@ -804,7 +818,7 @@ class ClusterBlob:
                             if index not in self.binnedIndicies:
                                 num_points += 1
                                 disp_vals = np.append(disp_vals, self.transformedData[index])
-                                disp_cols = np.append(disp_cols, self.secColors[index])
+                                disp_cols = np.append(disp_cols, self.auxColors[index])
         
         # make a black mark at the max values
         small_span = self.span/2
@@ -892,7 +906,7 @@ class Bin:
         self.mean = np.zeros((4))
         self.stdev = np.zeros((4))
         self.priTolerance = pritol
-        self.secTolerance = sectol
+        self.auxTolerance = sectol
         self.lowerLimits = np.zeros((4)) # lower and upper limits based on tolerance
         self.upperLimits = np.zeros((4))
 
@@ -904,7 +918,7 @@ class Bin:
         min_diff = 100000
         best_index = -1
         for index in self.indicies:
-            diff = abs(secValues[index] - self.secCentroid)
+            diff = abs(secValues[index] - self.auxCentroid)
             if(diff < min_diff):
                 min_diff = diff
                 best_index = index
@@ -945,7 +959,7 @@ class Bin:
         if(-1 == pt):
             pt=self.priTolerance
         if(-1 == st):
-            st=self.secTolerance
+            st=self.auxTolerance
         for i in range(0,3):
             self.lowerLimits[i] = int(self.mean[i] - pt * self.stdev[i])
             self.upperLimits[i] = int(self.mean[i] + pt * self.stdev[i]) + 1  # so range will look neater!
@@ -963,7 +977,7 @@ class Bin:
 
         # save these
         pt = self.priTolerance
-        st = self.secTolerance
+        st = self.auxTolerance
 
         self.binSize = self.indicies.shape[0]
         self.makeBinDist(transformedData, secValues)
@@ -972,7 +986,7 @@ class Bin:
             print "REC:", num_recruited
             # reduce these to force some kind of convergence
             self.priTolerance *= 0.8
-            self.secTolerance *= 0.8
+            self.auxTolerance *= 0.8
             # fix these
             self.binSize = self.indicies.shape[0]
             self.makeBinDist(transformedData, secValues)
@@ -982,7 +996,7 @@ class Bin:
             num_recruited = self.recruitRound(transformedData, secValues, mappedIndicies, binnedIndicies)
         
         self.priTolerance = pt
-        self.secTolerance = st
+        self.auxTolerance = st
         
         # finally, fix this guy
         print "Expanded to:", self.binSize
@@ -1053,7 +1067,7 @@ class Bin:
         print "Mean:", self.mean
         print "Stdev:", self.stdev
         print "P Tol:", self.priTolerance
-        print "S Tol:", self.secTolerance
+        print "S Tol:", self.auxTolerance
         print "Lower limts:", self.lowerLimits
         print "Upper limits:", self.upperLimits
         print "--------------------------------------"
