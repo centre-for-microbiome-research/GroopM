@@ -37,176 +37,28 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
-import argparse
-import sys
-from pprint import pprint
-
-import tables
-import sys
-import pysam
-import csv
-import os
-import numpy as np
-import string
-import re
 
 __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
-__license__ = "GPL"
+__license__ = "GPL3"
 __version__ = "0.0.1"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Development"
 
 ###############################################################################
-# MAIN CLASS
-###############################################################################
-class GMProj:
-    """main object to poke when doing gm work"""
-    def __init__(self):
-        self.conParser = None
-        self.bamParser = None
-        self.auxParser = None
-        self.contigsFile = "unset"
-        self.bamFiles = []
-        self.dbName = "unset"
-        self.bamColNames = []
-        self.contigNames = []
-        
-    def loadDB(self, fileName):
-        pass
-    
-    def createDB(self, bamFiles, contigs, aux, dbName, kmerSize=4, dumpAll=False):
-        """Main wrapper for parsing all input files"""
-        # load all the passed vars
-        self.dbName = dbName
-        self.contigsFile = contigs
-        self.bamFiles = bamFiles.split(",")
-        self.auxFile = aux
-        
-        self.kse = KmerSigEngine(kmerSize)
-        self.conParser = ContigParser()
-        self.bamParser = BamParser()
-        self.auxParser = AuxParser()
 
-        # make sure we're only overwriting existing DBs with the users consent
-        try:
-            with open(dbName) as f:
-                option = raw_input("****************************************************************\n"\
-                                   "    !!!WARNING!!! Database: "+dbName+" exists.\n" \
-                                   "    If you continue you *WILL* delete any previous analyses!\n" \
-                                   "****************************************************************\n"\
-                                   " Overwrite? (y,n)")
-                if(option.upper() != "Y"):
-                    print "Operation cancelled"
-                    return False
-                else:
-                    print "Overwriting database",dbName
-        except IOError as e:
-            print "Creating new database", dbName
-            raise
-        
-        # create the db
-        try:        
-            with tables.openFile(dbName, mode = "w", title = "GroopM") as h5file:
-                # Create a new group under "/" (root)
-                group = h5file.createGroup("/", 'profile', 'Assembly profiles')
-
-                #------------------------
-                # parse bam files
-                #------------------------
-                # build a table template based on the number of bamfiles we have
-                db_desc = { 'cid' : tables.StringCol(64) }
-                for bf in self.bamFiles:
-                    # assume the file is called somethign like "fred.bam"
-                    # we want to rip off the ".bam" part
-                    bam_desc = getBamDescriptor(bf)
-                    db_desc[bam_desc] = tables.FloatCol()
-                    self.bamColNames.append(bam_desc)
-                db_desc['length'] = tables.Int32Col()
-                try:
-                    COV_table = h5file.createTable(group, 'coverage', db_desc, "Bam based coverage")
-                    self.bamParser.parse(COV_table, self.bamFiles, self.bamColNames)
-                except:
-                    print "Error creating coverage table:", sys.exc_info()[0]
-                    raise
-                
-                #------------------------
-                # parse contigs 
-                #------------------------
-                db_desc = { 'cid' : tables.StringCol(64) }
-                for mer in self.kse.kmerCols:
-                     db_desc[mer] = tables.FloatCol()
-                try:
-                    TN_table = h5file.createTable(group, 'tns', db_desc, "TetraNucl signature")
-                except:
-                    print "Error creating TNS table:", sys.exc_info()[0]
-                    raise
-                try:
-                    f = open(self.contigsFile, "r")
-                    self.contigNames = self.conParser.parse(f, self.kse, TN_table)
-                    f.close()
-                except:
-                    print "Could not parse contig file:",self.contigsFile,sys.exc_info()[0]
-                    raise
-
-                #------------------------
-                # parse aux profile 
-                #------------------------
-                db_desc = { 'cid' : tables.StringCol(64), 'aux' :  tables.StringCol(64) }
-                try:
-                    AUX_table = h5file.createTable(group, 'aux', db_desc, "Secondary profile")
-                except:
-                    print "Error creating AUX table:", sys.exc_info()[0]
-                    raise
-                try:
-                    f = open(self.auxFile, "r")
-                    self.auxParser.parse(f, AUX_table)
-                except:
-                    print "Could not parse the auxilary profile file:",self.contigsFile,sys.exc_info()[0]
-                    raise
-                
-                #------------------------
-                # Add a table for the bins
-                #------------------------
-                db_desc = { 'cid' : tables.StringCol(64), 'bin' :  tables.Int32Col() }
-                try:
-                    BIN_table = h5file.createTable(group, 'bin', db_desc, "Bin IDs")
-                except:
-                    print "Error creating BIN table:", sys.exc_info()[0]
-                    raise
-                self.initBins(BIN_table)
-        except:
-            print "Error creating database:", dbName, sys.exc_info()[0]
-            raise
-
-        if(dumpAll):
-            with tables.openFile(dbName, mode = "r") as h5file:
-                self.bamParser.dumpCovTable(h5file.root.profile.coverage, self.bamColNames)
-                self.conParser.dumpTnTable(h5file.root.profile.tns, self.kse.kmerCols)
-                self.auxParser.dumpAUXTable(h5file.root.profile.aux)
-                
-    def initBins(self, table):
-        """Initialise the bins table
-        
-        set to 0 for no bin assignment
-        """
-        for cid in self.contigNames:
-            BIN_row = table.row
-            BIN_row['cid'] = cid
-            BIN_row['bin'] = 0
-        table.flush()
-    
-    def dumpBins(self, table):
-        print "-----------------------------------"
-        print "Bins table"
-        print "-----------------------------------"
-        for row in table:
-            print row['cid'],",",row['bin']
+import tables
+import pysam
+import os
+import numpy as np
+import string
+import re
 
 ###############################################################################
-# AUX PARSING CLASSES
+###############################################################################
+###############################################################################
 ###############################################################################
 class AuxParser:
     """Class for parsing auxilary profile values"""
@@ -227,7 +79,7 @@ class AuxParser:
         table.flush()
 
     def dumpAUXTable(self, table):
-        """dump the guts of the AUX table"""
+        """Dump the guts of the AUX table"""
         print "-----------------------------------"
         print "Aux profile table"
         print "-----------------------------------"
@@ -235,7 +87,8 @@ class AuxParser:
             print row['cid'],",",row['aux']
     
 ###############################################################################
-# CONTIG PARSING CLASSES
+###############################################################################
+###############################################################################
 ###############################################################################
 class ContigParser:
     """Main class for reading in and parsing contigs"""
@@ -291,8 +144,7 @@ class ContigParser:
         return con_names
 
     def dumpTnTable(self, table, kmerCols):
-        """dump the guts of the TN table"""
-
+        """Dump the guts of the TN table"""
         print "-----------------------------------"
         print "TNuclSig table"
         print "-----------------------------------"
@@ -304,7 +156,6 @@ class ContigParser:
 
 class KmerSigEngine:
     """Simple class for determining kmer signatures"""
-
     def __init__(self, kLen):
         self.kLen = kLen
         self.compl = string.maketrans('ACGT', 'TGCA')
@@ -312,7 +163,7 @@ class KmerSigEngine:
         self.numMers = len(self.kmerCols)
         
     def makeKmerColNames(self):
-        """work out the range of kmers required based on kmer length"""
+        """Work out the range of kmers required based on kmer length"""
         # build up the big list
         base_words = ("A","C","G","T")
         out_list = ["A","C","G","T"]
@@ -323,7 +174,7 @@ class KmerSigEngine:
                     working_list.append(mer+char)
             out_list = working_list
         
-        # pear it down based on lexicographical ordering
+        # pare it down based on lexicographical ordering
         ret_list = []
         for mer in out_list:
             lmer = self.shiftLowLexi(mer)
@@ -332,14 +183,14 @@ class KmerSigEngine:
         return ret_list
     
     def shiftLowLexi(self, seq):
-        """return the lexicographically lowest form of this sequence"""
+        """Return the lexicographically lowest form of this sequence"""
         rseq = self.revComp(seq)
         if(seq < rseq):
             return seq
         return rseq
         
     def revComp(self, seq):
-        """return the reverse complement of a sequence"""
+        """Return the reverse complement of a sequence"""
         return seq.translate(self.compl)[::-1]
     
     def getKSig(self, seq):
@@ -353,7 +204,8 @@ class KmerSigEngine:
 
 
 ###############################################################################
-# BAM PARSING CLASSES
+###############################################################################
+###############################################################################
 ###############################################################################
 class BamParser:
     """Parse multiple bam files and write the output to hdf5 """
@@ -361,7 +213,7 @@ class BamParser:
     def __init__(self): pass
     
     def parse(self, table, bamFiles, bamColNames):
-        """ parse multiple bam files and store the results in the main DB
+        """Parse multiple bam files and store the results in the main DB
         
         table: a table in an open h5 file like "CID,COV_1,...,COV_n,length"
         bamColNames: names of the COV_x columns
@@ -398,7 +250,7 @@ class BamParser:
             raise
 
     def parseBam(self, bamFile, bamCount, numBams, storage):
-        """Parse the bam file handle and store the number of reads mapped"""
+        """Parse a bam file (handle) and store the number of reads mapped"""
         for reference, length in zip(bamFile.references, bamFile.lengths):
             c = Counter()
             try:
@@ -421,8 +273,7 @@ class BamParser:
             storage[reference][bamCount] = float(num_reads)/float(length)
         
     def dumpCovTable(self, table, bamColNames):
-        """dump the guts of the coverage table"""
-
+        """Dump the guts of the coverage table"""
         print "-----------------------------------"
         print "Coverage table"
         print "-----------------------------------"
@@ -433,7 +284,7 @@ class BamParser:
             print row['length']
 
 class Counter:
-    """Call back for counting aligned reads
+    """AUX: Call back for counting aligned reads
     
     Used in conjunction with pysam.fetch 
     """
@@ -442,5 +293,10 @@ class Counter:
         self.counts += 1
 
 def getBamDescriptor(fullPath):
-    """reduce a full path to just the file name minus extension"""
+    """AUX: Reduce a full path to just the file name minus extension"""
     return os.path.splitext(os.path.basename(fullPath))[0]
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################

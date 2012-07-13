@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ###############################################################################
 #                                                                             #
-#    groopm.py                                                                   #
+#    groopm.py                                                                #
 #                                                                             #
 #    Implements groopm shell and wraps coarse workflows                       #
 #                                                                             #
@@ -37,31 +37,34 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
-import argparse
-import sys
-from pprint import pprint
-
-import code
-import readline 
-import rlcompleter 
-import os 
-import atexit
-
-import groopmUtils
 
 __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
-__license__ = "GPL"
+__license__ = "GPL3"
 __version__ = "0.0.1"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Development"
 
 ###############################################################################
-# CLASSES
-###############################################################################
 
+import argparse
+import sys
+import code
+import readline 
+import rlcompleter 
+import os 
+import atexit
+
+# GroopM imports
+import mstore
+import cluster
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
 class GroopMOptionsParser():
     def __init__(self):
         return
@@ -80,14 +83,15 @@ class GroopMOptionsParser():
             #batch_shell.run()
         elif(options.subparser_name == 'parse'):
             # parse raw input
-            print "GroopM running in data parsing mode..."
+            print " >>> GroopM running in data parsing mode..."
+            GMdata = mstore.GMDataManager()
             try:
-                GMproject = groopmUtils.GMProj()
-            except:
-                print "Error creating new project:", sys.exc_info()[0]
-                raise
-            try:
-                GMproject.createDB(options.bamfiles, options.reference, options.secprofile, options.dbname, dumpAll=options.dump)
+                GMdata.createDB(options.bamfiles,
+                                options.reference,
+                                options.secprofile,
+                                options.dbname,
+                                dumpAll=options.dump
+                                )
             except:
                 print "Error creating new DB:", sys.exc_info()[0]
                 raise
@@ -103,6 +107,10 @@ class GroopMOptionsParser():
         return 0
     
 
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
 class GroopMInteractiveConsole(code.InteractiveConsole):
     "Wrapper around Python that can filter input/output to the shell"
     def __init__(self, locals=None, filename="<console>"):
@@ -141,6 +149,7 @@ class GroopMInteractiveConsole(code.InteractiveConsole):
         return code.InteractiveConsole.push(self,line)
 
     def startConsole(self):
+        """Start the python console"""
         # tab completion 
         readline.parse_and_bind('tab: complete') 
         
@@ -177,5 +186,9 @@ class GroopMInteractiveConsole(code.InteractiveConsole):
             for sub in subcomands:
                 if(subHelp == sub[0]):
                     print sub[1]
-                    
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
                     
