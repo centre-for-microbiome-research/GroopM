@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import division
 ###############################################################################
 #                                                                             #
 #    som.py                                                                   #
@@ -70,7 +71,6 @@ __status__ = "Development"
 
 ###############################################################################
 
-from __future__ import division
 import argparse
 import sys
 from random import *
