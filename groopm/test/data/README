@@ -1,0 +1,4 @@
+Test data for groopm
+
+This data is used to test the mstore class. It consists of three sorted, indexed bamfiles each containing mappings for three contigs.
+The "values" file is a set of codon usage profiles
