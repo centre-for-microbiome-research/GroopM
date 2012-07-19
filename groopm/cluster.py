@@ -48,7 +48,7 @@ __email__ = "mike@mikeimelfort.com"
 __status__ = "Development"
 
 ###############################################################################
-
+import sys
 import math
 import colorsys
 import random
@@ -73,7 +73,7 @@ import mstore
 ###############################################################################
 class ClusterEngine:
     """Top level interface for clustering contigs"""
-    def __init__(self, plot=False, outFile=""):
+    def __init__(self, dbFileName, plot=False, outFile="", maxRows=0, force=False):
         # Data
         self.dataManager = mstore.GMDataManager()
         self.covProfiles = np.array([])
@@ -82,22 +82,76 @@ class ClusterEngine:
         self.auxProfiles = np.array([]) 
         self.auxColors = np.array([])
         
+        self.kmerSigs = np.array([])
+        self.bins = np.array([])
+        
         # associated classes
         self.dataTransformer = DataTransformer()
         self.clusterBlob = None
 
         # misc
-        self.maxRows = maxRows # limit the number of rows we'll parse
-        self.doPlots = plot
-        self.outputFile = outFile
+        self.dbFileName = dbFileName        # db containing all the data we'd like to use
+        self.forceWriting = force           # overwrite existng values silently?
+        self.maxRows = maxRows              # limit the number of rows we'll parse
+        self.doPlots = plot                 # produce many? plots
+        self.outputFile = outFile           # where to write output stuffs to
         
-    def loadData(self, dbFileName):
+    def loadData(self, condition=""):
         """Load pre-parsed data"""
-        
+        try:
+            self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, condition=condition)
+            self.auxProfiles = self.dataManager.getAuxProfiles(self.dbFileName, condition=condition)
+            self.bins = self.dataManager.getBins(self.dbFileName, condition=condition)
+            self.contigNames = self.dataManager.getContigNames(self.dbFileName, condition=condition)
+            self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, condition=condition)
+            self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, condition=condition)
+
+            indicies = self.dataManager.getConditionalIndicies(self.dbFileName, condition=condition)
+            
+            print self.covProfiles
+            print self.dataManager.getCoverageProfiles(self.dbFileName, indicies=indicies)
+            print self.auxProfiles
+            print self.dataManager.getAuxProfiles(self.dbFileName, indicies=indicies)
+            print self.bins
+            print self.dataManager.getBins(self.dbFileName, indicies=indicies)
+            print self.contigNames
+            print self.dataManager.getContigNames(self.dbFileName, indicies=indicies)
+            print self.contigLengths
+            print self.dataManager.getContigLengths(self.dbFileName, indicies=indicies)
+            print self.kmerSigs
+            print self.dataManager.getKmerSigs(self.dbFileName, indicies=indicies)
+
+
+            self.dataManager.setBins(self.dbFileName, {0:7})
+            print self.dataManager.getBins(self.dbFileName, indicies=indicies)
+            
+
+            
+        except:
+            print "Error loading DB:", self.dbFileName, sys.exc_info()[0]
+            raise
         pass
     
     def cluster(self):
         """Cluster the contigs"""
+        # check that the user is OK with nuking stuff...
+        if(not self.forceWriting):
+            if(self.dataManager.isClustered(self.dbFileName)):
+                option = raw_input(" ****WARNING**** Database: '"+self.dbFileName+"' has already been clustered.\n" \
+                                   " If you continue you *MAY* overwrite existing bins!\n" \
+                                   " Overwrite? (y,n) : ")
+                print "****************************************************************"
+                if(option.upper() != "Y"):
+                    print "Operation cancelled"
+                    return False
+                else:
+                    print "Overwriting database",self.dbFileName
+
+        # get some data
+        self.loadData()
+        self.dataManager.setClustered(self.dbFileName)
+        return True
+    
         # get a transformer
         dt = DataTransformer()
     
@@ -125,6 +179,8 @@ class ClusterEngine:
         if(self.doPlots):
             dt.renderTransData()
 
+        # all good!
+        return True
 
 ###############################################################################
 ###############################################################################
@@ -143,13 +199,12 @@ class DataTransformer:
         
         # primary data storage
         self.covProfiles = np.array([])          # one big array to store all the data
-        self.contigNames = np.array([])             # column names
-        self.covProfileRows = 0                     # rows and columns excluding header line
-        self.covProfileCols = 0                     #  and row names
+        self.contigNames = np.array([])          # column names
+        self.covProfileRows = 0                  # rows and columns excluding header line
+        self.covProfileCols = 0                  #  and row names
         
         # secondary data storage
-        self.auxondaryFileName = secondaryFN     # the csv holding the secondary (CU?) data
-        self.auxProfiles = np.array([])            # secondary values 
+        self.auxProfiles = np.array([])          # secondary values 
         self.auxColors = np.array([])            # secondary values as colours
         self.auxRows = 0                         # rows in seconday data (Always use only 1 col)
         

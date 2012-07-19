@@ -72,27 +72,28 @@ if __name__ == '__main__':
     parse_parser.add_argument('secprofile', help="csv file containing secondary profile (CUB, TN, etc...)")
     parse_parser.add_argument('dbname', help="name of the database being created")
     parse_parser.add_argument('-d', '--dump', action="store_true", default=False, help="Dump the contents of all tables to screen")
+    parse_parser.add_argument('-f', '--force', action="store_true", default=False, help="Overwrite existing sb file without prompting")
         
     # load saved data and bin
     bin_parser = subparsers.add_parser('bin', help='command line mode - load saved data and bin')
+    bin_parser.add_argument('dbname', help="name of the database to work with")
+    bin_parser.add_argument('-f', '--force', action="store_true", default=False, help="Overwrite existing sb file without prompting")
     
     # parse and bin in one step
     complete_parser = subparsers.add_parser('complete', help='command line mode - parse and bin in one step')
     
+    # TODO - implement these modes
     ##################################################
     # interactive mode
     ##################################################
-    interactive_parser = subparsers.add_parser('prompt', help='jump to interactive shell')
+    #interactive_parser = subparsers.add_parser('prompt', help='jump to interactive shell')
 
     ##################################################
     # batch mode
     ##################################################
-    batch_parser = subparsers.add_parser('batch', help='run commands in batch mode')
-    batch_parser.add_argument('batch_script', help="batch commands to be executed sequentially")
+    #batch_parser = subparsers.add_parser('batch', help='run commands in batch mode')
+    #batch_parser.add_argument('batch_script', help="batch commands to be executed sequentially")
         
-    # add positional options here:
-    #parser.add_argument('infile', help="CSV file of coverages to parse")
-    
     # get and check options
     args = parser.parse_args()
 

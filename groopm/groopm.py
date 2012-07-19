@@ -76,36 +76,52 @@ class GroopMOptionsParser():
             vars.update(locals())
             interactive_shell = GroopMInteractiveConsole(vars)
             interactive_shell.startConsole()
+        
         elif(options.subparser_name == 'batch'):
             # run batch commands            
-            print "Batch mode..."
+            print "****************************************************************"
+            print " [[GroopM]] Running in batch mode..."
+            print "****************************************************************"
             #batch_shell = cmd.GroopMBatchShell()
             #batch_shell.run()
+        
         elif(options.subparser_name == 'parse'):
             # parse raw input
             print "****************************************************************"
-            print " >>> GroopM running in data parsing mode..."
+            print " [[GroopM]] Running in data parsing mode..."
             print "****************************************************************"
             GMdata = mstore.GMDataManager()
-            try:
-                GMdata.createDB(options.bamfiles,
-                                options.reference,
-                                options.secprofile,
-                                options.dbname,
-                                dumpAll=options.dump
-                                )
-            except:
-                print "Error creating new DB:", sys.exc_info()[0]
-                raise
+            success = GMdata.createDB(options.bamfiles,
+                                      options.reference,
+                                      options.secprofile,
+                                      options.dbname,
+                                      dumpAll=options.dump,
+                                      force=options.force
+                                      )
+            if not success:
+                print options.dbname,"not updated" 
                             
         elif(options.subparser_name == 'bin'):
             # bin loaded input
-            print "Binning mode..."
+            print "****************************************************************"
+            print " [[GroopM]] Running in binning mode..."
+            print "****************************************************************"
+            CE = cluster.ClusterEngine(options.dbname,
+                                       force=options.force
+                                       )
+            success = CE.cluster()
+            if not success:
+                print options.dbname,"not updated" 
+        
         elif(options.subparser_name == 'complete'):
-            print "Parse + Binning mode..."
+            print "****************************************************************"
+            print " [[GroopM]] Running in binning mode..."
+            print "****************************************************************"
             
         else:
-            print "[[GroopM]] - Use -i for interactive shell or -h for help"
+            print "****************************************************************"
+            print " [[GroopM]] - Use -i for interactive shell or -h for help"
+            print "****************************************************************"
         return 0
     
 
