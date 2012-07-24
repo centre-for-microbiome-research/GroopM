@@ -192,26 +192,6 @@ class GMDataManager:
                     print "Error creating BIN table:", sys.exc_info()[0]
                     raise
                 #------------------------
-                # Add metadata
-                #------------------------
-                # Create a new group under "/" (root) for storing profile information
-                db_desc = {'bamColNames' : tables.StringCol(500, pos=0),
-                           'numBams' : tables.Int32Col(pos=1),
-                           'merColNames' : tables.StringCol(5000,pos=2),
-                           'merSize' : tables.Int32Col(pos=2),
-                           'numMers' : tables.Int32Col(pos=4),
-                           'numCons' : tables.Int32Col(pos=5),
-                           'numBins' : tables.Int32Col(pos=6),
-                           'clustered' : tables.BoolCol(pos=7),                  # set to true after clustering is complete
-                           'complete' : tables.BoolCol(pos=8)                    # set to true after clustering finishing is complete
-                           }
-                try:
-                    META_table = h5file.createTable(meta_group, 'meta', db_desc, "Descriptive data")
-                    self.initMeta(META_table, str.join(',',bamColNames), len(bamColNames), str.join(',',kse.kmerCols), kmerSize, len(kse.kmerCols), len(contigNames))
-                except:
-                    print "Error creating META table:", sys.exc_info()[0]
-                    raise
-                #------------------------
                 # parse bam files
                 #------------------------
                 # build a table template based on the number of bamfiles we have
@@ -244,6 +224,26 @@ class GMDataManager:
                     auxParser.parse(f, AUX_table, contigNames)
                 except:
                     print "Could not parse the auxilary profile file:",contigsFile,sys.exc_info()[0]
+                    raise
+                #------------------------
+                # Add metadata
+                #------------------------
+                # Create a new group under "/" (root) for storing profile information
+                db_desc = {'bamColNames' : tables.StringCol(500, pos=0),
+                           'numBams' : tables.Int32Col(pos=1),
+                           'merColNames' : tables.StringCol(5000,pos=2),
+                           'merSize' : tables.Int32Col(pos=2),
+                           'numMers' : tables.Int32Col(pos=4),
+                           'numCons' : tables.Int32Col(pos=5),
+                           'numBins' : tables.Int32Col(pos=6),
+                           'clustered' : tables.BoolCol(pos=7),                  # set to true after clustering is complete
+                           'complete' : tables.BoolCol(pos=8)                    # set to true after clustering finishing is complete
+                           }
+                try:
+                    META_table = h5file.createTable(meta_group, 'meta', db_desc, "Descriptive data")
+                    self.initMeta(META_table, str.join(',',bamColNames), len(bamColNames), str.join(',',kse.kmerCols), kmerSize, len(kse.kmerCols), len(contigNames))
+                except:
+                    print "Error creating META table:", sys.exc_info()[0]
                     raise
         except:
             print "Error creating database:", dbFileName, sys.exc_info()[0]
@@ -407,6 +407,44 @@ class GMDataManager:
         except:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
+
+    def getMetaField(self, dbFileName, fieldName):
+        """return the value of fieldName in the metadata tables"""
+        try:
+            with tables.openFile(dbFileName, mode='r') as h5file:
+                # theres only one value
+                return h5file.root.meta.meta.read()[fieldName][0]
+        except:
+            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            raise
+
+    def getNumBams(self, dbFileName):
+        """return the value of numBams in the metadata tables"""
+        return self.getMetaField(dbFileName, 'numBams')
+            
+    def getMerColNames(self, dbFileName):
+        """return the value of merColNames in the metadata tables"""
+        return self.getMetaField(dbFileName, 'merColNames')
+            
+    def getMerSize(self, dbFileName):
+        """return the value of merSize in the metadata tables"""
+        return self.getMetaField(dbFileName, 'merSize')
+
+    def getNumMers(self, dbFileName):
+        """return the value of numMers in the metadata tables"""
+        return self.getMetaField(dbFileName, 'numMers')
+
+    def getNumCons(self, dbFileName):
+        """return the value of numCons in the metadata tables"""
+        return self.getMetaField(dbFileName, 'numCons')
+
+    def getNumBins(self, dbFileName):
+        """return the value of numBins in the metadata tables"""
+        return self.getMetaField(dbFileName, 'numBins')
+        
+    def getBamColNames(self, dbFileName):
+        """return the value of bamColNames in the metadata tables"""
+        return self.getMetaField(dbFileName, 'bamColNames')
 
 #------------------------------------------------------------------------------
 # GET / SET WORKFLOW FLAGS 

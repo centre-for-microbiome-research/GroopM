@@ -78,7 +78,7 @@ class DataBlob:
     """
     def __init__(self, dbFileName, maxRows=0, force=False):
         # data
-        self.dataManager = mstore.GMDataManager()       # most data is saved to hdf
+        self.indicies = np.array([])        # indicies into the data structure based on condition
         self.covProfiles = np.array([])
         self.contigNames = np.array([])
         self.contigLengths = np.array([])
@@ -86,26 +86,83 @@ class DataBlob:
         self.auxColors = np.array([])
         self.kmerSigs = np.array([])
         self.bins = np.array([])
-        self.transformedData = np.array([])             # the munged data points
+        self.transformedData = np.array([]) # the munged data points
         
+        self.condition = ""                 # condition will be supplied at loading time
+        self.numContigs = 0                 # this depends on the condition given
+        self.numStoits = 0                  # this depends on the data which was parsed
+
         # misc
+        self.dataManager = mstore.GMDataManager()       # most data is saved to hdf
         self.dbFileName = dbFileName        # db containing all the data we'd like to use
         self.forceWriting = force           # overwrite existng values silently?
         self.maxRows = maxRows              # limit the number of rows we'll parse
 
-    def loadData(self, condition=""):
+    def loadData(self, condition="", loadKSigs=False):
         """Load pre-parsed data"""
         try:
-            indicies = self.dataManager.getConditionalIndicies(self.dbFileName, condition=condition)
-            self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indicies=indicies)
-            self.auxProfiles = self.dataManager.getAuxProfiles(self.dbFileName, indicies=indicies)
-            self.bins = self.dataManager.getBins(self.dbFileName, indicies=indicies)
-            self.contigNames = self.dataManager.getContigNames(self.dbFileName, indicies=indicies)
-            self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indicies=indicies)
-            self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indicies=indicies)
+            self.numStoits = self.getNumStoits()
+            self.condition = condition
+            print "Loading indicies (", condition,")"
+            self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName, condition=condition)
+            self.numContigs = len(self.indicies)
+            print "Working with:",self.numContigs,"contigs"
+
+            print "Loading coverage profiles"
+            self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indicies=self.indicies)
+
+            print "Loading aux profiles"
+            self.auxProfiles = self.dataManager.getAuxProfiles(self.dbFileName, indicies=self.indicies)
+            # use HSV to RGB to generate colours
+            S = 1       # SAT and VAL remain fixed at 1. Reduce to make
+            V = 1       # Pastels if that's your preference...
+            for val in self.auxProfiles:
+                self.auxColors = np.append(self.auxColors, [colorsys.hsv_to_rgb(val, S, V)])
+            self.auxColors = np.reshape(self.auxColors, (self.numContigs, 3))            
+            
+            print "Loading bins"
+            self.bins = self.dataManager.getBins(self.dbFileName, indicies=self.indicies)
+            
+            print "Loading contig names"
+            self.contigNames = self.dataManager.getContigNames(self.dbFileName, indicies=self.indicies)
+            
+            print "Loading contig lengths"
+            self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indicies=self.indicies)
+
+            if(loadKSigs):
+                print "Loading kmer sigs"
+                self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indicies=self.indicies)
         except:
             print "Error loading DB:", self.dbFileName, sys.exc_info()[0]
             raise
+
+    def getNumStoits(self):
+        """return the value of (stoit)numBams in the metadata tables"""
+        return self.dataManager.getNumBams(self.dbFileName)
+            
+    def getMerColNames(self):
+        """return the value of merColNames in the metadata tables"""
+        return self.dataManager.getMerColNames(self.dbFileName)
+            
+    def getMerSize(self):
+        """return the value of merSize in the metadata tables"""
+        return self.dataManager.getMerSize(self.dbFileName)
+
+    def getNumMers(self):
+        """return the value of numMers in the metadata tables"""
+        return self.dataManager.getNumMers(self.dbFileName)
+
+    def getNumCons(self):
+        """return the value of numCons in the metadata tables"""
+        return self.dataManager.getNumCons(self.dbFileName)
+
+    def getNumBins(self):
+        """return the value of numBins in the metadata tables"""
+        return self.dataManager.getNumBins(self.dbFileName)
+        
+    def getStoitColNames(self):
+        """return the value of (stoit)bamColNames in the metadata tables"""
+        return self.dataManager.getBamColNames(self.dbFileName)
         
 ###############################################################################
 ###############################################################################
@@ -119,19 +176,19 @@ class ClusterEngine:
         
         # associated classes
         self.dataTransformer = DataTransformer(self.dataBlob)
-        self.clusterBlob = ClusterBlob(self.dataBlob)
+        #self.clusterBlob = ClusterBlob(self.dataBlob)
     
         # misc
         self.plot = plot
-        self.outFile = outfile
-        self.force = force
+        self.outFile = outFile
+        self.forceWriting = force
         
     def cluster(self):
         """Cluster the contigs"""
         # check that the user is OK with nuking stuff...
         if(not self.forceWriting):
-            if(self.dataManager.isClustered(self.dbFileName)):
-                option = raw_input(" ****WARNING**** Database: '"+self.dbFileName+"' has already been clustered.\n" \
+            if(self.dataBlob.dataManager.isClustered(self.dataBlob.dbFileName)):
+                option = raw_input(" ****WARNING**** Database: '"+self.dataBlob.dbFileName+"' has already been clustered.\n" \
                                    " If you continue you *MAY* overwrite existing bins!\n" \
                                    " Overwrite? (y,n) : ")
                 print "****************************************************************"
@@ -139,16 +196,16 @@ class ClusterEngine:
                     print "Operation cancelled"
                     return False
                 else:
-                    print "Overwriting database",self.dbFileName
+                    print "Overwriting database",self.dataBlob.dbFileName
 
         # get some data
-        self.dataBlob.loadData()
+        self.dataBlob.loadData(condition="length >= 15000")
     
         # transform the data
-        self.dataTransformer.transformData(kf, sf)
-    
+        self.dataTransformer.transformData()
+        self.dataTransformer.renderTransData()
         # cluster and bin!
-        self.clusterBlob.clusterPoints()
+        #self.clusterBlob.clusterPoints()
 
         return
     
@@ -183,15 +240,10 @@ class DataTransformer:
         # data 
         self.dataBlob = db
 
-        # more about data storage
-        self.covProfileRows = 0
-        self.covProfileCols = 0
-        self.auxRows = 0
-        
         # constraints
         self.maxRows = maxRows                   # limit the number of rows we'll parse
         
-        # transformed data strorage
+        # misc
         self.radialVals = np.array([])           # for storing the distance from the origin to each 
         self.scaleFactor = scaleFactor           # scale every thing in the transformed data to this dimension
         
@@ -204,34 +256,36 @@ class DataTransformer:
         # Update this guy now we know how big he has to be
         # do it this way because we may apply successive transforms to this
         # guy and this is a neat way of clearing the data 
-        s = (self.covProfileRows,3)
-        self.transformedData = np.zeros(s)
+        s = (self.dataBlob.numContigs,3)
+        self.dataBlob.transformedData = np.zeros(s)
         tmp_data = np.array([])
-        
-        # the radius of the mapping sphere
-        RX = np.amax(self.covProfiles)
-        RD = np.median(self.covProfiles)
-        
+
         # first we shift the edge values accordingly and then 
         # map each point onto the surface of a hyper-sphere
         print "Start radial mapping..."
-        for point in self.covProfiles:
+        for point in self.dataBlob.covProfiles:
             norm = np.linalg.norm(point)
             self.radialVals = np.append(self.radialVals, norm)
-            tmp_data = np.append(tmp_data, self.rotateVectorAndScale(point, RX, RD, phi_max=15))
+            point /= np.abs(np.log(norm+1)) # make sure we're always taking a log of something greater than 1
+            tmp_data = np.append(tmp_data, self.rotateVectorAndScale(point, phi_max=8))
 
+        # it's nice to think that we can divide through by the min
+        # but we need to make sure that it's not at 0!
+        min_r = np.amin(self.radialVals)
+        if(0 == min_r):
+            min_r = 1
         # reshape this guy
-        tmp_data = np.reshape(tmp_data, (self.covProfileRows,self.covProfileCols))
+        tmp_data = np.reshape(tmp_data, (self.dataBlob.numContigs,self.dataBlob.numStoits))
     
         # now we use PCA to map the surface points back onto a 
         # 2 dimensional plane, thus making the data usefuller
         index = 0
-        if(self.covProfileCols == 2):
+        if(self.dataBlob.numStoits == 2):
             print "Skipping dimensionality reduction"
-            for point in self.covProfiles:
-                self.transformedData[index,0] = tmp_data[index,0]
-                self.transformedData[index,1] = tmp_data[index,1]
-                self.transformedData[index,2] = math.log(self.radialVals[index])
+            for point in self.dataBlob.covProfiles:
+                self.dataBlob.transformedData[index,0] = tmp_data[index,0]
+                self.dataBlob.transformedData[index,1] = tmp_data[index,1]
+                self.dataBlob.transformedData[index,2] = math.log(self.radialVals[index]/min_r)
                 index += 1
         else:    
             # Project the points onto a 2d plane which is orthonormal
@@ -241,20 +295,23 @@ class DataTransformer:
             p = PCA.PCA(tmp_data)
             components = p.pc()
             for point in components:
-                self.transformedData[index,0] = components[index,0]
-                self.transformedData[index,1] = components[index,1]
-                self.transformedData[index,2] = math.sqrt(math.log(self.radialVals[index]))
+                self.dataBlob.transformedData[index,0] = components[index,0]
+                self.dataBlob.transformedData[index,1] = components[index,1]
+                if(0 > self.radialVals[index]):
+                    self.dataBlob.transformedData[index,2] = 0
+                else:
+                    self.dataBlob.transformedData[index,2] = math.log(self.radialVals[index]/min_r)
                 index += 1
 
         # finally scale the matrix to make it equal in all dimensions                
-        min = np.amin(self.transformedData, axis=0)
-        max = np.amax(self.transformedData, axis=0)
+        min = np.amin(self.dataBlob.transformedData, axis=0)
+        max = np.amax(self.dataBlob.transformedData, axis=0)
         max = max - min
         max = max / (self.scaleFactor-1)
         for i in range(0,3):
-            self.transformedData[:,i] = (self.transformedData[:,i] -  min[i])/max[i]
+            self.dataBlob.transformedData[:,i] = (self.dataBlob.transformedData[:,i] -  min[i])/max[i]
 
-    def rotateVectorAndScale(self, point, RX, RD, phi_max=15, las=0):
+    def rotateVectorAndScale(self, point, phi_max=6, las=0):
         """
         Move a vector closer to the center of the positive quadrant
         
@@ -284,10 +341,10 @@ class DataTransformer:
         onto the surface of a hypersphere with radius R. This is a simple
         scaling operation.
        
-        We calculate phi based on theta. The idea is that vectors closer
-        to the corners should be pertubed more than those closer to the center.
-        set phi max as the divisor in a radial fraction.
+        The idea is that vectors closer to the corners should be pertubed
+        more than those closer to the center.
         
+        Set phi max as the divisor in a radial fraction.
         Ie set to '12' for pi/12 = 15 deg; 6 = pi/6 = 30 deg etc
         """
         # the vector we wish to move closer too...
@@ -299,31 +356,29 @@ class DataTransformer:
         # we need the angle between this vector and one of the axes
         ax = np.zeros_like(point)
         ax[0] = 1
-        
         if(0 == las):
-            las = np.arccos(np.dot(ax,center_vector)/np.linalg.norm(ax)/np.linalg.norm(center_vector))
-        
-        # find the existing angle between them theta
+            las = self.getAngBetween(ax, center_vector)
+
+        # find the existing angle between them -> theta
         theta = self.getAngBetween(point, center_vector)
-        
-        # at the boundary (theta = pi/4) we want max rotation
-        # at the center we like 0 rotation. For simplicity, let's use the logistic function!
-        lim = np.pi
-        phi = (np.pi/phi_max) / (1 + np.exp(-(2*lim)/las*theta + lim))                 # logistic function  
-        
-        # now we can find a vector which approximates the rotation of unit(V)
-        # by phi. It's norm will be a bit wonky but we're going to scale it anywho...
-        V_p = ((point / np.linalg.norm(point)) * ( theta - phi ) + center_vector * phi ) / theta
-        
+        V_p = point
+        # theta == 0 means we are already on the center!
+        if(0 != theta):
+            # at the boundary we want max rotation
+            # at the center we like 0 rotation. For simplicity, let's use the logistic function!
+            # The denominator produces a value of ~0 if theta == 0 and ~1 is theta == las  
+            phi = (np.pi/phi_max) / (2*(1 + np.exp(-1*(2*np.pi)*(theta/las) + np.pi)))  
+            
+            # now we can find a vector which approximates the rotation of unit(V)
+            # by phi. It's norm will be a bit wonky but we're going to scale it anywho...
+            V_p = ((point / np.linalg.norm(point)) * ( theta - phi ) + center_vector * phi ) / theta
+            V_p /= np.linalg.norm(V_p)
+    
         # finally scale V_p and return
-        point_r = np.linalg.norm(point)
-        #scale_r = (RN - point_r)/(RX - RN) + 2                              # linear
-        K = RD/2
-        scale_r = (((RD - K) * (np.log(point_r))) / np.log(RX)) + K    # log
-        return scale_r * (V_p / np.linalg.norm(V_p))
+        return V_p / np.linalg.norm(point)
         
     def getAngBetween(self, P1, P2):
-        """Return the angle between two points"""
+        """Return the angle between two points (in radians)"""
         # find the existing angle between them theta
         c = np.dot(P1,P2)/np.linalg.norm(P1)/np.linalg.norm(P2) 
         # rounding errors hurt everyone...
@@ -340,8 +395,8 @@ class DataTransformer:
         """Write transformed data to file"""
         outCSV = csv.writer(open(CSVFileName, 'wb'), dialect)
         outCSV.writerow(["'name'","'x'","'y'","'z'"])
-        for index in range (0,self.covProfileRows):
-            outCSV.writerow([self.contigNames[index], self.transformedData[index,0], self.transformedData[index,1], self.transformedData[index,2]])
+        for index in range (0,self.dataBlob.covProfileRows):
+            outCSV.writerow([self.dataBlob.contigNames[index], self.dataBlob.transformedData[index,0], self.dataBlob.transformedData[index,1], self.dataBlob.transformedData[index,2]])
 
     def plotTransViews(self, tag="fordens"):
         """Plot top, side and front views of the transformed data"""
@@ -352,64 +407,51 @@ class DataTransformer:
     def renderTransData(self, fileName="", show=True, elev=45, azim=45, all=False):
         """Plot transformed data in 3D"""
         fig = plt.figure()
-        if(self.auxondaryFileName != ""):
-            if(all):
-                myAXINFO = {
-                    'x': {'i': 0, 'tickdir': 1, 'juggled': (1, 0, 2),
-                    'color': (0, 0, 0, 0, 0)},
-                    'y': {'i': 1, 'tickdir': 0, 'juggled': (0, 1, 2),
-                    'color': (0, 0, 0, 0, 0)},
-                    'z': {'i': 2, 'tickdir': 0, 'juggled': (0, 2, 1),
-                    'color': (0, 0, 0, 0, 0)},
-                }
+        if(all):
+            myAXINFO = {
+                'x': {'i': 0, 'tickdir': 1, 'juggled': (1, 0, 2),
+                'color': (0, 0, 0, 0, 0)},
+                'y': {'i': 1, 'tickdir': 0, 'juggled': (0, 1, 2),
+                'color': (0, 0, 0, 0, 0)},
+                'z': {'i': 2, 'tickdir': 0, 'juggled': (0, 2, 1),
+                'color': (0, 0, 0, 0, 0)},
+            }
 
-                ax = fig.add_subplot(131, projection='3d')
-                ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
-                ax.azim = 0
-                ax.elev = 0
-                for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
-                    for elt in axis.get_ticklines() + axis.get_ticklabels():
-                        elt.set_visible(False)
-                ax.w_xaxis._AXINFO = myAXINFO
-                ax.w_yaxis._AXINFO = myAXINFO
-                ax.w_zaxis._AXINFO = myAXINFO
-                
-                ax = fig.add_subplot(132, projection='3d')
-                ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
-                ax.azim = 90
-                ax.elev = 0
-                for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
-                    for elt in axis.get_ticklines() + axis.get_ticklabels():
-                        elt.set_visible(False)
-                ax.w_xaxis._AXINFO = myAXINFO
-                ax.w_yaxis._AXINFO = myAXINFO
-                ax.w_zaxis._AXINFO = myAXINFO
-                
-                ax = fig.add_subplot(133, projection='3d')
-                ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
-                ax.azim = 0
-                ax.elev = 90
-                for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
-                    for elt in axis.get_ticklines() + axis.get_ticklabels():
-                        elt.set_visible(False)
-                ax.w_xaxis._AXINFO = myAXINFO
-                ax.w_yaxis._AXINFO = myAXINFO
-                ax.w_zaxis._AXINFO = myAXINFO
-            else:
-                ax = fig.add_subplot(111, projection='3d')
-                ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
-                ax.azim = azim
-                ax.elev = elev
-                ax.set_axis_off()
-
-                #ax = fig.add_subplot(122, projection='3d')
-                #ax.scatter(self.covProfiles[:,0], self.covProfiles[:,1], self.covProfiles[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
-                #ax.azim = azim
-                #ax.elev = elev
-                #ax.set_axis_off()
+            ax = fig.add_subplot(131, projection='3d')
+            ax.scatter(self.dataBlob.transformedData[:,0], self.dataBlob.transformedData[:,1], self.dataBlob.transformedData[:,2], edgecolors=self.dataBlob.auxColors, c=self.dataBlob.auxColors, marker='.')
+            ax.azim = 0
+            ax.elev = 0
+            for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
+                for elt in axis.get_ticklines() + axis.get_ticklabels():
+                    elt.set_visible(False)
+            ax.w_xaxis._AXINFO = myAXINFO
+            ax.w_yaxis._AXINFO = myAXINFO
+            ax.w_zaxis._AXINFO = myAXINFO
+            
+            ax = fig.add_subplot(132, projection='3d')
+            ax.scatter(self.dataBlob.transformedData[:,0], self.dataBlob.transformedData[:,1], self.dataBlob.transformedData[:,2], edgecolors=self.dataBlob.auxColors, c=self.dataBlob.auxColors, marker='.')
+            ax.azim = 90
+            ax.elev = 0
+            for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
+                for elt in axis.get_ticklines() + axis.get_ticklabels():
+                    elt.set_visible(False)
+            ax.w_xaxis._AXINFO = myAXINFO
+            ax.w_yaxis._AXINFO = myAXINFO
+            ax.w_zaxis._AXINFO = myAXINFO
+            
+            ax = fig.add_subplot(133, projection='3d')
+            ax.scatter(self.dataBlob.transformedData[:,0], self.dataBlob.transformedData[:,1], self.dataBlob.transformedData[:,2], edgecolors=self.dataBlob.auxColors, c=self.dataBlob.auxColors, marker='.')
+            ax.azim = 0
+            ax.elev = 90
+            for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
+                for elt in axis.get_ticklines() + axis.get_ticklabels():
+                    elt.set_visible(False)
+            ax.w_xaxis._AXINFO = myAXINFO
+            ax.w_yaxis._AXINFO = myAXINFO
+            ax.w_zaxis._AXINFO = myAXINFO
         else:
             ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2])
+            ax.scatter(self.dataBlob.transformedData[:,0], self.dataBlob.transformedData[:,1], self.dataBlob.transformedData[:,2], edgecolors=self.dataBlob.auxColors, c=self.dataBlob.auxColors, marker='.')
             ax.azim = azim
             ax.elev = elev
             ax.set_axis_off()
@@ -437,9 +479,9 @@ class ClusterBlob:
     All the bits and bobs you'll need to cluster and bin out 
     pre-transformed primary data
     """    
-    def __init__(self, rowNames, secValues, secColors, transformedData, scaleFactor):
+    def __init__(self, dataBlob):
         # See DataTransformer for details about these variables
-        self.contigNames = rowNames
+        self.dataBlob = dataBlob
         self.auxProfiles = secValues 
         self.auxColors = secColors
         self.transformedData = transformedData
