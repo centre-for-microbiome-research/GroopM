@@ -71,67 +71,61 @@ import mstore
 ###############################################################################
 ###############################################################################
 ###############################################################################
-class ClusterEngine:
-    """Top level interface for clustering contigs"""
-    def __init__(self, dbFileName, plot=False, outFile="", maxRows=0, force=False):
-        # Data
-        self.dataManager = mstore.GMDataManager()
+class DataBlob:
+    """Interacts with the groopm datamanager and local data fields
+    
+    Simple a wrapper around a group of numpy arrays
+    """
+    def __init__(self, dbFileName, maxRows=0, force=False):
+        # data
+        self.dataManager = mstore.GMDataManager()       # most data is saved to hdf
         self.covProfiles = np.array([])
         self.contigNames = np.array([])
         self.contigLengths = np.array([])
         self.auxProfiles = np.array([]) 
         self.auxColors = np.array([])
-        
         self.kmerSigs = np.array([])
         self.bins = np.array([])
+        self.transformedData = np.array([])             # the munged data points
         
-        # associated classes
-        self.dataTransformer = DataTransformer()
-        self.clusterBlob = None
-
         # misc
         self.dbFileName = dbFileName        # db containing all the data we'd like to use
         self.forceWriting = force           # overwrite existng values silently?
         self.maxRows = maxRows              # limit the number of rows we'll parse
-        self.doPlots = plot                 # produce many? plots
-        self.outputFile = outFile           # where to write output stuffs to
-        
+
     def loadData(self, condition=""):
         """Load pre-parsed data"""
         try:
-            self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, condition=condition)
-            self.auxProfiles = self.dataManager.getAuxProfiles(self.dbFileName, condition=condition)
-            self.bins = self.dataManager.getBins(self.dbFileName, condition=condition)
-            self.contigNames = self.dataManager.getContigNames(self.dbFileName, condition=condition)
-            self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, condition=condition)
-            self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, condition=condition)
-
             indicies = self.dataManager.getConditionalIndicies(self.dbFileName, condition=condition)
-            
-            print self.covProfiles
-            print self.dataManager.getCoverageProfiles(self.dbFileName, indicies=indicies)
-            print self.auxProfiles
-            print self.dataManager.getAuxProfiles(self.dbFileName, indicies=indicies)
-            print self.bins
-            print self.dataManager.getBins(self.dbFileName, indicies=indicies)
-            print self.contigNames
-            print self.dataManager.getContigNames(self.dbFileName, indicies=indicies)
-            print self.contigLengths
-            print self.dataManager.getContigLengths(self.dbFileName, indicies=indicies)
-            print self.kmerSigs
-            print self.dataManager.getKmerSigs(self.dbFileName, indicies=indicies)
-
-
-            self.dataManager.setBins(self.dbFileName, {0:7})
-            print self.dataManager.getBins(self.dbFileName, indicies=indicies)
-            
-
-            
+            self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indicies=indicies)
+            self.auxProfiles = self.dataManager.getAuxProfiles(self.dbFileName, indicies=indicies)
+            self.bins = self.dataManager.getBins(self.dbFileName, indicies=indicies)
+            self.contigNames = self.dataManager.getContigNames(self.dbFileName, indicies=indicies)
+            self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indicies=indicies)
+            self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indicies=indicies)
         except:
             print "Error loading DB:", self.dbFileName, sys.exc_info()[0]
             raise
-        pass
+        
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+class ClusterEngine:
+    """Top level interface for clustering contigs"""
+    def __init__(self, dbFileName, plot=False, outFile="", maxRows=0, force=False):
+        # Data
+        self.dataBlob = DataBlob(dbFileName)
+        
+        # associated classes
+        self.dataTransformer = DataTransformer(self.dataBlob)
+        self.clusterBlob = ClusterBlob(self.dataBlob)
     
+        # misc
+        self.plot = plot
+        self.outFile = outfile
+        self.force = force
+        
     def cluster(self):
         """Cluster the contigs"""
         # check that the user is OK with nuking stuff...
@@ -148,22 +142,14 @@ class ClusterEngine:
                     print "Overwriting database",self.dbFileName
 
         # get some data
-        self.loadData()
-        self.dataManager.setClustered(self.dbFileName)
-        return True
-    
-        # get a transformer
-        dt = DataTransformer()
+        self.dataBlob.loadData()
     
         # transform the data
-        dt.transformData()
+        self.dataTransformer.transformData(kf, sf)
     
-        # print top, front, side views
-        #dt.plotTransViews()
-        
         # cluster and bin!
-        cl = ClusterBlob(dt.rowNames, dt.secValues, dt.secColors, dt.transformedData, dt.scaleFactor)
-        cl.clusterPoints()
+        self.clusterBlob.clusterPoints()
+
         return
     
         # cluster points
@@ -177,7 +163,7 @@ class ClusterEngine:
     
         # plot the transformed space (if we've been asked to...)
         if(self.doPlots):
-            dt.renderTransData()
+            self.dataTransformer.renderTransData()
 
         # all good!
         return True
@@ -192,31 +178,23 @@ class DataTransformer:
     Loads data from a h5 database. This DB should have been built
     using groopm parse
     """
-    def __init__( self, maxRows = 0):
+    def __init__( self, db, maxRows = 0, scaleFactor=1000):
+        
+        # data 
+        self.dataBlob = db
+
+        # more about data storage
+        self.covProfileRows = 0
+        self.covProfileCols = 0
+        self.auxRows = 0
         
         # constraints
         self.maxRows = maxRows                   # limit the number of rows we'll parse
         
-        # primary data storage
-        self.covProfiles = np.array([])          # one big array to store all the data
-        self.contigNames = np.array([])          # column names
-        self.covProfileRows = 0                  # rows and columns excluding header line
-        self.covProfileCols = 0                  #  and row names
-        
-        # secondary data storage
-        self.auxProfiles = np.array([])          # secondary values 
-        self.auxColors = np.array([])            # secondary values as colours
-        self.auxRows = 0                         # rows in seconday data (Always use only 1 col)
-        
         # transformed data strorage
         self.radialVals = np.array([])           # for storing the distance from the origin to each 
-        self.transformedData = np.array([])      # the final munged data points
-        self.scaleFactor = 1000                  # scale every thing in the transformed data to this dimension
+        self.scaleFactor = scaleFactor           # scale every thing in the transformed data to this dimension
         
-#------------------------------------------------------------------------------
-# LOAD DATABASE 
-        
-
 #------------------------------------------------------------------------------
 # DATA TRANSFORMATIONS 
 

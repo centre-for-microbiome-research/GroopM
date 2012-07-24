@@ -147,7 +147,6 @@ class GMDataManager:
                         print "Overwriting database",dbFileName
         except IOError as e:
             print "Creating new database", dbFileName
-            raise
         
         # create the db
         try:        
@@ -664,7 +663,9 @@ class KmerSigEngine:
         sig = dict(zip(self.kmerCols, [0.0] * self.numMers))
         ll = len(seq)
         for i in range(0,ll-self.kLen+1):
-            sig[self.shiftLowLexi(seq[i:i+self.kLen])] += 1
+            this_mer = self.shiftLowLexi(seq[i:i+self.kLen])
+            if this_mer in sig:
+                sig[this_mer] += 1
         # normalise by length and return
         return dict(zip(self.kmerCols, [ X / ll for X in sig.values()]))
 
