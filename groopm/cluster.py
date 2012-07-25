@@ -63,6 +63,8 @@ import scipy.ndimage as ndi
 import scipy.spatial.distance as ssdist
 from scipy.stats import kstest
 
+import time
+
 # GroopM imports
 import PCA
 import mstore
@@ -427,31 +429,48 @@ class ClusterEngine:
                     print "Overwriting database",self.dataBlob.dbFileName
 
         # get some data
+        t0 = time.time()
         print "Load data"
         self.dataBlob.loadData(condition="length >= 10000")
-    
+        t1 = time.time()
+        print "\tTHIS: [",self.secondsToStr(t1-t0),"]\tTOTAL: [",self.secondsToStr(t1-t0),"]"
+        
         # transform the data
         print "Apply data transformations"
         self.dataBlob.transformData()
         # plot the transformed space (if we've been asked to...)
         if(self.plot):
             self.dataBlob.renderTransData()
+        t2 = time.time()
+        print "\tTHIS: [",self.secondsToStr(t2-t1),"]\tTOTAL: [",self.secondsToStr(t2-t0),"]"
         
         # cluster and bin!
         print "Create cores"
         self.clusterBlob.createCores()
+        t3 = time.time()
+        print "\tTHIS: [",self.secondsToStr(t3-t2),"]\tTOTAL: [",self.secondsToStr(t3-t0),"]"
         
         # now we assume that some true bins may be separated across two cores
         # try to condense things a little
         print "Condense cores"
         self.clusterBlob.condenseCores()
+        t4 = time.time()
+        print "\tTHIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
         
         # Now we use SOMs to classify the remaininfg contigs
         print "Start SOM classification"
+        t5 = time.time()
+        print "\tTHIS: [",self.secondsToStr(t5-t4),"]\tTOTAL: [",self.secondsToStr(t5-t0),"]"
 
         # all good!
+        t6 = time.time()
+        print "\tTOTAL: [",self.secondsToStr(t6-t0),"]"
         return True
 
+    def secondsToStr(self, t):
+        rediv = lambda ll,b : list(divmod(ll[0],b)) + ll[1:]
+        return "%d:%02d:%02d.%03d" % tuple(reduce(rediv,[[t*1000,],1000,60,60]))
+    
 ###############################################################################
 ###############################################################################
 ###############################################################################
