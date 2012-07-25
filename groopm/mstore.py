@@ -472,7 +472,7 @@ class GMDataManager:
             raise
             
     def isComplete(self, dbFileName):
-        """Has this data set been clustered?"""
+        """Has this data set been *completely* clustered?"""
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
                 return h5file.root.meta.meta.read()['complete']

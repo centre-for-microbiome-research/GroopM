@@ -76,7 +76,7 @@ class DataBlob:
     
     Simple a wrapper around a group of numpy arrays
     """
-    def __init__(self, dbFileName, maxRows=0, force=False):
+    def __init__(self, dbFileName, force=False, scaleFactor=1000):
         # data
         self.indicies = np.array([])        # indicies into the data structure based on condition
         self.covProfiles = np.array([])
@@ -96,22 +96,22 @@ class DataBlob:
         self.dataManager = mstore.GMDataManager()       # most data is saved to hdf
         self.dbFileName = dbFileName        # db containing all the data we'd like to use
         self.forceWriting = force           # overwrite existng values silently?
-        self.maxRows = maxRows              # limit the number of rows we'll parse
+        self.scaleFactor = scaleFactor      # scale every thing in the transformed data to this dimension
 
     def loadData(self, condition="", loadKSigs=False):
         """Load pre-parsed data"""
         try:
             self.numStoits = self.getNumStoits()
             self.condition = condition
-            print "Loading indicies (", condition,")"
+            print "\tLoading indicies (", condition,")"
             self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName, condition=condition)
             self.numContigs = len(self.indicies)
-            print "Working with:",self.numContigs,"contigs"
+            print "\tWorking with:",self.numContigs,"contigs"
 
-            print "Loading coverage profiles"
+            print "\tLoading coverage profiles"
             self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indicies=self.indicies)
 
-            print "Loading aux profiles"
+            print "\tLoading aux profiles"
             self.auxProfiles = self.dataManager.getAuxProfiles(self.dbFileName, indicies=self.indicies)
             # use HSV to RGB to generate colours
             S = 1       # SAT and VAL remain fixed at 1. Reduce to make
@@ -120,21 +120,24 @@ class DataBlob:
                 self.auxColors = np.append(self.auxColors, [colorsys.hsv_to_rgb(val, S, V)])
             self.auxColors = np.reshape(self.auxColors, (self.numContigs, 3))            
             
-            print "Loading bins"
+            print "\tLoading bins"
             self.bins = self.dataManager.getBins(self.dbFileName, indicies=self.indicies)
             
-            print "Loading contig names"
+            print "\tLoading contig names"
             self.contigNames = self.dataManager.getContigNames(self.dbFileName, indicies=self.indicies)
             
-            print "Loading contig lengths"
+            print "\tLoading contig lengths"
             self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indicies=self.indicies)
 
             if(loadKSigs):
-                print "Loading kmer sigs"
+                print "\tLoading kmer sigs"
                 self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indicies=self.indicies)
         except:
             print "Error loading DB:", self.dbFileName, sys.exc_info()[0]
             raise
+
+#------------------------------------------------------------------------------
+# GET / SET 
 
     def getNumStoits(self):
         """return the value of (stoit)numBams in the metadata tables"""
@@ -152,9 +155,10 @@ class DataBlob:
         """return the value of numMers in the metadata tables"""
         return self.dataManager.getNumMers(self.dbFileName)
 
-    def getNumCons(self):
-        """return the value of numCons in the metadata tables"""
-        return self.dataManager.getNumCons(self.dbFileName)
+### USE the member vars instead!
+#    def getNumCons(self):
+#        """return the value of numCons in the metadata tables"""
+#        return self.dataManager.getNumCons(self.dbFileName)
 
     def getNumBins(self):
         """return the value of numBins in the metadata tables"""
@@ -163,155 +167,83 @@ class DataBlob:
     def getStoitColNames(self):
         """return the value of (stoit)bamColNames in the metadata tables"""
         return self.dataManager.getBamColNames(self.dbFileName)
-        
-###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
-class ClusterEngine:
-    """Top level interface for clustering contigs"""
-    def __init__(self, dbFileName, plot=False, outFile="", maxRows=0, force=False):
-        # Data
-        self.dataBlob = DataBlob(dbFileName)
-        
-        # associated classes
-        self.dataTransformer = DataTransformer(self.dataBlob)
-        #self.clusterBlob = ClusterBlob(self.dataBlob)
     
-        # misc
-        self.plot = plot
-        self.outFile = outFile
-        self.forceWriting = force
-        
-    def cluster(self):
-        """Cluster the contigs"""
-        # check that the user is OK with nuking stuff...
-        if(not self.forceWriting):
-            if(self.dataBlob.dataManager.isClustered(self.dataBlob.dbFileName)):
-                option = raw_input(" ****WARNING**** Database: '"+self.dataBlob.dbFileName+"' has already been clustered.\n" \
-                                   " If you continue you *MAY* overwrite existing bins!\n" \
-                                   " Overwrite? (y,n) : ")
-                print "****************************************************************"
-                if(option.upper() != "Y"):
-                    print "Operation cancelled"
-                    return False
-                else:
-                    print "Overwriting database",self.dataBlob.dbFileName
-
-        # get some data
-        self.dataBlob.loadData(condition="length >= 15000")
+    def isClustered(self):
+        """Has the data been clustered already"""
+        return self.dataManager.isClustered(self.dbFileName)
     
-        # transform the data
-        self.dataTransformer.transformData()
-        self.dataTransformer.renderTransData()
-        # cluster and bin!
-        #self.clusterBlob.clusterPoints()
-
-        return
-    
-        # cluster points
-        #if("" != options.secondary_data):
-        #    dt.clusterPoints()
-        #    dt.renderTransData("postclust.png")
-        
-        # write to the output file
-#        if("" != self.outputFile):
-#            dt.writeOutput(self.outputFile, dialect)
-    
-        # plot the transformed space (if we've been asked to...)
-        if(self.doPlots):
-            self.dataTransformer.renderTransData()
-
-        # all good!
-        return True
-
-###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
-class DataTransformer:
-    """Munge raw profile data into a 3D coord system
-    
-    Loads data from a h5 database. This DB should have been built
-    using groopm parse
-    """
-    def __init__( self, db, maxRows = 0, scaleFactor=1000):
-        
-        # data 
-        self.dataBlob = db
-
-        # constraints
-        self.maxRows = maxRows                   # limit the number of rows we'll parse
-        
-        # misc
-        self.radialVals = np.array([])           # for storing the distance from the origin to each 
-        self.scaleFactor = scaleFactor           # scale every thing in the transformed data to this dimension
-        
+    def isComplete(self):
+        """Has the data been *completely* clustered already"""
+        return self.dataManager.isComplete(self.dbFileName)
 #------------------------------------------------------------------------------
 # DATA TRANSFORMATIONS 
 
     def transformData(self, kf=10, sf=1):
         """Perform all the necessary data transformations"""
-        print "Applying transformations..."
         # Update this guy now we know how big he has to be
         # do it this way because we may apply successive transforms to this
         # guy and this is a neat way of clearing the data 
-        s = (self.dataBlob.numContigs,3)
-        self.dataBlob.transformedData = np.zeros(s)
+        s = (self.numContigs,3)
+        self.transformedData = np.zeros(s)
         tmp_data = np.array([])
 
+        print "\tRadial mapping"
         # first we shift the edge values accordingly and then 
         # map each point onto the surface of a hyper-sphere
-        print "Start radial mapping..."
-        for point in self.dataBlob.covProfiles:
+        # the vector we wish to move closer to...
+        radialVals = np.array([])        
+        ax = np.zeros_like(self.covProfiles[0])
+        ax[0] = 1
+        las = self.getAngBetween(ax, np.ones_like(self.covProfiles[0]))
+        for point in self.covProfiles:
             norm = np.linalg.norm(point)
-            self.radialVals = np.append(self.radialVals, norm)
+            radialVals = np.append(radialVals, norm)
             point /= np.abs(np.log(norm+1)) # make sure we're always taking a log of something greater than 1
-            tmp_data = np.append(tmp_data, self.rotateVectorAndScale(point, phi_max=8))
+            tmp_data = np.append(tmp_data, self.rotateVectorAndScale(point, las, phi_max=8))
 
         # it's nice to think that we can divide through by the min
         # but we need to make sure that it's not at 0!
-        min_r = np.amin(self.radialVals)
+        min_r = np.amin(radialVals)
         if(0 == min_r):
             min_r = 1
         # reshape this guy
-        tmp_data = np.reshape(tmp_data, (self.dataBlob.numContigs,self.dataBlob.numStoits))
+        tmp_data = np.reshape(tmp_data, (self.numContigs,self.numStoits))
     
         # now we use PCA to map the surface points back onto a 
         # 2 dimensional plane, thus making the data usefuller
         index = 0
-        if(self.dataBlob.numStoits == 2):
-            print "Skipping dimensionality reduction"
-            for point in self.dataBlob.covProfiles:
-                self.dataBlob.transformedData[index,0] = tmp_data[index,0]
-                self.dataBlob.transformedData[index,1] = tmp_data[index,1]
-                self.dataBlob.transformedData[index,2] = math.log(self.radialVals[index]/min_r)
+        if(self.numStoits == 2):
+            print "Skip dimensionality reduction (dim < 3)"
+            for point in self.covProfiles:
+                self.transformedData[index,0] = tmp_data[index,0]
+                self.transformedData[index,1] = tmp_data[index,1]
+                self.transformedData[index,2] = math.log(radialVals[index]/min_r)
                 index += 1
         else:    
             # Project the points onto a 2d plane which is orthonormal
             # to the Z axis
-            print "Start dimensionality reduction..."
+            print "\tDimensionality reduction"
             PCA.Center(tmp_data,verbose=0)
             p = PCA.PCA(tmp_data)
             components = p.pc()
             for point in components:
-                self.dataBlob.transformedData[index,0] = components[index,0]
-                self.dataBlob.transformedData[index,1] = components[index,1]
-                if(0 > self.radialVals[index]):
-                    self.dataBlob.transformedData[index,2] = 0
+                self.transformedData[index,0] = components[index,0]
+                self.transformedData[index,1] = components[index,1]
+                if(0 > radialVals[index]):
+                    self.transformedData[index,2] = 0
                 else:
-                    self.dataBlob.transformedData[index,2] = math.log(self.radialVals[index]/min_r)
+                    self.transformedData[index,2] = math.log(radialVals[index]/min_r)
                 index += 1
 
         # finally scale the matrix to make it equal in all dimensions                
-        min = np.amin(self.dataBlob.transformedData, axis=0)
-        max = np.amax(self.dataBlob.transformedData, axis=0)
+        min = np.amin(self.transformedData, axis=0)
+        max = np.amax(self.transformedData, axis=0)
         max = max - min
         max = max / (self.scaleFactor-1)
         for i in range(0,3):
-            self.dataBlob.transformedData[:,i] = (self.dataBlob.transformedData[:,i] -  min[i])/max[i]
+            self.transformedData[:,i] = (self.transformedData[:,i] -  min[i])/max[i]
 
-    def rotateVectorAndScale(self, point, phi_max=6, las=0):
+    def rotateVectorAndScale(self, point, las, phi_max=6):
         """
         Move a vector closer to the center of the positive quadrant
         
@@ -347,17 +279,9 @@ class DataTransformer:
         Set phi max as the divisor in a radial fraction.
         Ie set to '12' for pi/12 = 15 deg; 6 = pi/6 = 30 deg etc
         """
-        # the vector we wish to move closer too...
+        # the vector we wish to move closer to and unitise
         center_vector = np.ones_like(point)
-
-        # unitise
         center_vector /= np.linalg.norm(center_vector)
-        
-        # we need the angle between this vector and one of the axes
-        ax = np.zeros_like(point)
-        ax[0] = 1
-        if(0 == las):
-            las = self.getAngBetween(ax, center_vector)
 
         # find the existing angle between them -> theta
         theta = self.getAngBetween(point, center_vector)
@@ -372,10 +296,12 @@ class DataTransformer:
             # now we can find a vector which approximates the rotation of unit(V)
             # by phi. It's norm will be a bit wonky but we're going to scale it anywho...
             V_p = ((point / np.linalg.norm(point)) * ( theta - phi ) + center_vector * phi ) / theta
-            V_p /= np.linalg.norm(V_p)
-    
-        # finally scale V_p and return
-        return V_p / np.linalg.norm(point)
+            norm = np.linalg.norm(V_p) * np.linalg.norm(point)
+            if(0 == norm):
+                return np.zeros_like(point)
+            else:
+                return (V_p / norm) 
+        return V_p
         
     def getAngBetween(self, P1, P2):
         """Return the angle between two points (in radians)"""
@@ -390,13 +316,6 @@ class DataTransformer:
 
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
-    
-    def writeOutput(self, CSVFileName, dialect):
-        """Write transformed data to file"""
-        outCSV = csv.writer(open(CSVFileName, 'wb'), dialect)
-        outCSV.writerow(["'name'","'x'","'y'","'z'"])
-        for index in range (0,self.dataBlob.covProfileRows):
-            outCSV.writerow([self.dataBlob.contigNames[index], self.dataBlob.transformedData[index,0], self.dataBlob.transformedData[index,1], self.dataBlob.transformedData[index,2]])
 
     def plotTransViews(self, tag="fordens"):
         """Plot top, side and front views of the transformed data"""
@@ -418,7 +337,7 @@ class DataTransformer:
             }
 
             ax = fig.add_subplot(131, projection='3d')
-            ax.scatter(self.dataBlob.transformedData[:,0], self.dataBlob.transformedData[:,1], self.dataBlob.transformedData[:,2], edgecolors=self.dataBlob.auxColors, c=self.dataBlob.auxColors, marker='.')
+            ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
             ax.azim = 0
             ax.elev = 0
             for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
@@ -429,7 +348,7 @@ class DataTransformer:
             ax.w_zaxis._AXINFO = myAXINFO
             
             ax = fig.add_subplot(132, projection='3d')
-            ax.scatter(self.dataBlob.transformedData[:,0], self.dataBlob.transformedData[:,1], self.dataBlob.transformedData[:,2], edgecolors=self.dataBlob.auxColors, c=self.dataBlob.auxColors, marker='.')
+            ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
             ax.azim = 90
             ax.elev = 0
             for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
@@ -440,7 +359,7 @@ class DataTransformer:
             ax.w_zaxis._AXINFO = myAXINFO
             
             ax = fig.add_subplot(133, projection='3d')
-            ax.scatter(self.dataBlob.transformedData[:,0], self.dataBlob.transformedData[:,1], self.dataBlob.transformedData[:,2], edgecolors=self.dataBlob.auxColors, c=self.dataBlob.auxColors, marker='.')
+            ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
             ax.azim = 0
             ax.elev = 90
             for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
@@ -451,24 +370,88 @@ class DataTransformer:
             ax.w_zaxis._AXINFO = myAXINFO
         else:
             ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(self.dataBlob.transformedData[:,0], self.dataBlob.transformedData[:,1], self.dataBlob.transformedData[:,2], edgecolors=self.dataBlob.auxColors, c=self.dataBlob.auxColors, marker='.')
+            ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
             ax.azim = azim
             ax.elev = elev
             ax.set_axis_off()
 
         if(fileName != ""):
-            if(all):
-                fig.set_size_inches(42,12)
-            else:
-                fig.set_size_inches(12,12)            
-            plt.savefig(fileName,dpi=300)
-            plt.close(fig)
+            try:
+                if(all):
+                    fig.set_size_inches(42,12)
+                else:
+                    fig.set_size_inches(12,12)            
+                plt.savefig(fileName,dpi=300)
+                plt.close(fig)
+            except:
+                print "Error saving image",fileName, sys.exc_info()[0]
+                raise
         elif(show):
-            plt.show()
-            plt.close(fig)
-            
+            try:
+                plt.show()
+                plt.close(fig)
+            except:
+                print "Error showing image", sys.exc_info()[0]
+                raise
         del fig
         
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+class ClusterEngine:
+    """Top level interface for clustering contigs"""
+    def __init__(self, dbFileName, plot=False, outFile="", force=False):
+        # worker classes
+        self.dataBlob = DataBlob(dbFileName)
+        self.clusterBlob = ClusterBlob(self.dataBlob)
+    
+        # misc
+        self.plot = plot
+        self.outFile = outFile
+        self.forceWriting = force
+        
+    def cluster(self):
+        """Cluster the contigs"""
+        # check that the user is OK with nuking stuff...
+        if(not self.forceWriting):
+            if(self.dataBlob.isClustered()):
+                option = raw_input(" ****WARNING**** Database: '"+self.dataBlob.dbFileName+"' has already been clustered.\n" \
+                                   " If you continue you *MAY* overwrite existing bins!\n" \
+                                   " Overwrite? (y,n) : ")
+                print "****************************************************************"
+                if(option.upper() != "Y"):
+                    print "Operation cancelled"
+                    return False
+                else:
+                    print "Overwriting database",self.dataBlob.dbFileName
+
+        # get some data
+        print "Load data"
+        self.dataBlob.loadData(condition="length >= 10000")
+    
+        # transform the data
+        print "Apply data transformations"
+        self.dataBlob.transformData()
+        # plot the transformed space (if we've been asked to...)
+        if(self.plot):
+            self.dataBlob.renderTransData()
+        
+        # cluster and bin!
+        print "Create cores"
+        self.clusterBlob.createCores()
+        
+        # now we assume that some true bins may be separated across two cores
+        # try to condense things a little
+        print "Condense cores"
+        self.clusterBlob.condenseCores()
+        
+        # Now we use SOMs to classify the remaininfg contigs
+        print "Start SOM classification"
+
+        # all good!
+        return True
+
 ###############################################################################
 ###############################################################################
 ###############################################################################
@@ -482,11 +465,8 @@ class ClusterBlob:
     def __init__(self, dataBlob):
         # See DataTransformer for details about these variables
         self.dataBlob = dataBlob
-        self.auxProfiles = secValues 
-        self.auxColors = secColors
-        self.transformedData = transformedData
-        self.scaleFactor = scaleFactor
-
+        self.scaleFactor = self.dataBlob.scaleFactor
+        
         # get enough memory for three heat maps
         self.imageMaps = np.zeros((3,self.scaleFactor,self.scaleFactor))
         self.blurredMaps = np.zeros((3,self.scaleFactor,self.scaleFactor))
@@ -498,28 +478,35 @@ class ClusterBlob:
 
         # store our bins
         self.numBins = 0
-        self.bins = {}
+        self.bins = {}                  # bins we kinda trust
+        self.badBins = {}               # bins we don't kinda trust
         
         # housekeeping / parameters
         self.roundNumber = 0            # how many times have we done this?
-        self.span = 30                 # amount we can travel about when determining "hot spots"
+        self.span = 30                  # amount we can travel about when determining "hot spots"
 
         # When blurring the raw image maps I chose a radius to suit my data, you can vary this as you like
         self.blurRadius = 12
         self.auxWobble = 0.1            # amount the sec data can move about and still be in the same cluster
         
+        self.debugPlots = False
         self.imageCounter = 1           # when we print many images
 
-    def clusterPoints(self, plotFileName=""):
-        """Process contigs and form bins"""
-        #
+    def createCores(self):
+        """Process contigs and form CORE bins"""
+        small_bin_cutoff = 10           # anything with less than this many contigs is not a real bin
+        num_below_cutoff = 0            # how many consecutive attempts have produced small bins
+        breakout_point = 10             # how many will we allow before we stop this loop
+        tmp_num_bins = 0                # gotta keep count
+        
+        cum_contigs_used = 0
         # First we need to find the centers of each blob.
         # We can make a heat map and look for hot spots
-        #
         self.populateImageMaps()
-                        
-        while(True):
-        #for i in range(0,10):
+        print "\t",
+        nl_counter = 0
+        while(num_below_cutoff < breakout_point):
+            sys.stdout.flush()
             # apply a gaussian blur to each image map to make hot spots
             # stand out more from the background 
             self.blurMaps()
@@ -534,27 +521,56 @@ class ClusterBlob:
                 self.roundNumber += 1
                 
                 # time to make a bin
-                self.numBins += 1
-                bin = Bin(center_indicies, self.auxProfiles, self.numBins)
-                self.bins[self.numBins] = bin
-                bin.makeBinDist(self.transformedData, self.auxProfiles)                
-                bin.plotBin(self.transformedData, self.auxColors, fileName="Image_"+str(self.imageCounter), tag="Initial")
-                self.imageCounter += 1
+                tmp_num_bins += 1
+                bin = Bin(center_indicies, self.dataBlob.auxProfiles, tmp_num_bins)
+                
+                # work out the distribution in points in this bin
+                bin.makeBinDist(self.dataBlob.transformedData, self.dataBlob.auxProfiles)     
+                
+                # Plot?
+                if(self.debugPlots):          
+                    bin.plotBin(self.dataBlob.transformedData, self.dataBlob.auxColors, fileName="Image_"+str(self.imageCounter), tag="Initial")
+                    self.imageCounter += 1
         
                 # make the bin more gooder
-                bin.recruit(self.transformedData, self.auxProfiles, self.mappedIndicies, self.binnedIndicies)
-                
-                # Plots
-                #bin.printContents()
-                bin.plotBin(self.transformedData, self.auxColors, fileName="Image_"+str(self.imageCounter), tag="Recruited")
-                self.imageCounter += 1
-                print bin.dumpContigIDs(self.contigNames)
+                bin_size = bin.recruit(self.dataBlob.transformedData, self.dataBlob.auxProfiles, self.mappedIndicies, self.binnedIndicies)
+                cum_contigs_used += bin_size
+                if(bin_size < small_bin_cutoff):
+                    self.badBins[tmp_num_bins] = bin
+                    num_below_cutoff += 1
+                    print "-",
+                else:
+                    # make this bin legit!
+                    self.numBins += 1
+                    bin.id = self.numBins 
+                    bin.calcTotalSize(self.dataBlob.contigLengths)
+                    self.bins[self.numBins] = bin
+                    # Plot?
+                    if(True):#self.debugPlots):          
+                        bin.plotBin(self.dataBlob.transformedData, self.dataBlob.auxColors, fileName="Image_"+str(self.imageCounter), tag="CORE")
+                        self.imageCounter += 1
+                    num_below_cutoff = 0
+                    print "+",
 
-                self.plotHeat("3X3_"+str(self.roundNumber)+".png", max=max_blur_value)
+                # make the printing prettier
+                nl_counter += 1
+                if(nl_counter > 9):
+                    nl_counter = 0
+                    print "\n\t",
+                    
+                if(self.debugPlots):
+                    self.plotHeat("3X3_"+str(self.roundNumber)+".png", max=max_blur_value)
                 
                 # append this bins list of mapped indicies to the main list
                 self.updatePostBin(bin)
+        print ""
+        perc = "%.2f" % round((float(cum_contigs_used)/float(self.dataBlob.numContigs))*100,2)
+        print "\tAssigned:",cum_contigs_used,"contigs to cores (",perc,"% )"
 
+    def condenseCores(self):
+        """combine similar CORE bins"""
+        pass
+    
     def populateImageMaps(self):
         """Load the transformed data into the main image maps"""
         # reset these guys... JIC
@@ -563,7 +579,7 @@ class ClusterBlob:
         
         # add to the grid wherever we find a contig
         index = -1
-        for point in np.around(self.transformedData):
+        for point in np.around(self.dataBlob.transformedData):
             index += 1
 
             # can only bin things once!
@@ -594,7 +610,7 @@ class ClusterBlob:
             self.binnedIndicies[index] = True
             
             # now update the image map, decrement
-            point = np.around(self.transformedData[index])
+            point = np.around(self.dataBlob.transformedData[index])
             # readability
             px = point[0]
             py = point[1]
@@ -644,7 +660,6 @@ class ClusterBlob:
                 self.imageMaps[index,px-1,py+1] -= valC      # Top right corner
                 if self.imageMaps[index,px-1,py+1] < np.finfo(float).eps:
                     self.imageMaps[index,px-1,py+1] = 0
-                
 
         if py > 0:
             self.imageMaps[index,px,py-1] -= valS            # Left side
@@ -755,9 +770,6 @@ class ClusterBlob:
         # store all points in the path here
         center_indicies = np.array([])
 
-        print "##############################################\n##############################################"
-        print "MV",max_value,"(",max_index,") @ (",max_x,",",max_y,")"        
-        
         this_span = int(1.5 * self.span)
         span_len = 2*this_span+1
         
@@ -768,8 +780,9 @@ class ClusterBlob:
         y_density = np.zeros(span_len)
         y_offset = max_y - this_span
         
-        self.plotRegion(max_x,max_y,max_z, fileName="Image_"+str(self.imageCounter), tag="column", column=True)
-        self.imageCounter += 1
+        if(self.debugPlots):
+            self.plotRegion(max_x,max_y,max_z, fileName="Image_"+str(self.imageCounter), tag="column", column=True)
+            self.imageCounter += 1
 
         # make a 3d grid to hold the values
         working_block = np.zeros((span_len, span_len, self.scaleFactor))
@@ -798,29 +811,9 @@ class ClusterBlob:
         max_y = densest_index[1] + y_lower
         max_z = densest_index[2]
        
-        print "densest at: ",densest_index,"(",max_x,max_y,max_z,")"
-
-        if(False):
-            plot_array = np.array([])
-            pindex = 0
-            for x in range(0, span_len):
-                for y in range(0, span_len):
-                    for z in range(0, self.scaleFactor):
-                        if(working_block[x,y,z] > 0):
-                            plot_array = np.append(plot_array, [x])
-                            plot_array = np.append(plot_array, [y])
-                            plot_array = np.append(plot_array, [z])
-                            pindex += 1
-    
-            plot_array =np.reshape(plot_array, (pindex, 3))                     
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(plot_array[:,0], plot_array[:,1], plot_array[:,2], marker='.')#, edgecolors=plot_cols, c=plot_cols)
-            plt.show()
-            del fig
-
-        self.plotRegion(max_x,max_y,max_z, fileName="Image_"+str(self.imageCounter), tag="first approx")
-        self.imageCounter += 1
+        if(self.debugPlots):
+            self.plotRegion(max_x,max_y,max_z, fileName="Image_"+str(self.imageCounter), tag="first approx")
+            self.imageCounter += 1
 
         # now get the basic color of this dense point
         center_values = np.array([])
@@ -831,7 +824,7 @@ class ClusterBlob:
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
                             if index not in self.binnedIndicies:
-                                center_values = np.append(center_values, self.auxProfiles[index])
+                                center_values = np.append(center_values, self.dataBlob.auxProfiles[index])
 
         cf = CenterFinder()
         sec_centroid = cf.findArrayCenter(center_values)                            
@@ -849,7 +842,7 @@ class ClusterBlob:
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
                             if index not in self.binnedIndicies:
-                                if(self.auxProfiles[index] > sec_lower and self.auxProfiles[index] < sec_upper):
+                                if(self.dataBlob.auxProfiles[index] > sec_lower and self.dataBlob.auxProfiles[index] < sec_upper):
                                     self.maxMaps[0,x,y] = self.blurredMaps[0,x,y]
                                     self.maxMaps[1,z,y] = self.blurredMaps[1,z,y]
                                     self.maxMaps[2,z,self.scaleFactor-x] = self.blurredMaps[1,z,self.scaleFactor-x]                                
@@ -892,8 +885,8 @@ class ClusterBlob:
                         for index in self.mappedIndicies[(x,y,realz)]:
                             if index not in self.binnedIndicies:
                                 num_points += 1
-                                disp_vals = np.append(disp_vals, self.transformedData[index])
-                                disp_cols = np.append(disp_cols, self.auxColors[index])
+                                disp_vals = np.append(disp_vals, self.dataBlob.transformedData[index])
+                                disp_cols = np.append(disp_cols, self.dataBlob.auxColors[index])
         
         # make a black mark at the max values
         small_span = self.span/2
@@ -905,7 +898,7 @@ class ClusterBlob:
                         for index in self.mappedIndicies[(x,y,realz)]:
                             if index not in self.binnedIndicies:
                                 num_points += 1
-                                disp_vals = np.append(disp_vals, self.transformedData[index])
+                                disp_vals = np.append(disp_vals, self.dataBlob.transformedData[index])
                                 disp_cols = np.append(disp_cols, colorsys.hsv_to_rgb(0,0,0))
         # reshape
         disp_vals = np.reshape(disp_vals, (num_points, 3))
@@ -976,6 +969,7 @@ class Bin:
         self.id = id
         self.indicies = indicies           # all the indicies belonging to this bin
         self.binSize = self.indicies.shape[0]
+        self.totalBP = 0
         
         # we need some objects to manage the distribution of contig proerties
         self.mean = np.zeros((4))
@@ -1047,8 +1041,8 @@ class Bin:
     def recruit(self, transformedData, secValues, mappedIndicies, binnedIndicies):
         """Iteratively grow the bin"""
         self.makeBinDist(transformedData, secValues)
-        print "--------------------------"
-        print "BIN:", self.id, "size:", self.binSize
+        #print "--------------------------"
+        #print "BIN:", self.id, "size:", self.binSize
 
         # save these
         pt = self.priTolerance
@@ -1058,7 +1052,7 @@ class Bin:
         self.makeBinDist(transformedData, secValues)
         num_recruited = self.recruitRound(transformedData, secValues, mappedIndicies, binnedIndicies) 
         while(num_recruited > 0):
-            print "REC:", num_recruited
+            #print "REC:", num_recruited
             # reduce these to force some kind of convergence
             self.priTolerance *= 0.8
             self.auxTolerance *= 0.8
@@ -1074,7 +1068,8 @@ class Bin:
         self.auxTolerance = st
         
         # finally, fix this guy
-        print "Expanded to:", self.binSize
+        #print "Expanded to:", self.binSize
+        return self.binSize
         
     def recruitRound(self, transformedData, secValues, mappedIndicies, binnedIndicies):
         """Recruit more points in from outside the current blob boundaries"""
@@ -1089,6 +1084,13 @@ class Bin:
                                     self.indicies = np.append(self.indicies,index)
                                     num_recruited += 1
         return num_recruited
+
+    def calcTotalSize(self, contigLengths):
+        """Work out the total size of this bin in BP"""
+        totalBP = 0
+        for index in self.indicies:
+            totalBP += contigLengths[index]
+        self.totalBP = totalBP
 
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
@@ -1122,15 +1124,28 @@ class Bin:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors=disp_cols, c=disp_cols, marker='.')
-        title = str.join(" ", ["Bin:",str(self.id),"Focus at: (",str(px), str(py), str(pz),")\n",tag,"\nContains:",str(self.binSize),"contigs"])
+        from locale import format, setlocale, LC_ALL # purdy commas
+        setlocale(LC_ALL, "")
+        title = str.join(" ", ["Bin:",str(self.id),"--",tag,"\n",
+                               "Focus at: (",str(px), str(py), str(pz),")\n",
+                               "Contains:",str(self.binSize),"contigs\n",
+                               "Total:",format('%d', self.totalBP, True),"BP"
+                               ])
         plt.title(title)
         
         if(fileName != ""):
-            fig.set_size_inches(6,6)
-            plt.savefig(fileName,dpi=300)
+            try:
+                fig.set_size_inches(6,6)
+                plt.savefig(fileName,dpi=300)
+            except:
+                print "Error saving image:", fileName, sys.exc_info()[0]
+                raise
         elif(show):
-            plt.show()
-            
+            try:
+                plt.show()
+            except:
+                print "Error showing image:", sys.exc_info()[0]
+                raise
         plt.close(fig)
         del fig
     
@@ -1139,6 +1154,7 @@ class Bin:
         print "--------------------------------------"
         print "Bin:", self.id
         print "Bin size:", self.binSize
+        print "Total BP:", self.totalBP
         print "Mean:", self.mean
         print "Stdev:", self.stdev
         print "P Tol:", self.priTolerance
@@ -1147,12 +1163,12 @@ class Bin:
         print "Upper limits:", self.upperLimits
         print "--------------------------------------"
     
-    def dumpContigIDs(self, rowNames):
+    def dumpContigIDs(self, contigNames):
         """Print out the contigIDs"""
         from cStringIO import StringIO
         file_str = StringIO()
         for index in self.indicies:
-            file_str.write(rowNames[index]+"\t")
+            file_str.write(contigNames[index]+"\t")
         return file_str.getvalue()
 
 ###############################################################################
