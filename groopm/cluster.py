@@ -406,7 +406,7 @@ class ClusterEngine:
     def __init__(self, dbFileName, plot=False, outFile="", force=False):
         # worker classes
         self.dataBlob = DataBlob(dbFileName)
-        self.clusterBlob = ClusterBlob(self.dataBlob)
+        self.clusterBlob = ClusterBlob(self.dataBlob, debugPlots=plot)
     
         # misc
         self.plot = plot
@@ -431,7 +431,7 @@ class ClusterEngine:
         # get some data
         t0 = time.time()
         print "Load data"
-        self.dataBlob.loadData(condition="length >= 10000")
+        self.dataBlob.loadData(condition="length >= 10000")#(length >= 4000 ) & (length <= 4300)")
         t1 = time.time()
         print "\tTHIS: [",self.secondsToStr(t1-t0),"]\tTOTAL: [",self.secondsToStr(t1-t0),"]"
         
@@ -446,14 +446,14 @@ class ClusterEngine:
         
         # cluster and bin!
         print "Create cores"
-        self.clusterBlob.createCores()
+        cum_contigs_used_good = self.clusterBlob.createCores()
         t3 = time.time()
         print "\tTHIS: [",self.secondsToStr(t3-t2),"]\tTOTAL: [",self.secondsToStr(t3-t0),"]"
         
         # now we assume that some true bins may be separated across two cores
         # try to condense things a little
         print "Condense cores"
-        self.clusterBlob.condenseCores()
+        self.clusterBlob.condenseCores(cum_contigs_used_good)
         t4 = time.time()
         print "\tTHIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
         
@@ -481,7 +481,7 @@ class ClusterBlob:
     All the bits and bobs you'll need to cluster and bin out 
     pre-transformed primary data
     """    
-    def __init__(self, dataBlob):
+    def __init__(self, dataBlob, debugPlots=False):
         # See DataTransformer for details about these variables
         self.dataBlob = dataBlob
         self.scaleFactor = self.dataBlob.scaleFactor
@@ -508,23 +508,27 @@ class ClusterBlob:
         self.blurRadius = 12
         self.auxWobble = 0.1            # amount the sec data can move about and still be in the same cluster
         
-        self.debugPlots = False
+        self.debugPlots = debugPlots
         self.imageCounter = 1           # when we print many images
 
     def createCores(self):
         """Process contigs and form CORE bins"""
         small_bin_cutoff = 10           # anything with less than this many contigs is not a real bin
         num_below_cutoff = 0            # how many consecutive attempts have produced small bins
-        breakout_point = 10             # how many will we allow before we stop this loop
-        tmp_num_bins = 0                # gotta keep count
+        breakout_point = 50             # how many will we allow before we stop this loop
+        tmp_num_bins = 10000            # gotta keep count, high numbered bins ar baaad!
         
-        cum_contigs_used = 0
+        cum_contigs_used_good = 0
+        cum_contigs_used_bad = 0
         # First we need to find the centers of each blob.
         # We can make a heat map and look for hot spots
         self.populateImageMaps()
         print "\t",
         nl_counter = 0
         while(num_below_cutoff < breakout_point):
+#            if(self.numBins > 4):
+#                break
+            
             sys.stdout.flush()
             # apply a gaussian blur to each image map to make hot spots
             # stand out more from the background 
@@ -553,19 +557,20 @@ class ClusterBlob:
         
                 # make the bin more gooder
                 bin_size = bin.recruit(self.dataBlob.transformedData, self.dataBlob.auxProfiles, self.mappedIndicies, self.binnedIndicies)
-                cum_contigs_used += bin_size
                 if(bin_size < small_bin_cutoff):
+                    cum_contigs_used_bad += bin_size
                     self.badBins[tmp_num_bins] = bin
                     num_below_cutoff += 1
                     print "-",
                 else:
                     # make this bin legit!
+                    cum_contigs_used_good += bin_size
                     self.numBins += 1
                     bin.id = self.numBins 
                     bin.calcTotalSize(self.dataBlob.contigLengths)
                     self.bins[self.numBins] = bin
                     # Plot?
-                    if(True):#self.debugPlots):          
+                    if(self.debugPlots):          
                         bin.plotBin(self.dataBlob.transformedData, self.dataBlob.auxColors, fileName="Image_"+str(self.imageCounter), tag="CORE")
                         self.imageCounter += 1
                     num_below_cutoff = 0
@@ -579,16 +584,131 @@ class ClusterBlob:
                     
                 if(self.debugPlots):
                     self.plotHeat("3X3_"+str(self.roundNumber)+".png", max=max_blur_value)
-                
+
+                # ---? REMOVE THIS WHEN CONDENSE WORKS
+                if(False):
+                    free_inds = bin.removeFromBin(self.dataBlob.transformedData, self.dataBlob.auxProfiles, self.dataBlob.contigLengths, 10)
+                    # make a new bin
+                    tmp_num_bins += 1
+                    smallbin = Bin(free_inds, self.dataBlob.auxProfiles, tmp_num_bins)
+                    smallbin.makeBinDist(self.dataBlob.transformedData, self.dataBlob.auxProfiles)
+                    smallbin.calcTotalSize(self.dataBlob.contigLengths)
+                    self.badBins[tmp_num_bins] = smallbin
+                    cum_contigs_used_good -= 10
+                    cum_contigs_used_bad += 10
+                    if(bin.id == 1):
+                        # make a small bin of 2 and 8 contigs for further testing
+                        free_inds = bin.removeFromBin(self.dataBlob.transformedData, self.dataBlob.auxProfiles, self.dataBlob.contigLengths, 2)
+                        smallbin2 = Bin(free_inds, self.dataBlob.auxProfiles, 2222)
+                        smallbin2.makeBinDist(self.dataBlob.transformedData, self.dataBlob.auxProfiles)
+                        smallbin2.calcTotalSize(self.dataBlob.contigLengths)
+                        self.badBins[2222] = smallbin2
+                        
+                        free_inds = bin.removeFromBin(self.dataBlob.transformedData, self.dataBlob.auxProfiles, self.dataBlob.contigLengths, 8)
+                        smallbin3 = Bin(free_inds, self.dataBlob.auxProfiles, 8888)
+                        smallbin3.makeBinDist(self.dataBlob.transformedData, self.dataBlob.auxProfiles)
+                        smallbin3.calcTotalSize(self.dataBlob.contigLengths)
+                        self.badBins[8888] = smallbin3
+                        self.updatePostBin(smallbin2)
+                        self.updatePostBin(smallbin3)
+                        cum_contigs_used_good -= 10
+                        cum_contigs_used_bad += 10
+                         
+                    self.updatePostBin(smallbin)
+                # ---? 
+                                
                 # append this bins list of mapped indicies to the main list
                 self.updatePostBin(bin)
         print ""
-        perc = "%.2f" % round((float(cum_contigs_used)/float(self.dataBlob.numContigs))*100,2)
-        print "\tAssigned:",cum_contigs_used,"contigs to cores (",perc,"% )"
+        perc = "%.2f" % round((float(cum_contigs_used_good)/float(self.dataBlob.numContigs))*100,2)
+        print "\t",cum_contigs_used_good,"contigs are distributed across",self.numBins,"cores (",perc,"% )"
+        print "\t",cum_contigs_used_bad,"contigs are distributed across",len(self.badBins),"pseudo cores"
+        
+        return cum_contigs_used_good
 
-    def condenseCores(self):
+    def condenseCores(self, cumContigsUsedGood):
         """combine similar CORE bins"""
-        pass
+        stdevs = 2
+        consumed_indicies = {} # who is getting consumed by who?
+        # go through all the bins, sorted according to auxProfile value
+        num_consumed = 0
+        num_upgraded = 0
+        contigs_upgraded = 0
+        num_deleted = 0
+        all_bins_sorted = sorted(self.bins.values() + self.badBins.values())
+        for subject_index in range(0, len(all_bins_sorted)):
+            if(subject_index not in consumed_indicies):
+                subject_bin = all_bins_sorted[subject_index]
+                #print "SUBJECT:", subject_bin.id, subject_bin.binSize, subject_bin.mean
+                subject_lower = subject_bin.mean[3] - stdevs * subject_bin.stdev[3]  # similar means within 1 stdev of the mean  
+                subject_upper = subject_bin.mean[3] + stdevs * subject_bin.stdev[3]  
+                query_index = subject_index+1
+                while(query_index < len(all_bins_sorted)):
+                    if(query_index not in consumed_indicies):
+                        query_bin = all_bins_sorted[query_index]
+                        # only worth comparing if the aux values are reasonable similar
+                        if(query_bin.mean[3] > subject_lower and query_bin.mean[3] < subject_upper):
+                            #print "QUERY:", query_bin.id, query_bin.binSize, query_bin.mean
+                            if(subject_bin.isSimilar(query_bin, stdevs=stdevs)):
+                                # smaller IDs eat the bigger ones
+                                print "SUBJECT:", subject_bin.id, subject_bin.binSize, subject_bin.mean
+                                print "QUERY:", query_bin.id, query_bin.binSize, query_bin.mean
+                                if(subject_bin.id < query_bin.id):
+                                    consumed_indicies[query_index] = subject_index
+                                else:
+                                    consumed_indicies[subject_index] = query_index
+                        else:  # because the list is sorted, we need not look further
+                            break
+                    query_index += 1
+            subject_index += 1
+        # first we worry about making all the bins ok, then we delete the consumed guys
+        dead_ids = []
+        for dead_bin_index in consumed_indicies:
+            if(False):#all_bins_sorted[dead_bin_index].id == 8888 or all_bins_sorted[dead_bin_index].id == 2222):
+                pass
+            else:
+                num_consumed += 1
+                contigs_upgraded += all_bins_sorted[dead_bin_index].binSize
+                all_bins_sorted[consumed_indicies[dead_bin_index]].consume(self.dataBlob.transformedData,
+                                                                           self.dataBlob.auxProfiles,
+                                                                           self.dataBlob.contigLengths,
+                                                                           all_bins_sorted[dead_bin_index]
+                                                                           )
+                # save this guy for the killing!
+                dead_ids.append(all_bins_sorted[dead_bin_index].id)
+            
+        # remove the consumed bins
+        for id in dead_ids:
+            if(id in self.badBins):
+                del self.badBins[id]
+            elif(id in self.bins):
+                del self.bins[id]
+        # move all bad_bins with greater than 5 contigs into self.bins.
+        for bin_id in self.badBins:
+            if(self.badBins[bin_id].binSize > 5):
+                # move it to the good bins pile
+                num_upgraded += 1
+                contigs_upgraded += self.badBins[bin_id].binSize 
+                self.numBins += 1
+                self.badBins[bin_id].id = self.numBins
+                self.bins[self.numBins] = self.badBins[bin_id]
+                # put this id here so that it's indexes will not be classified as unassigned
+                dead_ids.append(bin_id)
+        # free the indicies of the rest
+        for bin_id in self.badBins.keys():
+            if(bin_id not in dead_ids):
+                # we need to free these indicies!
+                for index in self.badBins[bin_id].indicies:
+                     del self.binnedIndicies[index]
+                num_deleted += 1
+            del self.badBins[bin_id]
+
+        print "\tIncorporated:",num_consumed,"smaller cores into larger ones"
+        print "\tUpgraded:",num_upgraded,"psuedo cores"
+        print "\tDeleted:",num_deleted,"psuedo cores"
+        cumContigsUsedGood += contigs_upgraded
+        perc = "%.2f" % round((float(cumContigsUsedGood)/float(self.dataBlob.numContigs))*100,2)
+        print "\t",(cumContigsUsedGood),"contigs are distributed across",self.numBins,"cores (",perc,"% )"
     
     def populateImageMaps(self):
         """Load the transformed data into the main image maps"""
@@ -620,8 +740,8 @@ class ClusterBlob:
                 # it's position + the positions to each side
                 # and touching each corner
                 self.incrementAboutPoint(0, px, py)
-                self.incrementAboutPoint(1, self.scaleFactor-1-pz, py)
-                self.incrementAboutPoint(2, self.scaleFactor-1-pz, self.scaleFactor-1-px)
+                self.incrementAboutPoint(1, self.scaleFactor - pz - 1, py)
+                self.incrementAboutPoint(2, self.scaleFactor - pz - 1, self.scaleFactor - px - 1)
 
     def updatePostBin(self, bin):
         """Update data structures after assigning contigs to a new bin"""
@@ -635,8 +755,8 @@ class ClusterBlob:
             py = point[1]
             pz = point[2]
             self.decrementAboutPoint(0, px, py)
-            self.decrementAboutPoint(1, self.scaleFactor-1-pz, py)
-            self.decrementAboutPoint(2, self.scaleFactor-1-pz, self.scaleFactor-1-px)
+            self.decrementAboutPoint(1, self.scaleFactor - pz - 1, py)
+            self.decrementAboutPoint(2, self.scaleFactor - pz - 1, self.scaleFactor - px - 1)
 
     def incrementAboutPoint(self, index, px, py, valP=1, valS=0.6, valC=0.2 ):
         """Increment value at a point in the 2D image maps
@@ -775,13 +895,22 @@ class ClusterBlob:
         for i in range (0,3): # top, front and side
             self.blurredMaps[i,:,:] = np.where(self.blurredMaps[i,:,:] >= lop_val, self.blurredMaps[i,:,:], 0)/lop_val
 
+    def makeCoordRanges(self, pos, span):
+        """Make search ranges which won't go out of bounds"""
+        lower = pos-span
+        upper = pos+span+1
+        if(lower < 0):
+            lower = 0
+        if(upper >= self.scaleFactor):
+            upper = self.scaleFactor - 1
+        return (lower, upper)
+
     def findNewClusterCenter(self):
         """Find a putative cluster"""
         # we work from the top view as this has the base clustering
         max_index = np.argmax(self.blurredMaps[0])
-        #max_index = np.argmax(self.imageMaps[0])
         max_value = self.blurredMaps[0].ravel()[max_index]
-        #max_value = self.imageMaps[0].ravel()[max_index]
+
         max_x = int(max_index/self.scaleFactor)
         max_y = max_index - self.scaleFactor*max_x
         max_z = -1
@@ -807,12 +936,10 @@ class ClusterBlob:
         working_block = np.zeros((span_len, span_len, self.scaleFactor))
         
         # go through the entire column
-        x_lower = max_x-this_span
-        x_upper = max_x+this_span+1
-        y_lower = max_y-this_span
-        y_upper = max_y+this_span+1
+        (x_lower, x_upper) = self.makeCoordRanges(max_x, this_span)
+        (y_lower, y_upper) = self.makeCoordRanges(max_y, this_span)
         for z in range(0, self.scaleFactor):
-            realz = self.scaleFactor-z
+            realz = self.scaleFactor - z - 1
             for x in range(x_lower, x_upper):
                 for y in range(y_lower, y_upper):
                     # check that the point is real and that it has not yet been binned
@@ -835,11 +962,14 @@ class ClusterBlob:
             self.imageCounter += 1
 
         # now get the basic color of this dense point
+        (x_lower, x_upper) = self.makeCoordRanges(max_x, self.span)
+        (y_lower, y_upper) = self.makeCoordRanges(max_y, self.span)
+        (z_lower, z_upper) = self.makeCoordRanges(max_z, self.span)
         center_values = np.array([])
-        for z in range(max_z-self.span, max_z+self.span+1):
-            realz = self.scaleFactor-z
-            for x in range(max_x-self.span, max_x+self.span+1):
-                for y in range(max_y-self.span, max_y+self.span+1):
+        for z in range(z_lower, z_upper):
+            realz = self.scaleFactor - z - 1
+            for x in range(x_lower, x_upper):
+                for y in range(y_lower, y_upper):
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
                             if index not in self.binnedIndicies:
@@ -853,10 +983,10 @@ class ClusterBlob:
         # now scoot out around this point and soak up similar points
         # get all the real indicies of these points so we can use them in
         # the primary data map
-        for z in range(max_z-self.span, max_z+self.span+1):
-            realz = self.scaleFactor-z
-            for x in range(max_x-self.span, max_x+self.span+1):
-                for y in range(max_y-self.span, max_y+self.span+1):
+        for z in range(z_lower, z_upper):
+            realz = self.scaleFactor - z - 1
+            for x in range(x_lower, x_upper):
+                for y in range(y_lower, y_upper):
                     # check that the point is real and that it has not yet been binned
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
@@ -864,7 +994,7 @@ class ClusterBlob:
                                 if(self.dataBlob.auxProfiles[index] > sec_lower and self.dataBlob.auxProfiles[index] < sec_upper):
                                     self.maxMaps[0,x,y] = self.blurredMaps[0,x,y]
                                     self.maxMaps[1,z,y] = self.blurredMaps[1,z,y]
-                                    self.maxMaps[2,z,self.scaleFactor-x] = self.blurredMaps[1,z,self.scaleFactor-x]                                
+                                    self.maxMaps[2,z,self.scaleFactor - x - 1] = self.blurredMaps[1,z,self.scaleFactor - x - 1]                                
                                     # add only once!
                                     if(index not in center_indicies):
                                         # bingo!
@@ -890,16 +1020,17 @@ class ClusterBlob:
         disp_cols = np.array([])
         num_points = 0
         # plot all points within span
-        z_lower = pz-self.span
-        z_upper = pz+self.span
+        (z_lower, z_upper) = self.makeCoordRanges(pz, self.span)
         if(column):
             z_lower = 0
             z_upper = self.scaleFactor - 1
-        
+
+        (x_lower, x_upper) = self.makeCoordRanges(px, self.span)
+        (y_lower, y_upper) = self.makeCoordRanges(py, self.span)
         for z in range(z_lower, z_upper):
-            realz = self.scaleFactor - z 
-            for x in range(px-self.span, px+self.span):
-                for y in range(py-self.span, py+self.span):
+            realz = self.scaleFactor - z - 1
+            for x in range(x_lower, x_upper):
+                for y in range(y_lower, y_upper):
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
                             if index not in self.binnedIndicies:
@@ -909,10 +1040,13 @@ class ClusterBlob:
         
         # make a black mark at the max values
         small_span = self.span/2
-        for z in range(pz-small_span, pz+small_span):
-            realz = self.scaleFactor - z 
-            for x in range(px-small_span, px+small_span):
-                for y in range(py-small_span, py+small_span):
+        (x_lower, x_upper) = self.makeCoordRanges(px, small_span)
+        (y_lower, y_upper) = self.makeCoordRanges(py, small_span)
+        (z_lower, z_upper) = self.makeCoordRanges(pz, small_span)
+        for z in range(z_lower, z_upper):
+            realz = self.scaleFactor - z - 1
+            for x in range(x_lower, x_upper):
+                for y in range(y_lower, y_upper):
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
                             if index not in self.binnedIndicies:
@@ -927,7 +1061,7 @@ class ClusterBlob:
         ax = fig.add_subplot(111, projection='3d')
         cm = mpl.colors.LinearSegmentedColormap('my_colormap', disp_cols, 1024)
         result = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors=disp_cols, c=disp_cols, cmap=cm, marker='.')
-        title = str.join(" ", ["Focus at: (",str(px), str(py), str(self.scaleFactor - pz),")\n",tag])
+        title = str.join(" ", ["Focus at: (",str(px), str(py), str(self.scaleFactor - pz - 1),")\n",tag])
         plt.title(title)
       
         if(fileName != ""):
@@ -984,7 +1118,7 @@ class Bin:
     column names array. The ClusterBlob has a list of bins which it can
     update etc...
     """
-    def __init__(self, indicies, secValues, id, pritol=3, sectol=3):
+    def __init__(self, indicies, auxProfiles, id, pritol=3, sectol=3):
         self.id = id
         self.indicies = indicies           # all the indicies belonging to this bin
         self.binSize = self.indicies.shape[0]
@@ -999,14 +1133,72 @@ class Bin:
         self.upperLimits = np.zeros((4))
 
 #------------------------------------------------------------------------------
+# Tools used for condensing 
+    
+    def __cmp__(self, alien):
+        """Sort bins based on aux values"""
+        if self.mean[3] < alien.mean[3]:
+            return -1
+        elif self.mean[3] == alien.mean[3]:
+            return 0
+        else:
+            return 1
+
+    def removeFromBin(self, transformedData, auxProfiles, contigLengths, numTigs):
+        """Remove contigs from a bin; returns the global indicies of those removed"""
+        # get the first numTigs
+        if(numTigs > self.binSize):
+            numTigs = self.binSize
+            
+        ret_indicies = np.array([])
+        while(numTigs > 0):
+            index = random.randint(0, len(self.indicies)-1)
+            ret_indicies = np.append(ret_indicies, self.indicies[index])
+            self.indicies = np.delete(self.indicies, index)
+            numTigs -= 1
+            self.binSize -= 1
+            
+        # fix the stats on our bin
+        self.makeBinDist(transformedData, auxProfiles)
+        self.calcTotalSize(contigLengths)
+
+        return ret_indicies
+        
+    def isSimilar(self, compBin, stdevs=1):
+        """Check whether two bins are similar"""
+        this_lowers = self.mean - stdevs * self.stdev
+        this_uppers = self.mean + stdevs * self.stdev
+        that_lowers = compBin.mean - stdevs * compBin.stdev
+        that_uppers = compBin.mean + stdevs * compBin.stdev
+        #print "\n\n",this_uppers,"\n",compBin.mean,"\n",this_lowers,"\n---\n",that_uppers,"\n",self.mean,"\n",that_lowers
+        # reciprocial test!
+        for index in range(0,4):
+            if(self.mean[index] < that_lowers[index] or self.mean[index] > that_uppers[index]):
+                return False
+            if(compBin.mean[index] < this_lowers[index] or compBin.mean[index] > this_uppers[index]):
+                return False
+        # got here? Must be similar!
+        return True
+    
+    def consume(self, transformedData, auxProfiles, contigLengths, deadBin):
+        """Combine the contigs of another bin with this one"""
+        # consume all the other bins indicies
+        self.indicies = np.concatenate([self.indicies, deadBin.indicies])
+        self.binSize += deadBin.binSize
+        
+        # fix the stats on our bin
+        self.makeBinDist(transformedData, auxProfiles)
+        self.calcTotalSize(contigLengths)
+        
+#------------------------------------------------------------------------------
 # Stats and properties 
          
-    def findBinCenterIndex(self, secValues):
+    def findBinCenterIndex(self, auxProfiles):
         """Find the center of a bin"""
         min_diff = 100000
         best_index = -1
         for index in self.indicies:
-            diff = abs(secValues[index] - self.auxCentroid)
+            diff = abs(auxProfiles[index] - self.auxCentroid)
             if(diff < min_diff):
                 min_diff = diff
                 best_index = index
@@ -1019,7 +1211,7 @@ class Bin:
         self.lowerLimits = np.zeros((4))
         self.upperLimits = np.zeros((4))
         
-    def makeBinDist(self, transformedData, secValues):
+    def makeBinDist(self, transformedData, auxProfiles):
         """Determine the distribution of the points in this bin
         
         The distribution is largely normal, except at the boundaries.
@@ -1032,7 +1224,7 @@ class Bin:
         for index in self.indicies:
             for i in range(0,3):
                 working_array[outer_index][i] = transformedData[index][i]
-            working_array[outer_index][3] = secValues[index]
+            working_array[outer_index][3] = auxProfiles[index]
             outer_index += 1
             
         # calculate the mean and srdev 
@@ -1057,9 +1249,9 @@ class Bin:
 #------------------------------------------------------------------------------
 # Grow the bin 
     
-    def recruit(self, transformedData, secValues, mappedIndicies, binnedIndicies):
+    def recruit(self, transformedData, auxProfiles, mappedIndicies, binnedIndicies):
         """Iteratively grow the bin"""
-        self.makeBinDist(transformedData, secValues)
+        self.makeBinDist(transformedData, auxProfiles)
         #print "--------------------------"
         #print "BIN:", self.id, "size:", self.binSize
 
@@ -1068,8 +1260,8 @@ class Bin:
         st = self.auxTolerance
 
         self.binSize = self.indicies.shape[0]
-        self.makeBinDist(transformedData, secValues)
-        num_recruited = self.recruitRound(transformedData, secValues, mappedIndicies, binnedIndicies) 
+        self.makeBinDist(transformedData, auxProfiles)
+        num_recruited = self.recruitRound(transformedData, auxProfiles, mappedIndicies, binnedIndicies) 
         while(num_recruited > 0):
             #print "REC:", num_recruited
             # reduce these to force some kind of convergence
@@ -1077,11 +1269,11 @@ class Bin:
             self.auxTolerance *= 0.8
             # fix these
             self.binSize = self.indicies.shape[0]
-            self.makeBinDist(transformedData, secValues)
+            self.makeBinDist(transformedData, auxProfiles)
             # print for fun
             #self.printContents()
             # go again
-            num_recruited = self.recruitRound(transformedData, secValues, mappedIndicies, binnedIndicies)
+            num_recruited = self.recruitRound(transformedData, auxProfiles, mappedIndicies, binnedIndicies)
         
         self.priTolerance = pt
         self.auxTolerance = st
@@ -1090,7 +1282,7 @@ class Bin:
         #print "Expanded to:", self.binSize
         return self.binSize
         
-    def recruitRound(self, transformedData, secValues, mappedIndicies, binnedIndicies):
+    def recruitRound(self, transformedData, auxProfiles, mappedIndicies, binnedIndicies):
         """Recruit more points in from outside the current blob boundaries"""
         num_recruited = 0
         for x in range(int(self.lowerLimits[0]), int(self.upperLimits[0])):
@@ -1099,7 +1291,7 @@ class Bin:
                     if((x,y,z) in mappedIndicies):
                         for index in mappedIndicies[(x,y,z)]:
                             if (index not in binnedIndicies) and (index not in self.indicies):
-                                if(secValues[index] >= self.lowerLimits[3] and secValues[index] <= self.upperLimits[3]):
+                                if(auxProfiles[index] >= self.lowerLimits[3] and auxProfiles[index] <= self.upperLimits[3]):
                                     self.indicies = np.append(self.indicies,index)
                                     num_recruited += 1
         return num_recruited

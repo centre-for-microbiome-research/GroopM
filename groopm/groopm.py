@@ -107,7 +107,8 @@ class GroopMOptionsParser():
             print " [[GroopM]] Running in binning mode..."
             print "****************************************************************"
             CE = cluster.ClusterEngine(options.dbname,
-                                       force=options.force
+                                       force=options.force,
+                                       plot=options.plot
                                        )
             success = CE.cluster()
             if not success:
