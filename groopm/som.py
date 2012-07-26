@@ -71,16 +71,12 @@ __status__ = "Development"
 
 ###############################################################################
 
-import argparse
 import sys
 from random import *
 from math import *
 import sys
-import scipy
-import numpy
-import csv
+import numpy as np
 import os
-import Rainbow
 from PIL import Image, ImageDraw
 import string
 
@@ -88,73 +84,20 @@ import string
 ###############################################################################
 ###############################################################################
 ###############################################################################
-def doWork( options ):
-    # get a working dir
-    if not os.path.exists(options.working_dir):
-        os.makedirs(options.working_dir)
 
-    # load the data file
-    data = []
-    names = []
-    with open(options.data_file, 'rb') as f:
-        reader = csv.reader(f, delimiter=options.delimiter)
-        headerline = reader.next()
-        for row in reader:
-            names.append(row.pop(0))
-            for t in range(len(row)):
-                row[t] = float(row[t])
-            data.append(scipy.array(row))
-
-    # get us a som
-    som = SOM(options.working_dir, options.grid_size, len(data[0]), options.learning_rate, options.weight_img)
-
-    # we only bother doing training if we're told to
-    if(not options.classify_only):
-        # start training
-        som.train(options.reps, data, options.animate)
-        som.renderWeightsImage(os.path.join(options.working_dir, options.weight_img))
-        som.printWeights(os.path.join(options.working_dir, options.weight_csv))
-    else:
-        # check to see if the weights file is there:
-        if(not os.path.isfile(os.path.join(options.working_dir, options.weight_csv))):
-           print "Error: no weights file found at classification step"
-           sys.exit(1)
-        
-        # override the weights in the som, no need if we've just finished training
-        print "Loading weights..."
-        som.overrideGrid(os.path.join(options.working_dir, options.weight_csv))
-        
-    # now classify this mofo!
-    som.classify(names, data)
-    #som.renderWeightedClassImage(os.path.join(options.working_dir, options.class_img))
-    
-    # only do contig validation if there are refs
-    if("" != options.refs):
-        som.groupContigs(options.refs, names)
-        som.renderContigImage(os.path.join(options.working_dir, options.contig_img))
-    
-    return 0
-
-###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
 class SOM:
-    def __init__(self, working_dir, side=10, FV_size=10, learning_rate=0.05, img="messom.png"):
+    def __init__(self, side, V_size, learning_rate=0.05):
         self.side = side                            # side length of the grid
-        self.FV_size = FV_size                      # size of our grid vectors
+        self.V_size = V_size                      # size of our grid vectors
         self.radius = side/2                        # the radius of neighbour nodes which will be influenced by each new training vector
         self.learning_rate = learning_rate          # the amount of influence
-        self.weight_img_name = img                  # name of the image we produce to visualise the weights
-        self.working_dir = working_dir              # where we will save any files etc...
         self.plots = []                             # x/y coords of classified vectors
         self.ref_positions = {}                     # map of contig refs to positions in the SOM         
         
         # initialise the nodes to random values between 0 -> 1
-        self.nodes = scipy.array([[ [random() for i in range(FV_size)] for x in range(self.side)] for y in range(self.side)])
-        
-        print "Initiated grid with:", (self.side * self.side), "points. (", self.side , "X", self.side, ")" 
+        self.nodes = np.array([[ [random() for i in range(V_size)] for x in range(self.side)] for y in range(self.side)])
 
+        # for when we want to autocolor the background
         self.colorLookup = self.getColorLookup()
 
 #------------------------------------------------------------------------------
@@ -165,7 +108,7 @@ class SOM:
     # you'd like to classify
     def classify(self, names_vector=[], data_vector=[[]]):
         print "Start classification..."
-        index_array = numpy.arange(len(data_vector))
+        index_array = np.arange(len(data_vector))
         for j in index_array:
             # find the best match between then data vector and the
             # current grid
@@ -176,10 +119,10 @@ class SOM:
 #------------------------------------------------------------------------------
 # TRAINING 
         
-    def train(self, iterations=1000, train_vector=[[]], animate=False):
+    def train(self, iterations=1000, train_vector=[[]], weightImgFileName=""):
         """Train the SOM
         
-        Train vector is a list of scipy arrays
+        Train vector is a list of numpy arrays
         """
         
         print "Start training -->", iterations, "iterations"
@@ -192,10 +135,9 @@ class SOM:
         # these contain the changes to the set of grid nodes
         # and we will add their values to the grid nodes
         # once we have input all the training nodes
-        delta_nodes = scipy.array([[[0.0 for i in range(self.FV_size)] for x in range(self.side)] for y in range(self.side)])
+        delta_nodes = np.array([[[0.0 for i in range(self.V_size)] for x in range(self.side)] for y in range(self.side)])
         
         for i in range(1, iterations+1):
-            print "Iteration:", i
             delta_nodes.fill(0.0)
             # gaussian decay on radius and amount of influence
             radius_decaying=self.radius*exp(-1.0*i/time_constant)
@@ -205,8 +147,8 @@ class SOM:
             rad_div_val = 2 * radius_decaying * i
             
             # we would ideally like to select guys from the training set at random
-            index_array = numpy.arange(len(train_vector))
-            numpy.random.shuffle(index_array)
+            index_array = np.arange(len(train_vector))
+            np.random.shuffle(index_array)
             cut_off = int(len(index_array)/1000)
             if(cut_off < 1000):
                 cut_off = 1000
@@ -224,6 +166,7 @@ class SOM:
                     influence = exp( (-1.0 * (loc[2]**2)) / rad_div_val)
                     inf_lrd = influence*learning_rate_decaying
                     delta_nodes[loc[0],loc[1]] += inf_lrd*(train_vector[j]-self.nodes[loc[0],loc[1]])
+            
             # add the deltas to the grid nodes
             self.nodes += delta_nodes
             
@@ -231,84 +174,32 @@ class SOM:
             self.reNorm()
             
             # make a tmp image, perhaps
-            if(animate):
-                filename = "%04d%s" % (i, "." + self.weight_img_name)
-                full_file_name = os.path.join(self.working_dir, filename)
-                self.renderWeightsImage(full_file_name)
-            
-        print "Done"
+            if(weightImgFileName != ""):
+                filename = "%04d%s" % (i, "." + weightImgFileName)
+                self.renderWeightsImage(filename)
 
-#------------------------------------------------------------------------------
-# EXTRA 
-
-    # Group contigs together so that we can see if they actually do group together
-    def groupContigs(self, refFiles, names):
-        # first check if it is a dir or a list of files
-        refs = []
-        if os.path.isdir(refFiles):
-            short_refs = [file for file in os.listdir(refFiles) if file.lower().endswith(".ref")]
-            for ref in short_refs:
-                refs.append(os.path.join(refFiles, ref))
-        else:
-            refs = string.split(refFiles, ",")
-
-        # now that we have consistent interface to refs,
-        # it's time to make a dict of all guys from each contig
-        for ref in refs:
-            with open(ref, 'rb') as f:
-                reader = csv.reader(f, delimiter="\t")
-                for row in reader:
-                    self.ref_positions[row[0]] = []
-                    
-        # make a dict of all frag names and link to their positions
-        pos_lookup = {}
-        for dat_counter in range(len(self.plots)):
-            pos_lookup[names[dat_counter]] = self.plots[dat_counter]
-             
-        # now go through all the names
-        # we have and clump them together
-        for name in names:
-            name_fields = string.split(name, "_")
-            keepable = name_fields[0:len(name_fields)-4:1]
-            short_name = string.join(keepable,"_");
-            self.ref_positions[short_name].append(pos_lookup[name])
-        
 #------------------------------------------------------------------------------
 # SOM STUFF 
-        
-    # override the values in the weights grid
-    # fileName is a vanilla tsv file of weights
-    def overrideGrid(self, fileName):
-        with open(fileName, 'rb') as f:
-            r = 0
-            c = 0
-            reader = csv.reader(f, delimiter='\t')
-            for row in reader:
-                self.nodes[r,c] = scipy.array(row)
-                c += 1
-                if(c == self.side):
-                    c = 0
-                    r += 1
-        # check to see thatwe are sane!
-        if(r != self.side or c != 0):
-            print "Error: Do the dimesions of the supplied weight data match those of the som?"
-        return 0
 
-    # some of the values will want to creep above 1 or below 0
-    # this function renormalises the grid
     def reNorm(self):
+        """set all weight vectors to values between 0 and 1
+        
+        some of the values will want to creep above 1 or below 0
+        this function renormalises the grid
+        """
         for r in range(self.side):
             for c in range(self.side):
-                for v in range(self.FV_size):
+                for v in range(self.V_size):
                     if(self.nodes[r,c,v] < 0):
                         self.nodes[r,c,v] = 0
                     elif(self.nodes[r,c,v] > 1):
                         self.nodes[r,c,v] = 1
    
-
-    # Returns a list of points which live within 'dist' of 'pt'
-    # mapped onto a torus! pt = [row,col]
     def find_neighborhood(self, pt, dist):
+        """Returns a list of points which live within 'dist' of 'pt'
+        
+        mapped onto a torus! pt = [row,col]
+        """  
         neighbors = []
         # first we bound ourselves to the oriented square surrounding 
         # the point of interest 
@@ -331,10 +222,12 @@ class SOM:
                     neighbors.append((y_out,x_out,this_dist))
         return neighbors
     
-    # Returns location of best match, uses Euclidean distance
-    # target_FV is a scipy array
     def best_match(self, target_FV):
-        loc = scipy.argmin((((self.nodes - target_FV)**2).sum(axis=2))**0.5)
+        """Returns location of best match, uses Euclidean distance
+        
+        target_FV is a numpy array
+        """
+        loc = np.argmin((((self.nodes - target_FV)**2).sum(axis=2))**0.5)
         r = 0
         while loc > self.side:
             loc -= self.side
@@ -345,9 +238,8 @@ class SOM:
 #------------------------------------------------------------------------------
 # IMAGE RENDERING 
 
-    # make an image of the weights in the som
     def renderWeightsImage(self, fileName):
-        print "Rendering weights image"
+        """make an image of the weights in the som"""
         try:
             img = Image.new("RGB", (self.side, self.side))
             for r in range(self.side):
@@ -356,31 +248,26 @@ class SOM:
                     col = self.getColor(self.nodes[r,c])
                     img.putpixel((c,r), (col[0], col[1], col[2]))
             img = img.resize((self.side*10, self.side*10),Image.NEAREST)
-            print "Saving image to:", fileName
             img.save(fileName)
         except:
             print sys.exc_info()[0]
             raise
 
-    # make an image of raw classifications 
     def renderClassImage(self, fileName):
-        print "Rendering classification image"
+        """make an image of raw classifications""" 
         try:
             img = Image.new("RGB", (self.side, self.side))
             for point in self.plots:
                 img.putpixel((point[1],point[0]), (255,0,0))
             img = img.resize((self.side*10, self.side*10),Image.NEAREST)
-            print "Saving image to:", fileName
             img.save(fileName)
         except:
             print sys.exc_info()[0]
             raise
 
-    # make an image of weighted classifications
     def renderWeightedClassImage(self, fileName):
-        print "Rendering weighted classification image"
-        
-        weighted_nodes = scipy.array([[0 for x in range(self.side)] for y in range(self.side)])
+        """make an image of weighted classifications"""
+        weighted_nodes = np.array([[0 for x in range(self.side)] for y in range(self.side)])
         max = 0
         for point in self.plots:
             weighted_nodes[point[1],point[0]] += 1
@@ -388,7 +275,7 @@ class SOM:
                 max  = weighted_nodes[point[1],point[0]]
 
         max += 1
-        res = 100
+        res = 200
         if(max < res):
             res = max - 1
         max  = self.transColour(max)
@@ -400,15 +287,13 @@ class SOM:
             for point in self.plots:
                 img.putpixel((point[1],point[0]), rainbow.getColour(self.transColour(weighted_nodes[point[1],point[0]])))
             img = img.resize((self.side*10, self.side*10),Image.NEAREST)
-            print "Saving image to:", fileName
             img.save(fileName)
         except:
             print sys.exc_info()[0]
             raise
         
-    # make an image of raw classifications 
     def renderContigImage(self, fileName):
-        print "Rendering contig validation image"
+        """make an colour image of raw classifications"""
         sep_size = 50
         try:
             img = Image.new("RGB", (self.side, self.side))
@@ -426,7 +311,6 @@ class SOM:
             del draw 
             img = img.resize((self.side*10, self.side*10),Image.NEAREST)
             img2 = img2.resize((self.side*10, self.side*10),Image.NEAREST)
-            print "Saving image to:", fileName
             img.save(fileName)
             img2.save(fileName+".png")
         except:
@@ -434,10 +318,11 @@ class SOM:
             raise
     
     def transColour(self, val):
+        """Transform color value"""
         return 10 * log(val)
     
-    # return a color for a given vector
     def getColor(self, target_FV):
+        """return a colour for a given weight vector"""
         col = [0,0,0]
         for l in range(3):
             # grab the subset of the vector we care about
@@ -459,34 +344,36 @@ class SOM:
             
         return col
         
-    # Work out how we are going to change our vector into a color
-    # returns a list of starts and lengths
     def getColorLookup(self):
-        if(self.FV_size == 3):
+        """Work out how we are going to change a vector into a colour
+        
+        Returns a list of starts and lengths
+        """
+        if(self.V_size == 3):
             return [0,1,2,1]
-        elif(self.FV_size == 4):
+        elif(self.V_size == 4):
             return [0,1,2,2]
-        elif(self.FV_size == 5):
+        elif(self.V_size == 5):
             return [0,1,2,3]
-        elif(self.FV_size == 6):
+        elif(self.V_size == 6):
             return [0,2,4,2]
-        elif(self.FV_size == 7):
+        elif(self.V_size == 7):
             return [0,2,4,3]
-        elif(self.FV_size == 8):
+        elif(self.V_size == 8):
             return [0,2,4,4]
-        elif(self.FV_size == 9):
+        elif(self.V_size == 9):
             return [0,2,4,5]
-        elif(self.FV_size == 10):
+        elif(self.V_size == 10):
             return [0,3,6,4]
-        elif(self.FV_size == 11):
+        elif(self.V_size == 11):
             return [0,3,6,5]
-        elif(self.FV_size == 12):
+        elif(self.V_size == 12):
             return [0,3,6,6]
-        elif(self.FV_size == 13):
+        elif(self.V_size == 13):
             return [0,3,6,7]
-        elif(self.FV_size == 14):
+        elif(self.V_size == 14):
             return [0,4,8,6]
-        elif(self.FV_size == 15):
+        elif(self.V_size == 15):
             return [0,4,8,7]
         else:
             print "***ERROR: Max vector size of 15! Time to be a haxxor!"
@@ -495,61 +382,112 @@ class SOM:
 #------------------------------------------------------------------------------
 # FILE IO 
     
-    # print final weights to disk
-    # save the data
-    def printWeights(self, fileName):
-        print "Saving weights"
-        weights_writer = csv.writer(open(fileName, 'wb'), delimiter='\t')
-        for r in range(self.side):
-            for c in range(self.side):
-                weights_writer.writerow(self.nodes[r,c])
-
-#------------------------------------------------------------------------------
-# 
-
 ###############################################################################
-# TEMPLATE SUBS
 ###############################################################################
-#
-# Entry point, parse command line args and call out to doWork
-#
-if __name__ == '__main__':
-    # intialise the options parser
-    parser = argparse.ArgumentParser(description='Self organising map engine for Messy.')
+###############################################################################
+###############################################################################
 
-    # add options here:
-    parser.add_argument("working_dir", default=".", help="A place to write all the files etc...")
-    parser.add_argument("data_file", help="Full path to the data file")
-    parser.add_argument("--classify_only", action="store_true", default=False, help="Do not repeat the training, assumes that there is a valid weights file which corresponds to the data file")
+class Rainbow:
+    def __init__(self, lb, ub, res, type="rb"):
+        """Simple dimple heatmap
+        
+        Specify the upper and lower bounds for your data. 
+        resolution refers to the number of bins which are available in this space
+        Supports four heatmap types is red-blue, blue-red, red-green-blue and blue-green-red
+        """ 
+
+        # constants
+        self.RB_lower_offset = 0.5
+        self.RB_divisor = (2.0/3.0)
+        self.RB_ERROR_COLOUR = [0,0,0]
+
+        # set the limits
+        self.lowerBound = lb
+        self.upperBound = ub
+        self.resolution = res
+        self.tickSize = (self.upperBound - self.lowerBound)/(self.resolution - 1)
+        
+        # set the type, red-blue by default
+        self.type = type
+        self.redOffset = 0.0
+        self.greenOffset = self.RB_divisor * math.pi * 2.0
+        self.blueOffset = self.RB_divisor * math.pi
+        
+        self.ignoreRed = False
+        self.ignoreGreen = True
+        self.ignoreBlue = False
+        
+        self.lowerScale = 0.0
+        self.upperScale = self.RB_divisor * math.pi
+        
+        if(self.type == "rbg"): # red-blue-green
+            self.redOffset = 0.0
+            self.greenOffset = self.RB_divisor * math.pi * 2.0
+            self.blueOffset = self.RB_divisor * math.pi
+            
+            self.ignoreRed = False
+            self.ignoreGreen = False
+            self.ignoreBlue = False
+            
+            self.lowerScale = 0.0
+            self.upperScale = (self.RB_divisor * math.pi * 2.0)
+
+        elif(self.type == "gbr"): # green-blue-red
+            self.redOffset = self.RB_divisor * math.pi * 2.0
+            self.greenOffset = 0.0
+            self.blueOffset = self.RB_divisor * math.pi
+
+            self.ignoreRed = False
+            self.ignoreGreen = False
+            self.ignoreBlue = False
+            
+            self.lowerScale = 0.0
+            self.upperScale = (self.RB_divisor * math.pi * 2.0)
+
+        elif(self.type == "br"): # blue-red
+            self.redOffset = self.RB_divisor * math.pi
+            self.greenOffset = self.RB_divisor * math.pi * 2.0
+            self.blueOffset = 0.0
+            
+            self.ignoreRed = False
+            self.ignoreGreen = True
+            self.ignoreBlue = False
+
+            self.lowerScale = 0.0
+            self.upperScale = (self.RB_divisor * math.pi)
+
+        self.scaleMultiplier = (self.upperScale - self.lowerScale)/(self.upperBound - self.lowerBound)
     
-    datagroup = parser.add_argument_group('Data options')
-    datagroup.add_argument("--no_header", action="store_true", default=False, help="Use this only if the data file has NO header [default: has header]")
-    datagroup.add_argument("--delimiter", "-l", default="\t", help="Delimeter in the data file [default: \"\\t\"]")    
+    def getValue(self, val):
+        """Get a raw value, not a colour"""
+        return (math.cos(val) + self.RB_lower_offset) * self.RB_divisor
+
+    def getColour(self, val):
+        """Return a colour for the given value.
+        
+        If nothing makes sense. return black
+        """
+        if(val > self.upperBound or val < self.lowerBound):
+            return self.RB_ERROR_COLOUR
+        
+        # normalise the value to suit the ticks
+        normalised_value = round(val/self.tickSize) * self.tickSize
     
-    alggroup = parser.add_argument_group('Algorithm options')    
-    alggroup.add_argument("--grid_size", "-g", type=int, default=32, help="Size of the data grid [default: 32]")
-    alggroup.add_argument("--reps", "-r", type=int, default=50, help="Number of reps to use on the training data [default: 50]")
-    alggroup.add_argument("--learning_rate", type=float, default=0.05, help="The diffusion speed [default: 0.05]")
+        # map the normalised value onto the horizontal scale
+        scaled_value = (normalised_value - self.lowerBound) * self.scaleMultiplier + self.lowerScale
+            
+        red = 0
+        green = 0
+        blue = 0
+        
+        if(not self.ignoreRed):
+            red = int(round(self.getValue(scaled_value - self.redOffset) * 255))
+        if(not self.ignoreGreen):
+            green = int(round(self.getValue(scaled_value - self.greenOffset) * 255))
+        if(not self.ignoreBlue):
+            blue = int(round(self.getValue(scaled_value - self.blueOffset) * 255))
     
-    classgroup = parser.add_argument_group('Classification and validation')
-    classgroup.add_argument("--class_img", "-L", default="messom_class.png", help="Full path to the classification image file [default: \"messom_class.png\"]")  
-    classgroup.add_argument("--contig_img", "-G", default="messom_contigs.png", help="Full path to the contig validation image file [default: \"messom_contigs.png\"]")  
-    classgroup.add_argument("--refs", "-R", default="", help="Comma separated list of refs files created by cleanAssem.pl OR directory containing refs files")  
- 
-    iogroup = parser.add_argument_group('IO options')
-    iogroup.add_argument("--weight_img", "-w", default="messom_weights.png", help="Full path to the weights image file [default: \"messom_weights.png\"]")
-    iogroup.add_argument("--weight_csv", "-W", default="weights.txt", help="specify a name for the weights file [default: \"weights.txt\"]")  
-    iogroup.add_argument("--animate", "-a", action="store_true", default=False, help="Create a separate image for each iteration [default: False]")
-
-
-    # get and check options
-    args = parser.parse_args()
-
-    # 
-    # do what we came here to do
-    #
-    doWork(args)
-
+        return (red, green, blue)
 
 ###############################################################################
 ###############################################################################
