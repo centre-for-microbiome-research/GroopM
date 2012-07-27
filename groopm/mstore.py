@@ -477,6 +477,19 @@ class GMDataManager:
         """return the value of numBins in the metadata tables"""
         return self.getMetaField(dbFileName, 'numBins')
         
+    def setNumBins(self, dbFileName, numBins):
+        """set the number of bins"""
+        try:
+            with tables.openFile(dbFileName, mode='a') as h5file:
+                META_table = h5file.root.meta.meta
+                for META_row in META_table: # there is only one meta row
+                    META_row['numBins'] = numBins
+                    META_row.update()
+                META_table.flush()
+        except:
+            print "Error opening database:", dbFileName, sys.exc_info()[0]
+            raise
+        
     def getStoitColNames(self, dbFileName):
         """return the value of stoitColNames in the metadata tables"""
         return self.getMetaField(dbFileName, 'stoitColNames')

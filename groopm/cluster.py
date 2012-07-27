@@ -101,7 +101,12 @@ class DataBlob:
         self.forceWriting = force           # overwrite existng values silently?
         self.scaleFactor = scaleFactor      # scale every thing in the transformed data to this dimension
 
-    def loadData(self, condition="", loadKSigs=False):
+    def loadData(self,
+                 condition="",
+                 silent=False,
+                 loadKSigs=False,
+                 loadBins=False,
+                 loadCores=False):
         """Load pre-parsed data"""
         try:
             self.numStoits = self.getNumStoits()
@@ -122,19 +127,21 @@ class DataBlob:
             for val in self.auxProfiles:
                 self.auxColors = np.append(self.auxColors, [colorsys.hsv_to_rgb(val, S, V)])
             self.auxColors = np.reshape(self.auxColors, (self.numContigs, 3))            
-            
-            print "\tLoading bins"
-            self.bins = self.dataManager.getBins(self.dbFileName, indicies=self.indicies)
 
-            print "\tLoading core info"
-            self.cores = self.dataManager.getCores(self.dbFileName, indicies=self.indicies)
-            
             print "\tLoading contig names"
             self.contigNames = self.dataManager.getContigNames(self.dbFileName, indicies=self.indicies)
             
             print "\tLoading contig lengths"
             self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indicies=self.indicies)
+            
+            if(loadBins):
+                print "\tLoading bins"
+                self.bins = self.dataManager.getBins(self.dbFileName, indicies=self.indicies)
 
+            if(loadCores):
+                print "\tLoading core info"
+                self.cores = self.dataManager.getCores(self.dbFileName, indicies=self.indicies)
+            
             if(loadKSigs):
                 print "\tLoading kmer sigs"
                 self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indicies=self.indicies)
@@ -169,6 +176,10 @@ class DataBlob:
     def getNumBins(self):
         """return the value of numBins in the metadata tables"""
         return self.dataManager.getNumBins(self.dbFileName)
+        
+    def setNumBins(self, numBins):
+        """set the number of bins"""
+        self.dataManager.setNumBins(self.dbFileName, numBins)
         
     def getStoitColNames(self):
         """return the value of stoitColNames in the metadata tables"""
