@@ -94,7 +94,8 @@ if __name__ == '__main__':
     print_parser.add_argument('dbname', help="name of the database to open")
     print_parser.add_argument('-b', '--bins', default="", help="comma separated list of bin numbers to print")
     print_parser.add_argument('-o', '--outfile', default="", help="print to file. Default: stdout")
-    print_parser.add_argument('-f', '--format', default='tab', help="output format [tab, list]. default: 'tab'")
+    print_parser.add_argument('-f', '--format', default='full', help="output format [full, minimal, summary]. default: 'full'")
+    print_parser.add_argument('-u', '--unbinned', action="store_true", default=False, help="print unbinned contig IDs too. Default: only binned")
     
     # TODO - implement these modes
 

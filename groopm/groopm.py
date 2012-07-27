@@ -60,6 +60,7 @@ import atexit
 # GroopM imports
 import mstore
 import cluster
+import groopmUtils
 
 ###############################################################################
 ###############################################################################
@@ -129,7 +130,12 @@ class GroopMOptionsParser():
             print "****************************************************************"
 
         elif(options.subparser_name == 'print'):
-            pass
+            PE = groopmUtils.PrintEngine(options.dbname,
+                                         options.format,
+                                         fileName=options.outfile
+                                         )
+            PE.loadData(getUnbinned=options.unbinned)
+            PE.printBins()
             
         else:
             print "****************************************************************"
