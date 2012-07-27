@@ -178,9 +178,26 @@ class DataBlob:
         """Has the data been clustered already"""
         return self.dataManager.isClustered(self.dbFileName)
     
+    def setClustered(self):
+        """Save that the db has been clustered"""
+        self.dataManager.setClustered(self.dbFileName, True)
+    
     def isComplete(self):
         """Has the data been *completely* clustered already"""
         return self.dataManager.isComplete(self.dbFileName)
+    
+    def setComplete(self):
+        """Save that the db has been completely clustered"""
+        self.dataManager.setComplete(self.dbFileName, True)
+    
+    def saveBins(self, update):
+        """Save our bins into the DB"""
+        self.dataManager.setBins(self.dbFileName, update)
+    
+    def saveCores(self, update):
+        """Save our core flags into the DB"""
+        self.dataManager.setCores(self.dbFileName, update)
+
 #------------------------------------------------------------------------------
 # DATA TRANSFORMATIONS 
 
@@ -451,7 +468,16 @@ class ClusterEngine:
         self.clusterBlob.condenseCores(cum_contigs_used_good, minSize)
         t4 = time.time()
         print "\tTHIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
-
+        
+        # Now save all the stuff to disk!
+        print "Saving cores"
+        (bin_update, core_update) = self.clusterBlob.getCoreBinUpdates()
+        self.dataBlob.saveBins(bin_update)
+        self.dataBlob.saveCores(core_update)
+        self.dataBlob.setClustered()
+        t5 = time.time()
+        print "\tTHIS: [",self.secondsToStr(t5-t4),"]\tTOTAL: [",self.secondsToStr(t5-t0),"]"
+        
     def expandBins(self):
         """Load cores and expand bins"""
         # check that the user is OK with nuking stuff...
@@ -544,9 +570,8 @@ class ClusterBlob:
         print "\t",
         nl_counter = 0
         while(num_below_cutoff < breakout_point):
-#            if(self.numBins > 4):
-#                break
-            
+            #if(self.numBins > 1):
+            #    break
             sys.stdout.flush()
             # apply a gaussian blur to each image map to make hot spots
             # stand out more from the background 
@@ -730,7 +755,26 @@ class ClusterBlob:
         cumContigsUsedGood += contigs_upgraded
         perc = "%.2f" % round((float(cumContigsUsedGood)/float(self.dataBlob.numContigs))*100,2)
         print "\t",(cumContigsUsedGood),"contigs are distributed across",self.numBins,"cores (",perc,"% )"
-    
+
+    def getCoreBinUpdates(self):
+        """Merge the bin information with the raw DB indexes so we can save to disk"""
+        core_update = dict(zip(self.dataBlob.indicies, [False]*np.size(self.dataBlob.indicies)))
+        bin_update = dict(zip(self.dataBlob.indicies, [0]*np.size(self.dataBlob.indicies)))
+
+        # we need a mapping from cid (or local index) to binID
+        c2b = dict(zip(range(0,np.size(self.dataBlob.indicies)), [0]*np.size(self.dataBlob.indicies)))
+        for bid in self.bins:
+            for index in self.bins[bid].indicies:
+                c2b[index] = bid
+        
+        # at this stage, all bins are cores
+        for index in range(0, self.dataBlob.numContigs):
+            if index in self.binnedIndicies:
+                bin_update[self.dataBlob.indicies[index]] = c2b[index]
+                core_update[self.dataBlob.indicies[index]] = True
+
+        return (bin_update, core_update)
+            
     def populateImageMaps(self):
         """Load the transformed data into the main image maps"""
         # reset these guys... JIC

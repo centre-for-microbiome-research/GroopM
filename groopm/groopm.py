@@ -110,9 +110,7 @@ class GroopMOptionsParser():
                                        force=options.force,
                                        plot=options.plot
                                        )
-            success = CE.makeCores(coreCut=options.cutoff, minSize=options.size, minVol=options.bp)
-            if not success:
-                print options.dbname,"not updated" 
+            CE.makeCores(coreCut=options.cutoff, minSize=options.size, minVol=options.bp)
 
         elif(options.subparser_name == 'expand'):
             # make bin cores
@@ -123,9 +121,7 @@ class GroopMOptionsParser():
                                        force=options.force,
                                        plot=options.plot
                                        )
-            success = CE.expandBins()
-            if not success:
-                print options.dbname,"not updated" 
+            CE.expandBins()
         
         elif(options.subparser_name == 'complete'):
             print "****************************************************************"
