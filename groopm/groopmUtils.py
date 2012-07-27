@@ -3,7 +3,7 @@
 #                                                                             #
 #    groopmUtils.py                                                           #
 #                                                                             #
-#    Classes for heavy lifting of raw data + output methods                   #
+#    Classes for non-clustering data manipulation and output                  #
 #                                                                             #
 #    Copyright (C) Michael Imelfort                                           #
 #                                                                             #

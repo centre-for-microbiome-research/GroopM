@@ -80,11 +80,11 @@ class GMDataManager:
     'mer3' : tables.FloatCol(pos=3)
     ...
     
-    **Bam files (coverage profile)**
+    **Coverage profile**
     table = 'coverage'
-    'bam1' : tables.FloatCol(pos=1)
-    'bam2' : tables.FloatCol(pos=2)
-    'bam3' : tables.FloatCol(pos=3)
+    'stoit1' : tables.FloatCol(pos=1)
+    'stoit2' : tables.FloatCol(pos=2)
+    'stoit3' : tables.FloatCol(pos=3)
     ...
     
     **Aux profile**
@@ -97,21 +97,22 @@ class GMDataManager:
     ------------------------
     ** Metadata **
     table = 'meta'
-    'bamColNames' : tables.StringCol(500, pos=0)
-    'numBams'     : tables.Int32Col(pos=1)
-    'merColNames' : tables.StringCol(5000,pos=2)
-    'merSize'     : tables.Int32Col(pos=3)
-    'numMers'     : tables.Int32Col(pos=4)
-    'numCons'     : tables.Int32Col(pos=5)
-    'numBins'     : tables.Int32Col(pos=6)
-    'clustered'   : tables.BoolCol(pos=7)           # set to true after clustering is complete
-    'complete'    : tables.BoolCol(pos=8)           # set to true after clustering finishing is complete
+    'stoitColNames' : tables.StringCol(512, pos=0)
+    'numStoits'     : tables.Int32Col(pos=1)
+    'merColNames'   : tables.StringCol(4096,pos=2)
+    'merSize'       : tables.Int32Col(pos=3)
+    'numMers'       : tables.Int32Col(pos=4)
+    'numCons'       : tables.Int32Col(pos=5)
+    'numBins'       : tables.Int32Col(pos=6)
+    'clustered'     : tables.BoolCol(pos=7)           # set to true after clustering is complete
+    'complete'      : tables.BoolCol(pos=8)           # set to true after clustering finishing is complete
     
     ** Bins **
     table = 'bin'
-    'cid'    : tables.StringCol(500, pos=0)
+    'cid'    : tables.StringCol(512, pos=0)
     'bin'    : tables.Int32Col(pos=1)
     'length' : tables.Int32Col(pos=2)
+    'core'   : tables.BoolCol(pos=3)                # is this contig part of a bin's core?
     """
     def __init__(self): pass
 
@@ -124,7 +125,7 @@ class GMDataManager:
         dbFileName = dbFileName
         contigsFile = contigs
         bamFiles = bamFiles.split(",")
-        bamColNames = []
+        stoitColNames = []
         auxFile = aux
         
         kse = KmerSigEngine(kmerSize)
@@ -184,9 +185,12 @@ class GMDataManager:
                 #------------------------
                 # Add a table for the bins
                 #------------------------
-                db_desc = { 'cid' : tables.StringCol(64, pos=0), 'bin' : tables.Int32Col(pos=1), 'length' : tables.Int32Col(pos=2) }
+                db_desc = {'cid' : tables.StringCol(512, pos=0),
+                           'bin' : tables.Int32Col(pos=1),
+                           'length' : tables.Int32Col(pos=2),
+                           'core' : tables.BoolCol(dflt=False, pos=3) }
                 try:
-                    BIN_table = h5file.createTable(meta_group, 'bin', db_desc, "Bin IDs")
+                    BIN_table = h5file.createTable(meta_group, 'bin', db_desc, "Bin information")
                     self.initBins(BIN_table, contigNames)
                 except:
                     print "Error creating BIN table:", sys.exc_info()[0]
@@ -202,11 +206,11 @@ class GMDataManager:
                     # we want to rip off the ".bam" part
                     bam_desc = getBamDescriptor(bf)
                     db_desc[bam_desc] = tables.FloatCol(pos=ppos)
-                    bamColNames.append(bam_desc)
+                    stoitColNames.append(bam_desc)
                     ppos += 1
                 try:
                     COV_table = h5file.createTable(profile_group, 'coverage', db_desc, "Bam based coverage")
-                    bamParser.parse(bamFiles, bamColNames, COV_table, contigNames)
+                    bamParser.parse(bamFiles, stoitColNames, COV_table, contigNames)
                 except:
                     print "Error creating coverage table:", sys.exc_info()[0]
                     raise
@@ -229,19 +233,19 @@ class GMDataManager:
                 # Add metadata
                 #------------------------
                 # Create a new group under "/" (root) for storing profile information
-                db_desc = {'bamColNames' : tables.StringCol(500, pos=0),
-                           'numBams' : tables.Int32Col(pos=1),
-                           'merColNames' : tables.StringCol(5000,pos=2),
+                db_desc = {'stoitColNames' : tables.StringCol(512, pos=0),
+                           'numStoits' : tables.Int32Col(pos=1),
+                           'merColNames' : tables.StringCol(4096,pos=2),
                            'merSize' : tables.Int32Col(pos=2),
                            'numMers' : tables.Int32Col(pos=4),
                            'numCons' : tables.Int32Col(pos=5),
-                           'numBins' : tables.Int32Col(pos=6),
-                           'clustered' : tables.BoolCol(pos=7),                  # set to true after clustering is complete
-                           'complete' : tables.BoolCol(pos=8)                    # set to true after clustering finishing is complete
+                           'numBins' : tables.Int32Col(dflt=0, pos=6),
+                           'clustered' : tables.BoolCol(dflt=False, pos=7),                  # set to true after clustering is complete
+                           'complete' : tables.BoolCol(dflt=False, pos=8)                    # set to true after clustering finishing is complete
                            }
                 try:
                     META_table = h5file.createTable(meta_group, 'meta', db_desc, "Descriptive data")
-                    self.initMeta(META_table, str.join(',',bamColNames), len(bamColNames), str.join(',',kse.kmerCols), kmerSize, len(kse.kmerCols), len(contigNames))
+                    self.initMeta(META_table, str.join(',',stoitColNames), len(stoitColNames), str.join(',',kse.kmerCols), kmerSize, len(kse.kmerCols), len(contigNames))
                 except:
                     print "Error creating META table:", sys.exc_info()[0]
                     raise
@@ -252,7 +256,7 @@ class GMDataManager:
         print "****************************************************************"
         print "Data loaded successfully!"
         print " ->",len(contigNames),"contigs"
-        print " ->",len(bamColNames),"BAM files"
+        print " ->",len(stoitColNames),"BAM files"
         print "Written to: '"+dbFileName+"'"
         print "****************************************************************"
 
@@ -270,23 +274,20 @@ class GMDataManager:
         for cid in sorted(contigNames):
             BIN_row = table.row
             BIN_row['cid'] = cid
-            BIN_row['length'] = contigNames[cid]
             BIN_row['bin'] = 0
+            BIN_row['length'] = contigNames[cid]
             BIN_row.append()
         table.flush()
     
-    def initMeta(self, table, bamColNames, numBams, merColNames, merSize, numMers, numCons):
+    def initMeta(self, table, stoitColNames, numStoits, merColNames, merSize, numMers, numCons):
         """Initialise the meta-data table"""
         META_row = table.row
-        META_row['bamColNames'] = bamColNames
-        META_row['numBams'] = numBams
+        META_row['stoitColNames'] = stoitColNames
+        META_row['numStoits'] = numStoits
         META_row['merColNames'] = merColNames
         META_row['merSize'] = merSize
         META_row['numMers'] = numMers
         META_row['numCons'] = numCons
-        META_row['numBins'] = 0
-        META_row['clustered'] = False
-        META_row['complete'] = False
         META_row.append()
         table.flush()
         
@@ -358,8 +359,42 @@ class GMDataManager:
             with tables.openFile(dbFileName, mode='a') as h5file:
                 table = h5file.root.meta.bin
                 for row_num in updates.keys():
-                    new_row = np.zeros((1,),dtype=('S64,i4,i4'))
-                    new_row[:] = [(table[row_num][0],updates[row_num],table[row_num][2])]
+                    new_row = np.zeros((1,),dtype=('S512,i4,i4,b1'))
+                    new_row[:] = [(table[row_num][0],updates[row_num],table[row_num][2],table[row_num][3])]
+                    table.modifyRows(start=row_num, rows=new_row)
+                table.flush()
+        except:
+            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            raise
+
+    def getCores(self, dbFileName, condition='', indicies=np.array([])):
+        """Load bin core info"""
+        try:
+            with tables.openFile(dbFileName, mode='r') as h5file:
+                if(np.size(indicies) != 0):
+                    return np.array([h5file.root.meta.bin[x][3] for x in indicies]).ravel()
+                else:
+                    if('' == condition):
+                        condition = "cid != ''" # no condition breaks everything!
+                    return np.array([list(x)[3] for x in h5file.root.meta.bin.readWhere(condition)]).ravel()
+        except:
+            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            raise
+
+    def setCores(self, dbFileName, updates):
+        """Set bin core stats
+        
+        updates is a dictionary which looks like:
+        { tableRow : coreValue }
+        """
+        row_nums = updates.keys()
+        new_bins = updates.values()
+        try:
+            with tables.openFile(dbFileName, mode='a') as h5file:
+                table = h5file.root.meta.bin
+                for row_num in updates.keys():
+                    new_row = np.zeros((1,),dtype=('S512,i4,i4,b1'))
+                    new_row[:] = [(table[row_num][0],table[row_num][1],table[row_num][2],updates[row_num])]
                     table.modifyRows(start=row_num, rows=new_row)
                 table.flush()
         except:
@@ -418,9 +453,9 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
 
-    def getNumBams(self, dbFileName):
-        """return the value of numBams in the metadata tables"""
-        return self.getMetaField(dbFileName, 'numBams')
+    def getNumStoits(self, dbFileName):
+        """return the value of numStoits in the metadata tables"""
+        return self.getMetaField(dbFileName, 'numStoits')
             
     def getMerColNames(self, dbFileName):
         """return the value of merColNames in the metadata tables"""
@@ -442,9 +477,9 @@ class GMDataManager:
         """return the value of numBins in the metadata tables"""
         return self.getMetaField(dbFileName, 'numBins')
         
-    def getBamColNames(self, dbFileName):
-        """return the value of bamColNames in the metadata tables"""
-        return self.getMetaField(dbFileName, 'bamColNames')
+    def getStoitColNames(self, dbFileName):
+        """return the value of stoitColNames in the metadata tables"""
+        return self.getMetaField(dbFileName, 'stoitColNames')
 
 #------------------------------------------------------------------------------
 # GET / SET WORKFLOW FLAGS 
@@ -501,14 +536,14 @@ class GMDataManager:
         print "Bins table"
         print "-----------------------------------"
         for row in table:
-            print row['cid'],",",row['length'],",",row['bin']
+            print row['cid'],",",row['length'],",",row['bin'],",",row['core']
 
     def dumpMeta(self, table):
         print "-----------------------------------"
         print "MetaData table"
         print "-----------------------------------"
         for row in table:
-            print row['bamColNames']
+            print row['stoitColNames']
             print row['merColNames']
             print row['merSize']
             print row['numMers']
@@ -524,9 +559,9 @@ class GMDataManager:
                 
                 # get the metadata
                 META_row = h5file.root.meta.meta.read()
-                print META_row['bamColNames']
+                print META_row['stoitColNames']
     
-                bamColNames = META_row['bamColNames'][0].split(",")
+                stoitColNames = META_row['stoitColNames'][0].split(",")
                 merSize = META_row['merSize']
      
                 kse = KmerSigEngine(merSize)
@@ -534,7 +569,7 @@ class GMDataManager:
                 bamParser = BamParser()
                 auxParser = AuxParser()
     
-                bamParser.dumpCovTable(h5file.root.profile.coverage, bamColNames)
+                bamParser.dumpCovTable(h5file.root.profile.coverage, stoitColNames)
                 conParser.dumpTnTable(h5file.root.profile.kms, kse.kmerCols)
                 auxParser.dumpAUXTable(h5file.root.profile.aux)
                 self.dumpBins(h5file.root.meta.bin)
@@ -717,17 +752,17 @@ class BamParser:
 
     def __init__(self): pass
     
-    def parse(self, bamFiles, bamColNames, table, contigNames):
+    def parse(self, bamFiles, stoitColNames, table, contigNames):
         """Parse multiple bam files and store the results in the main DB
         
         table: a table in an open h5 file like "CID,COV_1,...,COV_n,length"
-        bamColNames: names of the COV_x columns
+        stoitColNames: names of the COV_x columns
         """
         # parse the BAMs
         # we need to have some type of entry for each contig
         # so start by putting 0's here
         tmp_storage = {}
-        num_bams = len(bamColNames)
+        num_bams = len(stoitColNames)
         for cid in contigNames.keys():
             tmp_storage[cid] = np.zeros((num_bams))
 
@@ -736,7 +771,7 @@ class BamParser:
             bam_file = None
             try:
                 bam_file = pysam.Samfile(bf, 'rb')
-                print "Parsing",bamColNames[bam_count],"(",(bam_count+1),"of",num_bams,")"
+                print "Parsing",stoitColNames[bam_count],"(",(bam_count+1),"of",num_bams,")"
                 self.parseBam(bam_file, bam_count, tmp_storage, contigNames)                
                 bam_count += 1
             except:
@@ -750,8 +785,8 @@ class BamParser:
                 # make a new row
                 cov_row = table.row
                 # punch in the data
-                for i in range(0,len(bamColNames)):
-                    cov_row[bamColNames[i]] = tmp_storage[cid][i]
+                for i in range(0,len(stoitColNames)):
+                    cov_row[stoitColNames[i]] = tmp_storage[cid][i]
                 cov_row.append()
                 rows_created += 1
             table.flush()
@@ -782,13 +817,13 @@ class BamParser:
                 # to use a normalised coverage
                 storage[reference][bamCount] = float(num_reads)/float(length)
         
-    def dumpCovTable(self, table, bamColNames):
+    def dumpCovTable(self, table, stoitColNames):
         """Dump the guts of the coverage table"""
         print "-----------------------------------"
         print "Coverage table"
         print "-----------------------------------"
         for row in table:
-            for colName in bamColNames:
+            for colName in stoitColNames:
                 print ",",row[colName],
             print ""
 

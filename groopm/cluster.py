@@ -88,6 +88,7 @@ class DataBlob:
         self.auxColors = np.array([])
         self.kmerSigs = np.array([])
         self.bins = np.array([])
+        self.cores = np.array([])
         self.transformedData = np.array([]) # the munged data points
         
         self.condition = ""                 # condition will be supplied at loading time
@@ -124,6 +125,9 @@ class DataBlob:
             
             print "\tLoading bins"
             self.bins = self.dataManager.getBins(self.dbFileName, indicies=self.indicies)
+
+            print "\tLoading core info"
+            self.cores = self.dataManager.getCores(self.dbFileName, indicies=self.indicies)
             
             print "\tLoading contig names"
             self.contigNames = self.dataManager.getContigNames(self.dbFileName, indicies=self.indicies)
@@ -142,8 +146,8 @@ class DataBlob:
 # GET / SET 
 
     def getNumStoits(self):
-        """return the value of (stoit)numBams in the metadata tables"""
-        return self.dataManager.getNumBams(self.dbFileName)
+        """return the value of numStoits in the metadata tables"""
+        return self.dataManager.getNumStoits(self.dbFileName)
             
     def getMerColNames(self):
         """return the value of merColNames in the metadata tables"""
@@ -167,8 +171,8 @@ class DataBlob:
         return self.dataManager.getNumBins(self.dbFileName)
         
     def getStoitColNames(self):
-        """return the value of (stoit)bamColNames in the metadata tables"""
-        return self.dataManager.getBamColNames(self.dbFileName)
+        """return the value of stoitColNames in the metadata tables"""
+        return self.dataManager.getStoitColNames(self.dbFileName)
     
     def isClustered(self):
         """Has the data been clustered already"""
@@ -413,25 +417,16 @@ class ClusterEngine:
         self.outFile = outFile
         self.forceWriting = force
         
-    def cluster(self):
-        """Cluster the contigs"""
+    def makeCores(self, coreCut, minSize, minVol):
+        """Cluster the contigs to make bin cores"""
         # check that the user is OK with nuking stuff...
-        if(not self.forceWriting):
-            if(self.dataBlob.isClustered()):
-                option = raw_input(" ****WARNING**** Database: '"+self.dataBlob.dbFileName+"' has already been clustered.\n" \
-                                   " If you continue you *MAY* overwrite existing bins!\n" \
-                                   " Overwrite? (y,n) : ")
-                print "****************************************************************"
-                if(option.upper() != "Y"):
-                    print "Operation cancelled"
-                    return False
-                else:
-                    print "Overwriting database",self.dataBlob.dbFileName
+        if(not self.promptForOverwrite()):
+            return False
 
         # get some data
         t0 = time.time()
         print "Load data"
-        self.dataBlob.loadData(condition="length >= 10000")#(length >= 4000 ) & (length <= 4300)")
+        self.dataBlob.loadData(condition="length >= "+str(coreCut))
         t1 = time.time()
         print "\tTHIS: [",self.secondsToStr(t1-t0),"]\tTOTAL: [",self.secondsToStr(t1-t0),"]"
         
@@ -446,27 +441,50 @@ class ClusterEngine:
         
         # cluster and bin!
         print "Create cores"
-        cum_contigs_used_good = self.clusterBlob.createCores()
+        cum_contigs_used_good = self.clusterBlob.initialiseCores(minVol)
         t3 = time.time()
         print "\tTHIS: [",self.secondsToStr(t3-t2),"]\tTOTAL: [",self.secondsToStr(t3-t0),"]"
         
         # now we assume that some true bins may be separated across two cores
         # try to condense things a little
         print "Condense cores"
-        self.clusterBlob.condenseCores(cum_contigs_used_good)
+        self.clusterBlob.condenseCores(cum_contigs_used_good, minSize)
         t4 = time.time()
         print "\tTHIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
+
+    def expandBins(self):
+        """Load cores and expand bins"""
+        # check that the user is OK with nuking stuff...
+        if(not self.promptForOverwrite()):
+            return False
         
+        # get some data
+        t0 = time.time()
+        print "Load data"
+        self.dataBlob.loadData(condition="length >= 10000")#(length >= 4000 ) & (length <= 4300)")
+        t1 = time.time()
+        print "\tTHIS: [",self.secondsToStr(t1-t0),"]\tTOTAL: [",self.secondsToStr(t1-t0),"]"
+
         # Now we use SOMs to classify the remaininfg contigs
         print "Start SOM classification"
-        t5 = time.time()
-        print "\tTHIS: [",self.secondsToStr(t5-t4),"]\tTOTAL: [",self.secondsToStr(t5-t0),"]"
+        t2 = time.time()
+        print "\tTHIS: [",self.secondsToStr(t2-t1),"]\tTOTAL: [",self.secondsToStr(t2-t0),"]"
 
-        # all good!
-        t6 = time.time()
-        print "\tTOTAL: [",self.secondsToStr(t6-t0),"]"
+    def promptForOverwrite(self):
+        """Check that the user is ok with possibly overwriting the DB"""
+        if(not self.forceWriting):
+            if(self.dataBlob.isClustered()):
+                option = raw_input(" ****WARNING**** Database: '"+self.dataBlob.dbFileName+"' has already been clustered.\n" \
+                                   " If you continue you *MAY* overwrite existing bins!\n" \
+                                   " Overwrite? (y,n) : ")
+                print "****************************************************************"
+                if(option.upper() != "Y"):
+                    print "Operation cancelled"
+                    return False
+                else:
+                    print "Overwriting database",self.dataBlob.dbFileName
         return True
-
+    
     def secondsToStr(self, t):
         rediv = lambda ll,b : list(divmod(ll[0],b)) + ll[1:]
         return "%d:%02d:%02d.%03d" % tuple(reduce(rediv,[[t*1000,],1000,60,60]))
@@ -511,7 +529,7 @@ class ClusterBlob:
         self.debugPlots = debugPlots
         self.imageCounter = 1           # when we print many images
 
-    def createCores(self):
+    def initialiseCores(self, minVol):
         """Process contigs and form CORE bins"""
         small_bin_cutoff = 10           # anything with less than this many contigs is not a real bin
         num_below_cutoff = 0            # how many consecutive attempts have produced small bins
@@ -556,18 +574,21 @@ class ClusterBlob:
                     self.imageCounter += 1
         
                 # make the bin more gooder
+                is_good_bin = True
                 bin_size = bin.recruit(self.dataBlob.transformedData, self.dataBlob.auxProfiles, self.mappedIndicies, self.binnedIndicies)
-                if(bin_size < small_bin_cutoff):
-                    cum_contigs_used_bad += bin_size
-                    self.badBins[tmp_num_bins] = bin
-                    num_below_cutoff += 1
-                    print "-",
-                else:
+                if(bin.calcTotalSize(self.dataBlob.contigLengths) < minVol):    # less than the good volume
+                    if(bin_size < small_bin_cutoff):
+                        is_good_bin = False
+                        cum_contigs_used_bad += bin_size
+                        self.badBins[tmp_num_bins] = bin
+                        num_below_cutoff += 1
+                        print "-",
+                    # else bin is large enough!
+                if(is_good_bin):
                     # make this bin legit!
                     cum_contigs_used_good += bin_size
                     self.numBins += 1
                     bin.id = self.numBins 
-                    bin.calcTotalSize(self.dataBlob.contigLengths)
                     self.bins[self.numBins] = bin
                     # Plot?
                     if(self.debugPlots):          
@@ -626,7 +647,7 @@ class ClusterBlob:
         
         return cum_contigs_used_good
 
-    def condenseCores(self, cumContigsUsedGood):
+    def condenseCores(self, cumContigsUsedGood, minSize):
         """combine similar CORE bins"""
         stdevs = 2
         consumed_indicies = {} # who is getting consumed by who?
@@ -683,9 +704,9 @@ class ClusterBlob:
                 del self.badBins[id]
             elif(id in self.bins):
                 del self.bins[id]
-        # move all bad_bins with greater than 5 contigs into self.bins.
+        # move all bad_bins with greater than minSize contigs into self.bins.
         for bin_id in self.badBins:
-            if(self.badBins[bin_id].binSize > 5):
+            if(self.badBins[bin_id].binSize > minSize):
                 # move it to the good bins pile
                 num_upgraded += 1
                 contigs_upgraded += self.badBins[bin_id].binSize 
@@ -975,6 +996,10 @@ class ClusterBlob:
                             if index not in self.binnedIndicies:
                                 center_values = np.append(center_values, self.dataBlob.auxProfiles[index])
 
+        # make sure we have something to go on here
+        if(np.size(center_values) == 0):
+            return (-1, np.array([]), -1)
+
         cf = CenterFinder()
         sec_centroid = cf.findArrayCenter(center_values)                            
         sec_lower = sec_centroid - self.auxWobble
@@ -1002,9 +1027,7 @@ class ClusterBlob:
         if(np.size(center_indicies) > 0):
             return (sec_centroid, center_indicies, max_value)
         
-        center_indicies = np.array([])
-            
-        return (sec_centroid, center_indicies, -1)
+        return (-1, np.array([]), -1)
 
     def Ablur(self, blur, density, incAtPoint, index, offset, size):
         """AUX: Used when finding the densest point in a small block"""

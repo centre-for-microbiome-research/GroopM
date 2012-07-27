@@ -101,27 +101,43 @@ class GroopMOptionsParser():
             if not success:
                 print options.dbname,"not updated" 
                             
-        elif(options.subparser_name == 'bin'):
-            # bin loaded input
+        elif(options.subparser_name == 'core'):
+            # make bin cores
             print "****************************************************************"
-            print " [[GroopM]] Running in binning mode..."
+            print " [[GroopM]] Running in core creation mode..."
             print "****************************************************************"
             CE = cluster.ClusterEngine(options.dbname,
                                        force=options.force,
                                        plot=options.plot
                                        )
-            success = CE.cluster()
+            success = CE.makeCores(coreCut=options.cutoff, minSize=options.size, minVol=options.bp)
+            if not success:
+                print options.dbname,"not updated" 
+
+        elif(options.subparser_name == 'expand'):
+            # make bin cores
+            print "****************************************************************"
+            print " [[GroopM]] Running in bin expansion mode..."
+            print "****************************************************************"
+            CE = cluster.ClusterEngine(options.dbname,
+                                       force=options.force,
+                                       plot=options.plot
+                                       )
+            success = CE.expandBins()
             if not success:
                 print options.dbname,"not updated" 
         
         elif(options.subparser_name == 'complete'):
             print "****************************************************************"
-            print " [[GroopM]] Running in binning mode..."
+            print " [[GroopM]] All in one!..."
             print "****************************************************************"
+
+        elif(options.subparser_name == 'print'):
+            pass
             
         else:
             print "****************************************************************"
-            print " [[GroopM]] - Use -i for interactive shell or -h for help"
+            print " [[GroopM]] - Use -h for help"
             print "****************************************************************"
         return 0
     
