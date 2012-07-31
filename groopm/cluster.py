@@ -1189,6 +1189,141 @@ class ClusterBlob:
 ###############################################################################
 ###############################################################################
 ###############################################################################
+
+class CoreValidator:
+    """Plot images of transformed data and bin cores for user validation"""
+    def __init__(self, dbFileName):
+        self.dataBlob = DataBlob(dbFileName)        # based on user specified length
+        self.dataBlobC = DataBlob(dbFileName)       # cores!
+
+        # core stats
+        self.cores = {}
+        self.ccData = np.array([])
+        self.ccColour = np.array([])
+        
+        # munged data 
+        self.numCores = 0
+        self.coreMembers = {}
+
+    def validate(self, coreCut):
+        """Main wrapper for core validation"""
+        self.loadData(coreCut)
+        self.findCoreCentres()
+        self.measureBinKVariance()
+        #self.renderValImg()
+        
+    def loadData(self, coreCut):
+        """Load data from the DB and transform"""
+        self.dataBlob.loadData(condition="length >= "+str(coreCut))
+        self.dataBlobC.loadData(loadBins=True, loadKSigs=True, condition="core >= True")
+        print "\t( length >=",coreCut,") -> ",np.size(self.dataBlob.auxProfiles)
+        print "\tCores -> ",np.size(self.dataBlobC.auxProfiles)
+        self.numCores = self.dataBlobC.getNumBins()
+        self.dataBlob.transformData()
+        self.dataBlobC.transformData()
+
+    def findCoreCentres(self):
+        """Find the point representing the centre of each core"""
+        self.ccData = np.zeros((self.numCores,3))
+        for index in range(0,self.numCores):
+            self.coreMembers[index+1] = []
+        
+        # fill them up
+        for index in range(0, np.size(self.dataBlobC.indicies)):
+            self.coreMembers[self.dataBlobC.bins[index]].append(index)
+
+        # remake the cores and populate the centres
+        S = 1       # SAT and VAL remain fixed at 1. Reduce to make
+        V = 1       # Pastels if that's your preference...
+        for index in range(0,self.numCores):
+            # add 1 to the index as 0 is the null core!
+            self.cores[index+1] = Bin(np.array(self.coreMembers[index+1]), self.dataBlobC.auxProfiles, index+1)
+            self.cores[index+1].makeBinDist(self.dataBlobC.transformedData, self.dataBlobC.auxProfiles)
+            for i in range (0,3):
+                self.ccData[index][i] = self.cores[index+1].mean[i]
+            self.ccColour = np.append(self.ccColour, [colorsys.hsv_to_rgb(self.cores[index+1].mean[3], S, V)])
+            
+        self.ccColour = np.reshape(self.ccColour, (self.numCores, 3))            
+
+    def measureBinKVariance(self):
+        """Measure within and between bin variance of kmer sigs"""
+        means = np.array([])
+        stdevs = np.array([])
+        bids = np.array([])
+        
+        # work out the mean and stdev for the kmer sigs for each bin
+        for bid in self.cores:
+            bkworking = np.array([])
+            for index in self.cores[bid].indicies:
+                bkworking = np.append(bkworking, self.dataBlobC.kmerSigs[index])
+            bkworking = np.reshape(bkworking, (self.cores[bid].binSize, np.size(self.dataBlobC.kmerSigs[0])))
+            bids = np.append(bids, [bid])
+            means = np.append(means, np.mean(bkworking, axis=0))
+            stdevs = np.append(stdevs, np.std(bkworking, axis=0))
+            
+        means = np.reshape(means, (self.numCores, np.size(self.dataBlobC.kmerSigs[0])))
+        stdevs = np.reshape(stdevs, (self.numCores, np.size(self.dataBlobC.kmerSigs[0])))
+        
+        # now work out the between and within core variances
+        between = np.std(means, axis=0)
+        within = np.median(stdevs, axis=0)
+
+        B = np.arange(0, np.size(self.dataBlobC.kmerSigs[0]), 1)
+        names = self.dataBlobC.getMerColNames().split(',')
+        
+        # we'd like to find the indicies of the worst 10% for each type so we can ignore them
+        # specifically, we'd like to remove the least variable between core kms and the 
+        # most variable within core kms.
+        sort_between_indicies = np.argsort(between)
+        sort_within_indicies = np.argsort(within)[::-1]
+        number_to_trim = int(0.1* float(np.size(self.dataBlobC.kmerSigs[0])))
+        print "BETWEEN"
+        for i in range(0,number_to_trim):
+            print names[sort_between_indicies[i]]
+        print "WITHIN" 
+        for i in range(0,number_to_trim):
+            print names[sort_within_indicies[i]] 
+        
+        plt.figure(1)
+        plt.subplot(211)
+        plt.plot(B, between, 'r--', B, within, 'b--')
+        plt.xticks(B, names, rotation=90)
+        plt.grid()
+        plt.subplot(212)
+        ratio = between/within
+        plt.plot(B, ratio, 'r--')
+        plt.xticks(B, names, rotation=90)
+        plt.grid()
+        plt.show()
+        
+        
+#------------------------------------------------------------------------------
+# IO and IMAGE RENDERING 
+
+    def renderValImg(self):
+        """Render the image for validating cores"""
+        fig = plt.figure()
+        ax1 = fig.add_subplot(121, projection='3d')
+        ax1.scatter(self.dataBlob.transformedData[:,0], self.dataBlob.transformedData[:,1], self.dataBlob.transformedData[:,2], edgecolors=self.dataBlob.auxColors, c=self.dataBlob.auxColors, marker='.')
+
+        ax2 = fig.add_subplot(122, projection='3d')
+        ax2.scatter(self.ccData[:,0], self.ccData[:,1], self.ccData[:,2], edgecolors=self.ccColour, c=self.ccColour, marker='.')
+
+        try:
+            plt.show()
+            plt.close(fig)
+        except:
+            print "Error showing image", sys.exc_info()[0]
+            raise
+
+        del fig
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
 class Bin:
     """Class for managing collections of contigs
     

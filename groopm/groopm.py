@@ -113,6 +113,14 @@ class GroopMOptionsParser():
                                        )
             CE.makeCores(coreCut=options.cutoff, minSize=options.size, minVol=options.bp)
 
+        elif(options.subparser_name == 'coreval'):
+            # make bin cores
+            print "****************************************************************"
+            print " [[GroopM]] Running in core validation mode..."
+            print "****************************************************************"
+            CV = cluster.CoreValidator(options.dbname)
+            CV.validate(coreCut=options.cutoff)
+            
         elif(options.subparser_name == 'expand'):
             # make bin cores
             print "****************************************************************"
@@ -134,7 +142,10 @@ class GroopMOptionsParser():
                                          options.format,
                                          fileName=options.outfile
                                          )
-            PE.loadData(getUnbinned=options.unbinned)
+            bins = []
+            if(options.bins != ""):
+                bins = options.bins.split(',')
+            PE.loadData(getUnbinned=options.unbinned, bins=bins)
             PE.printBins()
             
         else:
