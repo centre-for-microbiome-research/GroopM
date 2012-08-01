@@ -60,7 +60,7 @@ from groopm import groopm
 if __name__ == '__main__':
     # intialise the options parser
     parser = argparse.ArgumentParser(description='[[GroopM]] - Metagenomic binning tools')
-    subparsers = parser.add_subparsers(help="choose one of these run modes:\n", dest='subparser_name')
+    subparsers = parser.add_subparsers(help="--", dest='subparser_name')
 
     ##################################################
     # regular modes    
@@ -69,7 +69,6 @@ if __name__ == '__main__':
     parse_parser = subparsers.add_parser('parse', help='parse raw data and save to DB')
     parse_parser.add_argument('bamfiles', help="comma separated list of bam files to parse")
     parse_parser.add_argument('reference', help="fasta file containing bam reference sequences")
-    parse_parser.add_argument('secprofile', help="CSV file containing secondary profile (CUB, TN, etc...)")
     parse_parser.add_argument('dbname', help="name of the database being created")
     parse_parser.add_argument('-d', '--dump', action="store_true", default=False, help="dump the contents of all tables to screen")
     parse_parser.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing DB file without prompting")
@@ -82,6 +81,11 @@ if __name__ == '__main__':
     core_parser.add_argument('-D', '--plot', action="store_true", default=False, help="create plots during core creation. Default: no plots")
     core_parser.add_argument('-s', '--size', default=5, help="minimum number of contigs which define a core. Default: 5")
     core_parser.add_argument('-b', '--bp', default=1000000, help="cumulative size of contigs which define a core regardless of number of contigs. Default: 1000000")
+
+    # load cores and visualise
+    core_validator = subparsers.add_parser('coreval', help='validate cores')
+    core_validator.add_argument('dbname', help="name of the database to open")
+    core_validator.add_argument('-c', '--cutoff', default=10000, help="cutoff size for core creation. Default 10000")
 
     # load saved data and enlarge bins
     expand_parser = subparsers.add_parser('expand', help='load DB and enlarge bins')

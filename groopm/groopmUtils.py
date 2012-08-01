@@ -53,6 +53,7 @@ import numpy as np
 
 # GroopM imports
 import mstore
+import cluster
 
 ###############################################################################
 ###############################################################################
@@ -77,15 +78,25 @@ class PrintEngine:
         self.bin_sizes = {}
         self.bin_members = {}
         
-    def loadData(self, getUnbinned=False):
+    def loadData(self, getUnbinned=False, bins=[]):
         """load information from the DB"""
         if(getUnbinned):
             # get the lot!
             self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName)
         else:
             # only get those with a non-zero bin ID
-            self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName,
-                                                                    condition='bin != 0')
+            if(len(bins) == 0):
+                self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName,
+                                                                        condition='bin != 0')
+            else:
+                # get only those we're told to get
+                condition = "((bin == "+str(bins[0])+")"
+                for index in range (1,len(bins)):
+                    condition += " | (bin == "+str(bins[index])+")"
+                
+                condition += ")"
+                self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName,
+                                                                        condition=condition)
         self.contigNames = self.dataManager.getContigNames(self.dbFileName,
                                                            indicies=self.indicies)
         self.contigLengths = self.dataManager.getContigLengths(self.dbFileName,

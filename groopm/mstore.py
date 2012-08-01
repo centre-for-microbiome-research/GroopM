@@ -87,10 +87,6 @@ class GMDataManager:
     'stoit3' : tables.FloatCol(pos=3)
     ...
     
-    **Aux profile**
-    table = 'aux'
-    'aux' : tables.FloatCol(pos=1)
-    
     ------------------------
      METADATA
     group = '/meta'
@@ -119,19 +115,17 @@ class GMDataManager:
 #------------------------------------------------------------------------------
 # DB CREATION / INITIALISATION 
 
-    def createDB(self, bamFiles, contigs, aux, dbFileName, kmerSize=4, dumpAll=False, force=False):
+    def createDB(self, bamFiles, contigs, dbFileName, kmerSize=4, dumpAll=False, force=False):
         """Main wrapper for parsing all input files"""
         # load all the passed vars
         dbFileName = dbFileName
         contigsFile = contigs
         bamFiles = bamFiles.split(",")
         stoitColNames = []
-        auxFile = aux
         
         kse = KmerSigEngine(kmerSize)
         conParser = ContigParser()
         bamParser = BamParser()
-        auxParser = AuxParser()
 
         # make sure we're only overwriting existing DBs with the users consent
         try:
@@ -213,21 +207,6 @@ class GMDataManager:
                     bamParser.parse(bamFiles, stoitColNames, COV_table, contigNames)
                 except:
                     print "Error creating coverage table:", sys.exc_info()[0]
-                    raise
-                #------------------------
-                # parse aux profile 
-                #------------------------
-                db_desc = { 'aux' : tables.FloatCol(pos=0) }
-                try:
-                    AUX_table = h5file.createTable(profile_group, 'aux', db_desc, "Secondary profile")
-                except:
-                    print "Error creating AUX table:", sys.exc_info()[0]
-                    raise
-                try:
-                    f = open(auxFile, "r")
-                    auxParser.parse(f, AUX_table, contigNames)
-                except:
-                    print "Could not parse the auxilary profile file:",contigsFile,sys.exc_info()[0]
                     raise
                 #------------------------
                 # Add metadata
@@ -319,20 +298,6 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
         
-    def getAuxProfiles(self, dbFileName, condition='', indicies=np.array([])):
-        """Load aux profiles"""
-        try:
-            with tables.openFile(dbFileName, mode='r') as h5file:
-                if(np.size(indicies) != 0):
-                    return np.array([list(h5file.root.profile.aux[x])[0] for x in indicies]).ravel()
-                else:
-                    if('' == condition):
-                        condition = "cid != ''" # no condition breaks everything!
-                    return np.array([list(h5file.root.profile.aux[x.nrow])[0] for x in h5file.root.meta.bin.where(condition)]).ravel()
-        except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
-            raise
-
     def getBins(self, dbFileName, condition='', indicies=np.array([])):
         """Load bins"""
         try:
@@ -580,58 +545,15 @@ class GMDataManager:
                 kse = KmerSigEngine(merSize)
                 conParser = ContigParser()
                 bamParser = BamParser()
-                auxParser = AuxParser()
     
                 bamParser.dumpCovTable(h5file.root.profile.coverage, stoitColNames)
                 conParser.dumpTnTable(h5file.root.profile.kms, kse.kmerCols)
-                auxParser.dumpAUXTable(h5file.root.profile.aux)
                 self.dumpBins(h5file.root.meta.bin)
                 self.dumpMeta(h5file.root.meta.meta)
         except:
             print "Error opening database:", dbFileName, sys.exc_info()[0]
             raise
 
-###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
-class AuxParser:
-    """Class for parsing auxilary profile values"""
-    def __init__(self): pass
-    
-    def parse(self, auxFile, table, contigNames):
-        """Do the heavy lifting of parsing AUX data"""
-        print "Parsing auxilary profile"
-        search=re.compile(r"^['\"]").search # line starts with a quote char
-        tmp_storage = {} # so we can have all tables sorted accordingly
-        for cid in contigNames.keys():
-            tmp_storage[cid] = 0.0
-        
-        for line in auxFile:
-            if(not search(line)):
-                fields = line.rstrip().split(",")
-                cid = fields[0]
-                if cid in contigNames:
-                    tmp_storage[fields[0]] = fields[1]
-
-        rows_created = 0
-        for cid in sorted(tmp_storage.keys()):     
-            AUX_row = table.row
-            # punch in the data
-            AUX_row['aux'] = tmp_storage[cid]
-            AUX_row.append()
-            rows_created += 1
-        table.flush()
-        return rows_created
-
-    def dumpAUXTable(self, table):
-        """Dump the guts of the AUX table"""
-        print "-----------------------------------"
-        print "Aux profile table"
-        print "-----------------------------------"
-        for row in table:
-            print row['aux']
-    
 ###############################################################################
 ###############################################################################
 ###############################################################################
