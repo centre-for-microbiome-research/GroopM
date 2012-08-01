@@ -486,6 +486,7 @@ class ClusterEngine:
         self.dataBlob.saveBins(bin_update)
         self.dataBlob.saveCores(core_update)
         self.dataBlob.setClustered()
+        self.dataBlob.setNumBins(np.size(self.dataBlob.bins))
         t5 = time.time()
         print "\tTHIS: [",self.secondsToStr(t5-t4),"]\tTOTAL: [",self.secondsToStr(t5-t0),"]"
         
