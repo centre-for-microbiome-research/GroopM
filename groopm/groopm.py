@@ -94,7 +94,6 @@ class GroopMOptionsParser():
             GMdata = mstore.GMDataManager()
             success = GMdata.createDB(options.bamfiles,
                                       options.reference,
-                                      options.secprofile,
                                       options.dbname,
                                       dumpAll=options.dump,
                                       force=options.force

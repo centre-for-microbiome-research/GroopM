@@ -84,8 +84,7 @@ class DataBlob:
         self.covProfiles = np.array([])
         self.contigNames = np.array([])
         self.contigLengths = np.array([])
-        self.auxProfiles = np.array([]) 
-        self.auxColors = np.array([])
+        self.contigColours = np.array([])
         self.kmerSigs = np.array([])
         self.bins = np.array([])
         self.cores = np.array([])
@@ -104,7 +103,6 @@ class DataBlob:
     def loadData(self,
                  condition="",
                  silent=False,
-                 loadKSigs=False,
                  loadBins=False,
                  loadCores=False):
         """Load pre-parsed data"""
@@ -119,14 +117,17 @@ class DataBlob:
             print "\tLoading coverage profiles"
             self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indicies=self.indicies)
 
-            print "\tLoading aux profiles"
-            self.auxProfiles = self.dataManager.getAuxProfiles(self.dbFileName, indicies=self.indicies)
+            print "\tLoading kmer sigs"
+            self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indicies=self.indicies)
+
+            print "\tCreating colour profiles"
+            colourProfile = self.makeColourProfile()
             # use HSV to RGB to generate colours
             S = 1       # SAT and VAL remain fixed at 1. Reduce to make
             V = 1       # Pastels if that's your preference...
-            for val in self.auxProfiles:
-                self.auxColors = np.append(self.auxColors, [colorsys.hsv_to_rgb(val, S, V)])
-            self.auxColors = np.reshape(self.auxColors, (self.numContigs, 3))            
+            for val in colourProfile:
+                self.contigColours = np.append(self.contigColours, [colorsys.hsv_to_rgb(val, S, V)])
+            self.contigColours = np.reshape(self.contigColours, (self.numContigs, 3))            
 
             print "\tLoading contig names"
             self.contigNames = self.dataManager.getContigNames(self.dbFileName, indicies=self.indicies)
@@ -142,9 +143,6 @@ class DataBlob:
                 print "\tLoading core info"
                 self.cores = self.dataManager.getCores(self.dbFileName, indicies=self.indicies)
             
-            if(loadKSigs):
-                print "\tLoading kmer sigs"
-                self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indicies=self.indicies)
         except:
             print "Error loading DB:", self.dbFileName, sys.exc_info()[0]
             raise
@@ -277,6 +275,31 @@ class DataBlob:
         for i in range(0,3):
             self.transformedData[:,i] = (self.transformedData[:,i] -  min[i])/max[i]
 
+    def makeColourProfile(self):
+        """Make a colour profile based on ksig information"""
+        ret_array = np.array([0.0]*np.size(self.indicies))
+        working_data = np.array(self.kmerSigs, copy=True) 
+        PCA.Center(working_data,verbose=0)
+        p = PCA.PCA(working_data)
+        components = p.pc()
+        
+        # now make the colour profile based on PC1
+        index = 0
+        for point in components:
+            ret_array[index] = float(components[index,0])
+            index += 1
+        
+        # normalise to fit between 0 and 1
+        ret_array -= np.min(ret_array)
+        ret_array /= np.max(ret_array)
+        if(False):
+            print ret_array
+            plt.figure(1)
+            plt.subplot(111)
+            plt.plot(components[:,0], components[:,1], 'r.')
+            plt.show()
+        return ret_array
+    
     def rotateVectorAndScale(self, point, las, phi_max=6):
         """
         Move a vector closer to the center of the positive quadrant
@@ -371,7 +394,7 @@ class DataBlob:
             }
 
             ax = fig.add_subplot(131, projection='3d')
-            ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
+            ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
             ax.azim = 0
             ax.elev = 0
             for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
@@ -382,7 +405,7 @@ class DataBlob:
             ax.w_zaxis._AXINFO = myAXINFO
             
             ax = fig.add_subplot(132, projection='3d')
-            ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
+            ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
             ax.azim = 90
             ax.elev = 0
             for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
@@ -393,7 +416,7 @@ class DataBlob:
             ax.w_zaxis._AXINFO = myAXINFO
             
             ax = fig.add_subplot(133, projection='3d')
-            ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
+            ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
             ax.azim = 0
             ax.elev = 90
             for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
@@ -404,7 +427,7 @@ class DataBlob:
             ax.w_zaxis._AXINFO = myAXINFO
         else:
             ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.auxColors, c=self.auxColors, marker='.')
+            ax.scatter(self.transformedData[:,0], self.transformedData[:,1], self.transformedData[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
             ax.azim = azim
             ax.elev = elev
             ax.set_axis_off()
@@ -475,10 +498,10 @@ class ClusterEngine:
         
         # now we assume that some true bins may be separated across two cores
         # try to condense things a little
-        print "Condense cores"
-        self.clusterBlob.condenseCores(cum_contigs_used_good, minSize)
-        t4 = time.time()
-        print "\tTHIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
+        #print "Condense cores"
+        #self.clusterBlob.condenseCores(cum_contigs_used_good, minSize)
+        #t4 = time.time()
+        #print "\tTHIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
         
         # Now save all the stuff to disk!
         print "Saving cores"
@@ -486,8 +509,9 @@ class ClusterEngine:
         self.dataBlob.saveBins(bin_update)
         self.dataBlob.saveCores(core_update)
         self.dataBlob.setClustered()
-        t5 = time.time()
-        print "\tTHIS: [",self.secondsToStr(t5-t4),"]\tTOTAL: [",self.secondsToStr(t5-t0),"]"
+        self.dataBlob.setNumBins(np.size(self.dataBlob.bins))
+        t4 = time.time()
+        print "\tTHIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
         
     def expandBins(self):
         """Load cores and expand bins"""
@@ -544,7 +568,7 @@ class ClusterBlob:
         # get enough memory for three heat maps
         self.imageMaps = np.zeros((3,self.scaleFactor,self.scaleFactor))
         self.blurredMaps = np.zeros((3,self.scaleFactor,self.scaleFactor))
-        self.maxMaps = np.zeros((3,self.scaleFactor,self.scaleFactor))
+        #self.maxMaps = np.zeros((3,self.scaleFactor,self.scaleFactor))
         
         # we need a way to reference from the imageMaps back onto the transformed data
         self.mappedIndicies = {}
@@ -561,7 +585,6 @@ class ClusterBlob:
 
         # When blurring the raw image maps I chose a radius to suit my data, you can vary this as you like
         self.blurRadius = 12
-        self.auxWobble = 0.1            # amount the sec data can move about and still be in the same cluster
         
         self.debugPlots = debugPlots
         self.imageCounter = 1           # when we print many images
@@ -590,8 +613,8 @@ class ClusterBlob:
     
             # now search for the "hottest" spots on the blurred map
             # this is a new bin centroid
-            (sec_centroid, center_indicies, max_blur_value) = self.findNewClusterCenter()
-            if(-1 == sec_centroid):
+            (center_indicies, max_blur_value) = self.findNewClusterCenter()
+            if(np.size(center_indicies) == 0):
                 break
             else:
                 # make sure we got something
@@ -599,19 +622,19 @@ class ClusterBlob:
                 
                 # time to make a bin
                 tmp_num_bins += 1
-                bin = Bin(center_indicies, self.dataBlob.auxProfiles, tmp_num_bins)
+                bin = Bin(center_indicies, self.dataBlob.kmerSigs, tmp_num_bins)
                 
                 # work out the distribution in points in this bin
-                bin.makeBinDist(self.dataBlob.transformedData, self.dataBlob.auxProfiles)     
+                bin.makeBinDist(self.dataBlob.transformedData, self.dataBlob.kmerSigs)     
                 
                 # Plot?
                 if(self.debugPlots):          
-                    bin.plotBin(self.dataBlob.transformedData, self.dataBlob.auxColors, fileName="Image_"+str(self.imageCounter), tag="Initial")
+                    bin.plotBin(self.dataBlob.transformedData, self.dataBlob.contigColours, fileName="Image_"+str(self.imageCounter), tag="Initial")
                     self.imageCounter += 1
         
                 # make the bin more gooder
                 is_good_bin = True
-                bin_size = bin.recruit(self.dataBlob.transformedData, self.dataBlob.auxProfiles, self.mappedIndicies, self.binnedIndicies)
+                bin_size = bin.recruit(self.dataBlob.transformedData, self.dataBlob.kmerSigs, self.mappedIndicies, self.binnedIndicies)
                 if(bin.calcTotalSize(self.dataBlob.contigLengths) < minVol):    # less than the good volume
                     if(bin_size < small_bin_cutoff):
                         is_good_bin = False
@@ -628,7 +651,7 @@ class ClusterBlob:
                     self.bins[self.numBins] = bin
                     # Plot?
                     if(self.debugPlots):          
-                        bin.plotBin(self.dataBlob.transformedData, self.dataBlob.auxColors, fileName="Image_"+str(self.imageCounter), tag="CORE")
+                        bin.plotBin(self.dataBlob.transformedData, self.dataBlob.contigColours, fileName="Image_"+str(self.imageCounter), tag="CORE")
                         self.imageCounter += 1
                     num_below_cutoff = 0
                     print "+",
@@ -642,38 +665,6 @@ class ClusterBlob:
                 if(self.debugPlots):
                     self.plotHeat("3X3_"+str(self.roundNumber)+".png", max=max_blur_value)
 
-                # ---? REMOVE THIS WHEN CONDENSE WORKS
-                if(False):
-                    free_inds = bin.removeFromBin(self.dataBlob.transformedData, self.dataBlob.auxProfiles, self.dataBlob.contigLengths, 10)
-                    # make a new bin
-                    tmp_num_bins += 1
-                    smallbin = Bin(free_inds, self.dataBlob.auxProfiles, tmp_num_bins)
-                    smallbin.makeBinDist(self.dataBlob.transformedData, self.dataBlob.auxProfiles)
-                    smallbin.calcTotalSize(self.dataBlob.contigLengths)
-                    self.badBins[tmp_num_bins] = smallbin
-                    cum_contigs_used_good -= 10
-                    cum_contigs_used_bad += 10
-                    if(bin.id == 1):
-                        # make a small bin of 2 and 8 contigs for further testing
-                        free_inds = bin.removeFromBin(self.dataBlob.transformedData, self.dataBlob.auxProfiles, self.dataBlob.contigLengths, 2)
-                        smallbin2 = Bin(free_inds, self.dataBlob.auxProfiles, 2222)
-                        smallbin2.makeBinDist(self.dataBlob.transformedData, self.dataBlob.auxProfiles)
-                        smallbin2.calcTotalSize(self.dataBlob.contigLengths)
-                        self.badBins[2222] = smallbin2
-                        
-                        free_inds = bin.removeFromBin(self.dataBlob.transformedData, self.dataBlob.auxProfiles, self.dataBlob.contigLengths, 8)
-                        smallbin3 = Bin(free_inds, self.dataBlob.auxProfiles, 8888)
-                        smallbin3.makeBinDist(self.dataBlob.transformedData, self.dataBlob.auxProfiles)
-                        smallbin3.calcTotalSize(self.dataBlob.contigLengths)
-                        self.badBins[8888] = smallbin3
-                        self.updatePostBin(smallbin2)
-                        self.updatePostBin(smallbin3)
-                        cum_contigs_used_good -= 10
-                        cum_contigs_used_bad += 10
-                         
-                    self.updatePostBin(smallbin)
-                # ---? 
-                                
                 # append this bins list of mapped indicies to the main list
                 self.updatePostBin(bin)
         print ""
@@ -682,90 +673,6 @@ class ClusterBlob:
         print "\t",cum_contigs_used_bad,"contigs are distributed across",len(self.badBins),"pseudo cores"
         
         return cum_contigs_used_good
-
-    def condenseCores(self, cumContigsUsedGood, minSize):
-        """combine similar CORE bins"""
-        stdevs = 2
-        consumed_indicies = {} # who is getting consumed by who?
-        # go through all the bins, sorted according to auxProfile value
-        num_consumed = 0
-        num_upgraded = 0
-        contigs_upgraded = 0
-        num_deleted = 0
-        all_bins_sorted = sorted(self.bins.values() + self.badBins.values())
-        for subject_index in range(0, len(all_bins_sorted)):
-            if(subject_index not in consumed_indicies):
-                subject_bin = all_bins_sorted[subject_index]
-                #print "SUBJECT:", subject_bin.id, subject_bin.binSize, subject_bin.mean
-                subject_lower = subject_bin.mean[3] - stdevs * subject_bin.stdev[3]  # similar means within 1 stdev of the mean  
-                subject_upper = subject_bin.mean[3] + stdevs * subject_bin.stdev[3]  
-                query_index = subject_index+1
-                while(query_index < len(all_bins_sorted)):
-                    if(query_index not in consumed_indicies):
-                        query_bin = all_bins_sorted[query_index]
-                        # only worth comparing if the aux values are reasonable similar
-                        if(query_bin.mean[3] > subject_lower and query_bin.mean[3] < subject_upper):
-                            #print "QUERY:", query_bin.id, query_bin.binSize, query_bin.mean
-                            if(subject_bin.isSimilar(query_bin, stdevs=stdevs)):
-                                # smaller IDs eat the bigger ones
-                                print "SUBJECT:", subject_bin.id, subject_bin.binSize, subject_bin.mean
-                                print "QUERY:", query_bin.id, query_bin.binSize, query_bin.mean
-                                if(subject_bin.id < query_bin.id):
-                                    consumed_indicies[query_index] = subject_index
-                                else:
-                                    consumed_indicies[subject_index] = query_index
-                        else:  # because the list is sorted, we need not look further
-                            break
-                    query_index += 1
-            subject_index += 1
-        # first we worry about making all the bins ok, then we delete the consumed guys
-        dead_ids = []
-        for dead_bin_index in consumed_indicies:
-            if(False):#all_bins_sorted[dead_bin_index].id == 8888 or all_bins_sorted[dead_bin_index].id == 2222):
-                pass
-            else:
-                num_consumed += 1
-                contigs_upgraded += all_bins_sorted[dead_bin_index].binSize
-                all_bins_sorted[consumed_indicies[dead_bin_index]].consume(self.dataBlob.transformedData,
-                                                                           self.dataBlob.auxProfiles,
-                                                                           self.dataBlob.contigLengths,
-                                                                           all_bins_sorted[dead_bin_index]
-                                                                           )
-                # save this guy for the killing!
-                dead_ids.append(all_bins_sorted[dead_bin_index].id)
-            
-        # remove the consumed bins
-        for id in dead_ids:
-            if(id in self.badBins):
-                del self.badBins[id]
-            elif(id in self.bins):
-                del self.bins[id]
-        # move all bad_bins with greater than minSize contigs into self.bins.
-        for bin_id in self.badBins:
-            if(self.badBins[bin_id].binSize > minSize):
-                # move it to the good bins pile
-                num_upgraded += 1
-                contigs_upgraded += self.badBins[bin_id].binSize 
-                self.numBins += 1
-                self.badBins[bin_id].id = self.numBins
-                self.bins[self.numBins] = self.badBins[bin_id]
-                # put this id here so that it's indexes will not be classified as unassigned
-                dead_ids.append(bin_id)
-        # free the indicies of the rest
-        for bin_id in self.badBins.keys():
-            if(bin_id not in dead_ids):
-                # we need to free these indicies!
-                for index in self.badBins[bin_id].indicies:
-                     del self.binnedIndicies[index]
-                num_deleted += 1
-            del self.badBins[bin_id]
-
-        print "\tIncorporated:",num_consumed,"smaller cores into larger ones"
-        print "\tUpgraded:",num_upgraded,"psuedo cores"
-        print "\tDeleted:",num_deleted,"psuedo cores"
-        cumContigsUsedGood += contigs_upgraded
-        perc = "%.2f" % round((float(cumContigsUsedGood)/float(self.dataBlob.numContigs))*100,2)
-        print "\t",(cumContigsUsedGood),"contigs are distributed across",self.numBins,"cores (",perc,"% )"
 
     def getCoreBinUpdates(self):
         """Merge the bin information with the raw DB indexes so we can save to disk"""
@@ -949,7 +856,7 @@ class ClusterBlob:
     def blurMaps(self):
         """Blur the 2D image maps"""
         self.blurredMaps = np.zeros((3,self.scaleFactor,self.scaleFactor))
-        self.maxMaps = np.zeros((3,self.scaleFactor,self.scaleFactor))
+        #self.maxMaps = np.zeros((3,self.scaleFactor,self.scaleFactor))
         
         for i in range (0,3): # top, front and side
             self.blurredMaps[i,:,:] = ndi.gaussian_filter(self.imageMaps[i,:,:]**0.5, (self.blurRadius,self.blurRadius)) 
@@ -990,9 +897,6 @@ class ClusterBlob:
         max_x = int(max_index/self.scaleFactor)
         max_y = max_index - self.scaleFactor*max_x
         max_z = -1
-
-        # store all points in the path here
-        center_indicies = np.array([])
 
         this_span = int(1.5 * self.span)
         span_len = 2*this_span+1
@@ -1042,6 +946,8 @@ class ClusterBlob:
         (y_lower, y_upper) = self.makeCoordRanges(max_y, self.span)
         (z_lower, z_upper) = self.makeCoordRanges(max_z, self.span)
         center_values = np.array([])
+        cv_colours = np.array([])
+        c_inc = 0
         for z in range(z_lower, z_upper):
             realz = self.scaleFactor - z - 1
             for x in range(x_lower, x_upper):
@@ -1049,20 +955,61 @@ class ClusterBlob:
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
                             if index not in self.binnedIndicies:
-                                center_values = np.append(center_values, self.dataBlob.auxProfiles[index])
+                                center_values = np.append(center_values, self.dataBlob.kmerSigs[index])
+                                cv_colours = np.append(cv_colours, self.dataBlob.contigColours[index])
+                                c_inc += 1
 
         # make sure we have something to go on here
         if(np.size(center_values) == 0):
-            return (-1, np.array([]), -1)
+            return (np.array([]), -1)
 
+        # reshape these guys!
+        center_values = np.reshape(center_values, (c_inc, np.size(self.dataBlob.kmerSigs[0])))
+        cv_colours = np.reshape(cv_colours, (c_inc, 3))
+        
+        # transform them into one dimensional points
+        oneD_center_values = np.zeros(c_inc)
+        working_centres = np.array(center_values, copy=True) 
+        PCA.Center(working_centres,verbose=0)
+        p = PCA.PCA(working_centres)
+        components = p.pc()
+        index = 0
+        for point in components:
+            oneD_center_values[index] = components[index,0]
+            index += 1
+
+        if(False):
+            plt.figure(1)
+            plt.subplot(111)
+            cm = mpl.colors.LinearSegmentedColormap('my_colormap', cv_colours, 1024)
+            plt.scatter(components[:,0], components[:,1], edgecolors=cv_colours, c=cv_colours, cmap=cm, marker='.')
+            plt.show()
+
+        # find the sig which lies at the center
         cf = CenterFinder()
-        sec_centroid = cf.findArrayCenter(center_values)                            
-        sec_lower = sec_centroid - self.auxWobble
-        sec_upper = sec_centroid + self.auxWobble
+        oneD_center_values -= np.min(oneD_center_values)
+        oneD_center_values /= np.max(oneD_center_values)
+        centroid_sig = center_values[cf.findArrayCenter(oneD_center_values)]
+        
+        # now we need to work out how close to this sig we need to be...
+        dists = np.array([])
+        for sig in center_values:
+            dists = np.append(dists, np.linalg.norm(sig - centroid_sig))
+            
+        # get a first approximation on the upper cutoff
+        tol = 2
+        dists = np.sort(dists)
+        sub_dists = dists[0:int(np.size(dists)/4):1]
+        upper_dist = np.mean(sub_dists) + tol * np.std(sub_dists)
+
+        # now refine (expand) based on the first approximation
+        sub_dists = np.array([x for x in dists if x < upper_dist])
+        upper_dist = np.mean(sub_dists) + tol * np.std(sub_dists)
 
         # now scoot out around this point and soak up similar points
         # get all the real indicies of these points so we can use them in
         # the primary data map
+        center_indicies = np.array([])
         for z in range(z_lower, z_upper):
             realz = self.scaleFactor - z - 1
             for x in range(x_lower, x_upper):
@@ -1070,19 +1017,15 @@ class ClusterBlob:
                     # check that the point is real and that it has not yet been binned
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
-                            if index not in self.binnedIndicies:
-                                if(self.dataBlob.auxProfiles[index] > sec_lower and self.dataBlob.auxProfiles[index] < sec_upper):
-                                    self.maxMaps[0,x,y] = self.blurredMaps[0,x,y]
-                                    self.maxMaps[1,z,y] = self.blurredMaps[1,z,y]
-                                    self.maxMaps[2,z,self.scaleFactor - x - 1] = self.blurredMaps[1,z,self.scaleFactor - x - 1]                                
-                                    # add only once!
-                                    if(index not in center_indicies):
-                                        # bingo!
-                                        center_indicies = np.append(center_indicies, index)
+                            if(index not in center_indicies) and (index not in self.binnedIndicies):
+                                # make sure the kmer sig is close enough
+                                dist = np.linalg.norm(self.dataBlob.kmerSigs[index] - centroid_sig)
+                                if(dist < upper_dist):
+                                    center_indicies = np.append(center_indicies, index)
         if(np.size(center_indicies) > 0):
-            return (sec_centroid, center_indicies, max_value)
+            return (center_indicies, max_value)
         
-        return (-1, np.array([]), -1)
+        return (np.array([]), -1)
 
     def Ablur(self, blur, density, incAtPoint, index, offset, size):
         """AUX: Used when finding the densest point in a small block"""
@@ -1114,7 +1057,7 @@ class ClusterBlob:
                             if index not in self.binnedIndicies:
                                 num_points += 1
                                 disp_vals = np.append(disp_vals, self.dataBlob.transformedData[index])
-                                disp_cols = np.append(disp_cols, self.dataBlob.auxColors[index])
+                                disp_cols = np.append(disp_cols, self.dataBlob.contigColours[index])
         
         # make a black mark at the max values
         small_span = self.span/2
@@ -1216,8 +1159,8 @@ class CoreValidator:
         """Load data from the DB and transform"""
         self.dataBlob.loadData(condition="length >= "+str(coreCut))
         self.dataBlobC.loadData(loadBins=True, loadKSigs=True, condition="core >= True")
-        print "\t( length >=",coreCut,") -> ",np.size(self.dataBlob.auxProfiles)
-        print "\tCores -> ",np.size(self.dataBlobC.auxProfiles)
+        print "\t( length >=",coreCut,") -> ",np.size(self.dataBlob.kmerSigs)
+        print "\tCores -> ",np.size(self.dataBlobC.kmerSigs)
         self.numCores = self.dataBlobC.getNumBins()
         self.dataBlob.transformData()
         self.dataBlobC.transformData()
@@ -1237,8 +1180,8 @@ class CoreValidator:
         V = 1       # Pastels if that's your preference...
         for index in range(0,self.numCores):
             # add 1 to the index as 0 is the null core!
-            self.cores[index+1] = Bin(np.array(self.coreMembers[index+1]), self.dataBlobC.auxProfiles, index+1)
-            self.cores[index+1].makeBinDist(self.dataBlobC.transformedData, self.dataBlobC.auxProfiles)
+            self.cores[index+1] = Bin(np.array(self.coreMembers[index+1]), self.dataBlobC.kmerSigs, index+1)
+            self.cores[index+1].makeBinDist(self.dataBlobC.transformedData, self.dataBlobC.kmerSigs)
             for i in range (0,3):
                 self.ccData[index][i] = self.cores[index+1].mean[i]
             self.ccColour = np.append(self.ccColour, [colorsys.hsv_to_rgb(self.cores[index+1].mean[3], S, V)])
@@ -1304,7 +1247,7 @@ class CoreValidator:
         """Render the image for validating cores"""
         fig = plt.figure()
         ax1 = fig.add_subplot(121, projection='3d')
-        ax1.scatter(self.dataBlob.transformedData[:,0], self.dataBlob.transformedData[:,1], self.dataBlob.transformedData[:,2], edgecolors=self.dataBlob.auxColors, c=self.dataBlob.auxColors, marker='.')
+        ax1.scatter(self.dataBlob.transformedData[:,0], self.dataBlob.transformedData[:,1], self.dataBlob.transformedData[:,2], edgecolors=self.dataBlob.contigColours, c=self.dataBlob.contigColours, marker='.')
 
         ax2 = fig.add_subplot(122, projection='3d')
         ax2.scatter(self.ccData[:,0], self.ccData[:,1], self.ccData[:,2], edgecolors=self.ccColour, c=self.ccColour, marker='.')
@@ -1331,19 +1274,26 @@ class Bin:
     column names array. The ClusterBlob has a list of bins which it can
     update etc...
     """
-    def __init__(self, indicies, auxProfiles, id, pritol=3, sectol=3):
+    def __init__(self, indicies, kmerSigs, id, covtol=3, mertol=2):
         self.id = id
         self.indicies = indicies           # all the indicies belonging to this bin
         self.binSize = self.indicies.shape[0]
         self.totalBP = 0
         
         # we need some objects to manage the distribution of contig proerties
-        self.mean = np.zeros((4))
-        self.stdev = np.zeros((4))
-        self.priTolerance = pritol
-        self.auxTolerance = sectol
-        self.lowerLimits = np.zeros((4)) # lower and upper limits based on tolerance
-        self.upperLimits = np.zeros((4))
+        self.covMeans = np.zeros((3))
+        self.covStdevs = np.zeros((3))
+        self.covTolerance = covtol
+        self.covLowerLimits = np.zeros((3)) # lower and upper limits based on tolerance
+        self.covUpperLimits = np.zeros((3))
+        
+        self.merMeans = np.array([])
+        self.merStdevs = np.array([])
+        self.merCentroid = np.array([])
+        self.kDistMean = 0
+        self.kDiststdev = 0
+        self.kDistTolerance = mertol
+        self.kDistUpperLimit = 0
 
 #------------------------------------------------------------------------------
 # Tools used for condensing 
@@ -1357,7 +1307,7 @@ class Bin:
         else:
             return 1
 
-    def removeFromBin(self, transformedData, auxProfiles, contigLengths, numTigs):
+    def removeFromBin(self, transformedData, kmerSigs, contigLengths, numTigs):
         """Remove contigs from a bin; returns the global indicies of those removed"""
         # get the first numTigs
         if(numTigs > self.binSize):
@@ -1372,7 +1322,7 @@ class Bin:
             self.binSize -= 1
             
         # fix the stats on our bin
-        self.makeBinDist(transformedData, auxProfiles)
+        self.makeBinDist(transformedData, kmerSigs)
         self.calcTotalSize(contigLengths)
 
         return ret_indicies
@@ -1393,118 +1343,139 @@ class Bin:
         # got here? Must be similar!
         return True
     
-    def consume(self, transformedData, auxProfiles, contigLengths, deadBin):
+    def consume(self, transformedData, kmerSigs, contigLengths, deadBin):
         """Combine the contigs of another bin with this one"""
         # consume all the other bins indicies
         self.indicies = np.concatenate([self.indicies, deadBin.indicies])
         self.binSize += deadBin.binSize
         
         # fix the stats on our bin
-        self.makeBinDist(transformedData, auxProfiles)
+        self.makeBinDist(transformedData, kmerSigs)
         self.calcTotalSize(contigLengths)
         
 #------------------------------------------------------------------------------
 # Stats and properties 
-         
-    def findBinCenterIndex(self, auxProfiles):
-        """Find the center of a bin"""
-        min_diff = 100000
-        best_index = -1
-        for index in self.indicies:
-            diff = abs(auxProfiles[index] - self.auxCentroid)
-            if(diff < min_diff):
-                min_diff = diff
-                best_index = index
-        return best_index
 
     def clearBinDist(self):
         """Clear any set distribution statistics"""
-        self.mean = np.zeros((4))
-        self.stdev = np.zeros((4))
-        self.lowerLimits = np.zeros((4))
-        self.upperLimits = np.zeros((4))
+        self.covMeans = np.zeros((3))
+        self.covStdevs = np.zeros((3))
+        self.covLowerLimits = np.zeros((3))
+        self.covUpperLimits = np.zeros((3))
         
-    def makeBinDist(self, transformedData, auxProfiles):
+        self.merMeans = np.array([])
+        self.merStdevs = np.array([])
+        self.merCentroid = np.array([])
+        self.kDistMean = 0
+        self.kDiststdev = 0
+        self.kDistUpperLimit = 0
+        
+        
+    def makeBinDist(self, transformedData, kmerSigs):
         """Determine the distribution of the points in this bin
         
         The distribution is largely normal, except at the boundaries.
         """
         self.clearBinDist()
         
-        # get the values of interest
-        working_array = np.zeros((self.binSize,4))
+        # first, do the coverages
+        cov_working_array = np.zeros((self.binSize,3))
         outer_index = 0
         for index in self.indicies:
             for i in range(0,3):
-                working_array[outer_index][i] = transformedData[index][i]
-            working_array[outer_index][3] = auxProfiles[index]
+                cov_working_array[outer_index][i] = transformedData[index][i]
             outer_index += 1
-            
         # calculate the mean and srdev 
-        self.mean = np.mean(working_array,axis=0)
-        self.stdev = np.std(working_array,axis=0)
-            
+        self.covMeans = np.mean(cov_working_array,axis=0)
+        self.covStdevs = np.std(cov_working_array,axis=0)
+
+        # now do the kmerSigs
+        # z-normalise each column in the working array
+        mer_working_array = np.array(kmerSigs, copy=True)
+        self.merMeans = np.mean(mer_working_array, axis=0)
+        tmpMerStdevs = np.std(mer_working_array, axis=0)
+        # no zeros!
+        self.merStdevs = np.array([x if x !=0 else 1.0 for x in tmpMerStdevs])
+        mer_working_array2 = np.array([])
+        for mwa in mer_working_array:
+            mer_working_array2 = np.append(mer_working_array2, (mwa-self.merMeans)/self.merStdevs)
+        mer_working_array2 = np.reshape(mer_working_array2, np.shape(mer_working_array))
+        # find the centroid of the z-normed working array
+#        self.merCentroid = np.mean(mer_working_array2, axis=0)
+        self.merCentroid = np.zeros((np.size(kmerSigs[0])))
+        
+        # work out the distribution of distances from z-normed sigs to the centroid
+        k_dists = np.array([])
+        for sig in mer_working_array2:
+            print sig
+            k_dists = np.append(k_dists, np.linalg.norm(sig-self.merCentroid))
+        for d in k_dists:
+            print d,",",
+        print "''''''''''''''''''''''''''''"
+        self.kDistMean = np.mean(k_dists)
+        self.kDiststdev = np.std(k_dists)
         # set the acceptance ranges
         self.makeLimits()
         
     def makeLimits(self, pt=-1, st=-1):
         """Set inclusion limits based on mean, variance and tolerance settings"""
         if(-1 == pt):
-            pt=self.priTolerance
+            pt=self.covTolerance
         if(-1 == st):
-            st=self.auxTolerance
+            st=self.kDistTolerance
         for i in range(0,3):
-            self.lowerLimits[i] = int(self.mean[i] - pt * self.stdev[i])
-            self.upperLimits[i] = int(self.mean[i] + pt * self.stdev[i]) + 1  # so range will look neater!
-        self.lowerLimits[3] = self.mean[3] - st * self.stdev[3]
-        self.upperLimits[3] = self.mean[3] + st * self.stdev[3]
-
+            self.covLowerLimits[i] = int(self.covMeans[i] - pt * self.covStdevs[i])
+            self.covUpperLimits[i] = int(self.covMeans[i] + pt * self.covStdevs[i]) + 1  # so range will look neater!
+        self.kDistUpperLimit = self.kDistMean + st * self.kDiststdev
+        print self.kDistMean , st , self.kDiststdev
+        print "===="
+        
+    def getKDist(self, sig):
+        """Get the distance of this sig from the centroid"""
+        # z-norm and then distance!
+        return np.linalg.norm((sig-self.merMeans)/self.merStdevs - self.merCentroid)
+    
 #------------------------------------------------------------------------------
 # Grow the bin 
     
-    def recruit(self, transformedData, auxProfiles, mappedIndicies, binnedIndicies):
+    def recruit(self, transformedData, kmerSigs, mappedIndicies, binnedIndicies):
         """Iteratively grow the bin"""
-        self.makeBinDist(transformedData, auxProfiles)
-        #print "--------------------------"
-        #print "BIN:", self.id, "size:", self.binSize
+        self.makeBinDist(transformedData, kmerSigs)
 
         # save these
-        pt = self.priTolerance
-        st = self.auxTolerance
+        pt = self.covTolerance
+        st = self.kDistTolerance
 
         self.binSize = self.indicies.shape[0]
-        self.makeBinDist(transformedData, auxProfiles)
-        num_recruited = self.recruitRound(transformedData, auxProfiles, mappedIndicies, binnedIndicies) 
+        num_recruited = self.recruitRound(transformedData, kmerSigs, mappedIndicies, binnedIndicies) 
         while(num_recruited > 0):
-            #print "REC:", num_recruited
             # reduce these to force some kind of convergence
-            self.priTolerance *= 0.8
-            self.auxTolerance *= 0.8
+            self.covTolerance *= 0.8
+            self.kDistTolerance *= 0.8
             # fix these
             self.binSize = self.indicies.shape[0]
-            self.makeBinDist(transformedData, auxProfiles)
-            # print for fun
-            #self.printContents()
+            self.makeBinDist(transformedData, kmerSigs)
             # go again
-            num_recruited = self.recruitRound(transformedData, auxProfiles, mappedIndicies, binnedIndicies)
+            num_recruited = self.recruitRound(transformedData, kmerSigs, mappedIndicies, binnedIndicies)
         
-        self.priTolerance = pt
-        self.auxTolerance = st
+        self.covTolerance = pt
+        self.kDistTolerance = st
         
         # finally, fix this guy
-        #print "Expanded to:", self.binSize
         return self.binSize
         
-    def recruitRound(self, transformedData, auxProfiles, mappedIndicies, binnedIndicies):
+    def recruitRound(self, transformedData, kmerSigs, mappedIndicies, binnedIndicies):
         """Recruit more points in from outside the current blob boundaries"""
         num_recruited = 0
-        for x in range(int(self.lowerLimits[0]), int(self.upperLimits[0])):
-            for y in range(int(self.lowerLimits[1]), int(self.upperLimits[1])):
-                for z in range(int(self.lowerLimits[2]), int(self.upperLimits[2])):
+        for x in range(int(self.covLowerLimits[0]), int(self.covUpperLimits[0])):
+            for y in range(int(self.covLowerLimits[1]), int(self.covUpperLimits[1])):
+                for z in range(int(self.covLowerLimits[2]), int(self.covUpperLimits[2])):
                     if((x,y,z) in mappedIndicies):
                         for index in mappedIndicies[(x,y,z)]:
                             if (index not in binnedIndicies) and (index not in self.indicies):
-                                if(auxProfiles[index] >= self.lowerLimits[3] and auxProfiles[index] <= self.upperLimits[3]):
+                                k_dist = self.getKDist(kmerSigs[index])
+                                print k_dist, self.kDistUpperLimit
+                                if(k_dist <= self.kDistUpperLimit):
                                     self.indicies = np.append(self.indicies,index)
                                     num_recruited += 1
         return num_recruited
@@ -1519,7 +1490,7 @@ class Bin:
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
 #
-    def plotBin(self, transformedData, secColors, fileName="", tag=""):
+    def plotBin(self, transformedData, contigColours, fileName="", tag=""):
         """Plot a bin"""
         disp_vals = np.array([])
         disp_cols = np.array([])
@@ -1527,13 +1498,13 @@ class Bin:
         for index in self.indicies:
             num_points += 1
             disp_vals = np.append(disp_vals, transformedData[index])
-            disp_cols = np.append(disp_cols, secColors[index])
+            disp_cols = np.append(disp_cols, contigColours[index])
 
         # make a black mark at the max values
         self.makeLimits(pt=1, st=1)
-        px = int(self.mean[0])
-        py = int(self.mean[1])
-        pz = int(self.mean[2])
+        px = int(self.covMeans[0])
+        py = int(self.covMeans[1])
+        pz = int(self.covMeans[2])
         num_points += 1
         disp_vals = np.append(disp_vals, [px,py,pz])
         disp_cols = np.append(disp_cols, colorsys.hsv_to_rgb(0,0,0))
@@ -1579,12 +1550,6 @@ class Bin:
         print "Bin:", self.id
         print "Bin size:", self.binSize
         print "Total BP:", self.totalBP
-        print "Mean:", self.mean
-        print "Stdev:", self.stdev
-        print "P Tol:", self.priTolerance
-        print "S Tol:", self.auxTolerance
-        print "Lower limts:", self.lowerLimits
-        print "Upper limits:", self.upperLimits
         print "--------------------------------------"
     
     def dumpContigIDs(self, contigNames):
@@ -1607,11 +1572,13 @@ class CenterFinder:
     come across a value. Gravity is bringing the ball down. If we plot
     the height of the ball vs array index then the highest the ball
     reaches is the index in the center of the densest part of the array 
+    
+    NOTE: Assumes the data is normalised between 0 and 1!
     """
     def __init__(self): pass
     
     def findArrayCenter(self, vals):
-        """Find the center of the numpy array vals"""
+        """Find the center of the numpy array vals, return the index of the center"""
         # parameters
         current_val_max = -1
         delta = 0
@@ -1622,8 +1589,8 @@ class CenterFinder:
         working = np.array([])
         final_index = -1
         # run through in one direction
-        vals = np.sort(vals)
-        for val in vals:
+        vals_sorted = np.sort(vals)
+        for val in vals_sorted:
             # calculate delta
             delta = val - last_val
             # reduce the current value according to the delta value
@@ -1642,8 +1609,8 @@ class CenterFinder:
         height = 0
         last_val = 0
         # run through in the reverse direction
-        vals = vals[::-1]
-        for val in vals:
+        vals_sorted = vals_sorted[::-1]
+        for val in vals_sorted:
             if last_val == 0:
                 delta = 0
             else:
@@ -1656,10 +1623,16 @@ class CenterFinder:
             last_val = val
         
         max_index = np.argmax(working)
-        vals = np.sort(vals)
-        max_value = vals[max_index]
-         
-        return max_value
+        vals_sorted = np.sort(vals_sorted)
+        max_value = vals_sorted[max_index]
+        
+        # find the original index!
+        index = 0
+        for val in vals:
+            if(val == max_value):
+                return index
+            index += 1
+        return -1
     
     def reduceViaDelta(self, height, bounce_amount, delta):
         """Reduce the height of the 'ball'"""
