@@ -1377,41 +1377,35 @@ class Bin:
         The distribution is largely normal, except at the boundaries.
         """
         self.clearBinDist()
+        self.merCentroid = np.zeros((np.size(kmerSigs[0])))
         
-        # first, do the coverages
+        # Get some data!
         cov_working_array = np.zeros((self.binSize,3))
+        mer_working_array = np.zeros((self.binSize,np.size(kmerSigs[0])))
         outer_index = 0
         for index in self.indicies:
             for i in range(0,3):
                 cov_working_array[outer_index][i] = transformedData[index][i]
+            mer_working_array[outer_index] = kmerSigs[index]
             outer_index += 1
-        # calculate the mean and srdev 
+        
+        # calculate the coverage mean and stdev 
         self.covMeans = np.mean(cov_working_array,axis=0)
         self.covStdevs = np.std(cov_working_array,axis=0)
 
         # now do the kmerSigs
         # z-normalise each column in the working array
-        mer_working_array = np.array(kmerSigs, copy=True)
         self.merMeans = np.mean(mer_working_array, axis=0)
         tmpMerStdevs = np.std(mer_working_array, axis=0)
         # no zeros!
         self.merStdevs = np.array([x if x !=0 else 1.0 for x in tmpMerStdevs])
-        mer_working_array2 = np.array([])
-        for mwa in mer_working_array:
-            mer_working_array2 = np.append(mer_working_array2, (mwa-self.merMeans)/self.merStdevs)
-        mer_working_array2 = np.reshape(mer_working_array2, np.shape(mer_working_array))
-        # find the centroid of the z-normed working array
-#        self.merCentroid = np.mean(mer_working_array2, axis=0)
-        self.merCentroid = np.zeros((np.size(kmerSigs[0])))
+        for index in range(0,np.size(self.indicies)):
+            mer_working_array[index] = (mer_working_array[index]-self.merMeans)/self.merStdevs
         
         # work out the distribution of distances from z-normed sigs to the centroid
         k_dists = np.array([])
-        for sig in mer_working_array2:
-            print sig
+        for sig in mer_working_array:
             k_dists = np.append(k_dists, np.linalg.norm(sig-self.merCentroid))
-        for d in k_dists:
-            print d,",",
-        print "''''''''''''''''''''''''''''"
         self.kDistMean = np.mean(k_dists)
         self.kDiststdev = np.std(k_dists)
         # set the acceptance ranges
@@ -1427,8 +1421,6 @@ class Bin:
             self.covLowerLimits[i] = int(self.covMeans[i] - pt * self.covStdevs[i])
             self.covUpperLimits[i] = int(self.covMeans[i] + pt * self.covStdevs[i]) + 1  # so range will look neater!
         self.kDistUpperLimit = self.kDistMean + st * self.kDiststdev
-        print self.kDistMean , st , self.kDiststdev
-        print "===="
         
     def getKDist(self, sig):
         """Get the distance of this sig from the centroid"""
@@ -1474,7 +1466,6 @@ class Bin:
                         for index in mappedIndicies[(x,y,z)]:
                             if (index not in binnedIndicies) and (index not in self.indicies):
                                 k_dist = self.getKDist(kmerSigs[index])
-                                print k_dist, self.kDistUpperLimit
                                 if(k_dist <= self.kDistUpperLimit):
                                     self.indicies = np.append(self.indicies,index)
                                     num_recruited += 1
