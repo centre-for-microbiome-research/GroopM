@@ -77,41 +77,51 @@ class PrintEngine:
         # munged data 
         self.bin_sizes = {}
         self.bin_members = {}
+        self.binIds = []
         
     def loadData(self, getUnbinned=False, bins=[]):
         """load information from the DB"""
+        tmp_bids = self.dataManager.getBinStats(self.dbFileName) # first grab all the bin Ids
         if(getUnbinned):
             # get the lot!
             self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName)
+            self.binIds = tmp_bids  # don't discriminate
         else:
             # only get those with a non-zero bin ID
             if(len(bins) == 0):
                 self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName,
-                                                                        condition='bin != 0')
+                                                                        condition='bid != 0')
+                self.binIds = tmp_bids  # don't discriminate
             else:
                 # get only those we're told to get
-                condition = "((bin == "+str(bins[0])+")"
+                condition = "((bid == "+str(bins[0])+")"
                 for index in range (1,len(bins)):
-                    condition += " | (bin == "+str(bins[index])+")"
+                    condition += " | (bid == "+str(bins[index])+")"
                 
                 condition += ")"
                 self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName,
                                                                         condition=condition)
+                # load only those we're told to!
+                self.binIds = []
+                for bid in bins:
+                    self.binIds[bid] = tmp_bins[bid]
+
         self.contigNames = self.dataManager.getContigNames(self.dbFileName,
                                                            indicies=self.indicies)
         self.contigLengths = self.dataManager.getContigLengths(self.dbFileName,
                                                            indicies=self.indicies)
+        # load bins
         self.bins = self.dataManager.getBins(self.dbFileName, indicies=self.indicies)
-        self.numBins = self.dataManager.getNumBins(self.dbFileName)
+        self.numBins = len(self.binIds.keys())
         
         self.initialiseContainers()
 
     def initialiseContainers(self):
         """Munge the raw data into something more usable"""
         # intialise these containers
-        for index in range(0,self.numBins+1):
-            self.bin_sizes[index] = 0;
-            self.bin_members[index] = []
+        for bid in self.binIds.keys():
+            self.bin_sizes[bid] = 0;
+            self.bin_members[bid] = []
         
         # fill them up
         for index in range(0, np.size(self.indicies)):
@@ -137,11 +147,11 @@ class PrintEngine:
             print "#\"bid\"\t\"totalBP\"\t\"numCons\""
             for bid in self.bin_members:
                 if(np.size(self.bin_members[bid]) > 0):
-                    print str(bid)+"\t"+str(self.bin_sizes[bid])+"\t"+str(np.size(self.bin_members[bid]))
+                    print str(bid)+"\t"+str(self.bin_sizes[bid])+"\t"+str(self.binIds[bid])
         elif(self.format == 'full'):
             for bid in self.bin_members:
                 if(np.size(self.bin_members[bid]) > 0):
-                    print "#bid_"+str(bid)+"_totalBP_"+str(self.bin_sizes[bid])+"_numCons_"+str(np.size(self.bin_members[bid]))
+                    print "#bid_"+str(bid)+"_totalBP_"+str(self.bin_sizes[bid])+"_numCons_"+str(self.binIds[bid])
                     print "#\"bid\"\t\"cid\"\t\"length\""            
                     for member in self.bin_members[bid]:
                         print bid, self.contigNames[member], self.contigLengths[member]

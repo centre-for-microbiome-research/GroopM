@@ -102,13 +102,18 @@ class GMDataManager:
     'numBins'       : tables.Int32Col(pos=6)
     'clustered'     : tables.BoolCol(pos=7)           # set to true after clustering is complete
     'complete'      : tables.BoolCol(pos=8)           # set to true after clustering finishing is complete
+
+    ** Contigs **
+    table = 'contigs'
+    'cid'    : tables.StringCol(512, pos=0)
+    'bid'    : tables.Int32Col(pos=1)
+    'length' : tables.Int32Col(pos=2)
+    'core'   : tables.BoolCol(pos=3)                  # is this contig part of a bin's core?
     
     ** Bins **
     table = 'bin'
-    'cid'    : tables.StringCol(512, pos=0)
-    'bin'    : tables.Int32Col(pos=1)
-    'length' : tables.Int32Col(pos=2)
-    'core'   : tables.BoolCol(pos=3)                # is this contig part of a bin's core?
+    'bid'        : tables.Int32Col(pos=0)
+    'numMembers' : tables.Int32Col(pos=1)
     """
     def __init__(self): pass
 
@@ -148,7 +153,7 @@ class GMDataManager:
             with tables.openFile(dbFileName, mode = "w", title = "GroopM") as h5file:
                 # Create groups under "/" (root) for storing profile information and metadata
                 profile_group = h5file.createGroup("/", 'profile', 'Assembly profiles')
-                meta_group = h5file.createGroup("/", 'meta', 'Project meta data')
+                meta_group = h5file.createGroup("/", 'meta', 'Associated metadata')
                 #------------------------
                 # parse contigs and make kmer sigs
                 #
@@ -163,7 +168,7 @@ class GMDataManager:
                      db_desc[mer] = tables.FloatCol(pos=ppos)
                      ppos += 1
                 try:
-                    KMER_table = h5file.createTable(profile_group, 'kms', db_desc, "kmer signature")
+                    KMER_table = h5file.createTable(profile_group, 'kms', db_desc, "Kmer signature")
                 except:
                     print "Error creating KMERSIG table:", sys.exc_info()[0]
                     raise
@@ -177,15 +182,26 @@ class GMDataManager:
                     print "Could not parse contig file:",contigsFile,sys.exc_info()[0]
                     raise
                 #------------------------
-                # Add a table for the bins
+                # Add a table for the contigs
                 #------------------------
                 db_desc = {'cid' : tables.StringCol(512, pos=0),
-                           'bin' : tables.Int32Col(pos=1),
+                           'bid' : tables.Int32Col(dflt=0,pos=1),
                            'length' : tables.Int32Col(pos=2),
                            'core' : tables.BoolCol(dflt=False, pos=3) }
                 try:
-                    BIN_table = h5file.createTable(meta_group, 'bin', db_desc, "Bin information")
-                    self.initBins(BIN_table, contigNames)
+                    CONTIG_table = h5file.createTable(meta_group, 'contigs', db_desc, "Contig information")
+                    self.initContigs(CONTIG_table, contigNames)
+                except:
+                    print "Error creating CONTIG table:", sys.exc_info()[0]
+                    raise
+                #------------------------
+                # Add a table for the bins
+                #------------------------
+                db_desc = {'bid' : tables.Int32Col(pos=0),
+                           'numMembers' : tables.Int32Col(dflt=0,pos=1) }
+                try:
+                    BIN_table = h5file.createTable(meta_group, 'bins', db_desc, "Bin information")
+                    BIN_table.flush()
                 except:
                     print "Error creating BIN table:", sys.exc_info()[0]
                     raise
@@ -245,17 +261,16 @@ class GMDataManager:
         # all good!
         return True
                 
-    def initBins(self, table, contigNames):
-        """Initialise the bins table
+    def initContigs(self, table, contigNames):
+        """Initialise the contigs table
         
         set to 0 for no bin assignment
         """
         for cid in sorted(contigNames):
-            BIN_row = table.row
-            BIN_row['cid'] = cid
-            BIN_row['bin'] = 0
-            BIN_row['length'] = contigNames[cid]
-            BIN_row.append()
+            CONTIG_row = table.row
+            CONTIG_row['cid'] = cid
+            CONTIG_row['length'] = contigNames[cid]
+            CONTIG_row.append()
         table.flush()
     
     def initMeta(self, table, stoitColNames, numStoits, merColNames, merSize, numMers, numCons):
@@ -279,7 +294,7 @@ class GMDataManager:
             condition = "cid != ''" # no condition breaks everything!
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
-                return np.array([x.nrow for x in h5file.root.meta.bin.where(condition)])
+                return np.array([x.nrow for x in h5file.root.meta.contigs.where(condition)])
         except:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
@@ -293,36 +308,88 @@ class GMDataManager:
                 else:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
-                    return np.array([list(h5file.root.profile.coverage[x.nrow]) for x in h5file.root.meta.bin.where(condition)])
+                    return np.array([list(h5file.root.profile.coverage[x.nrow]) for x in h5file.root.meta.contigs.where(condition)])
         except:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
+
+    def setBinStats(self, dbFileName, updates):
+        """Set bins table 
         
+        updates is a dictionary which looks like:
+        { bid : numMembers }
+        """
+        try:
+            with tables.openFile(dbFileName, mode='a', rootUEP="/meta") as meta_group:
+                # pytables is a little "dumb" thus it's easier to 
+                # make a new table and then copy everything over
+                
+                # try remove any older failed attempts
+                try:
+                    meta_group.removeNode('/', 'tmp_bins')
+                except:
+                    pass
+                # make a new tmp table
+                db_desc = {'bid' : tables.Int32Col(pos=0), 'numMembers' : tables.Int32Col(dflt=0,pos=1) }
+                BIN_table = meta_group.createTable('/', 'tmp_bins', db_desc, "Temp bin information")
+                # add in the new stuff
+                for bid in updates.keys(): 
+                    BIN_row = BIN_table.row
+                    BIN_row['bid'] = bid
+                    BIN_row['numMembers'] = updates[bid]
+                    BIN_row.append()
+                BIN_table.flush()
+                
+                # do the rename
+                meta_group.renameNode('/', 'bins', 'tmp_bins', overwrite=True)
+                
+        except:
+            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            raise
+
+    def getBinStats(self, dbFileName):
+        """Load data from bins table
+        
+        Returns a dict of type:
+        { bid : numMembers }
+        """
+        try:
+            with tables.openFile(dbFileName, mode='r') as h5file:
+                ret_dict = {}
+                all_rows = h5file.root.meta.bins.read()
+                for row in all_rows:
+                    ret_dict[row[0]] = row[1]
+                return ret_dict
+        except:
+            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            raise
+        return {}
+        
+                
     def getBins(self, dbFileName, condition='', indicies=np.array([])):
-        """Load bins"""
+        """Load per-contig bins"""
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
                 if(np.size(indicies) != 0):
-                    return np.array([h5file.root.meta.bin[x][1] for x in indicies]).ravel()
+                    return np.array([h5file.root.meta.contigs[x][1] for x in indicies]).ravel()
                 else:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
-                    return np.array([list(x)[1] for x in h5file.root.meta.bin.readWhere(condition)]).ravel()
+                    return np.array([list(x)[1] for x in h5file.root.meta.contigs.readWhere(condition)]).ravel()
         except:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
 
     def setBins(self, dbFileName, updates):
-        """Set bin stats
+        """Set per-contig bins
         
         updates is a dictionary which looks like:
         { tableRow : binValue }
         """
         row_nums = updates.keys()
-        new_bins = updates.values()
         try:
             with tables.openFile(dbFileName, mode='a') as h5file:
-                table = h5file.root.meta.bin
+                table = h5file.root.meta.contigs
                 for row_num in updates.keys():
                     new_row = np.zeros((1,),dtype=('S512,i4,i4,b1'))
                     new_row[:] = [(table[row_num][0],updates[row_num],table[row_num][2],table[row_num][3])]
@@ -337,26 +404,25 @@ class GMDataManager:
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
                 if(np.size(indicies) != 0):
-                    return np.array([h5file.root.meta.bin[x][3] for x in indicies]).ravel()
+                    return np.array([h5file.root.meta.contigs[x][3] for x in indicies]).ravel()
                 else:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
-                    return np.array([list(x)[3] for x in h5file.root.meta.bin.readWhere(condition)]).ravel()
+                    return np.array([list(x)[3] for x in h5file.root.meta.contigs.readWhere(condition)]).ravel()
         except:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
 
     def setCores(self, dbFileName, updates):
-        """Set bin core stats
+        """Set bin cores
         
         updates is a dictionary which looks like:
         { tableRow : coreValue }
         """
         row_nums = updates.keys()
-        new_bins = updates.values()
         try:
             with tables.openFile(dbFileName, mode='a') as h5file:
-                table = h5file.root.meta.bin
+                table = h5file.root.meta.contigs
                 for row_num in updates.keys():
                     new_row = np.zeros((1,),dtype=('S512,i4,i4,b1'))
                     new_row[:] = [(table[row_num][0],table[row_num][1],table[row_num][2],updates[row_num])]
@@ -371,11 +437,11 @@ class GMDataManager:
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
                 if(np.size(indicies) != 0):
-                    return np.array([h5file.root.meta.bin[x][0] for x in indicies]).ravel()
+                    return np.array([h5file.root.meta.contigs[x][0] for x in indicies]).ravel()
                 else:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
-                    return np.array([list(x)[0] for x in h5file.root.meta.bin.readWhere(condition)]).ravel()
+                    return np.array([list(x)[0] for x in h5file.root.meta.contigs.readWhere(condition)]).ravel()
         except:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
@@ -385,11 +451,11 @@ class GMDataManager:
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
                 if(np.size(indicies) != 0):
-                    return np.array([h5file.root.meta.bin[x][2] for x in indicies]).ravel()
+                    return np.array([h5file.root.meta.contigs[x][2] for x in indicies]).ravel()
                 else:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
-                    return np.array([list(x)[2] for x in h5file.root.meta.bin.readWhere(condition)]).ravel()
+                    return np.array([list(x)[2] for x in h5file.root.meta.contigs.readWhere(condition)]).ravel()
         except:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
@@ -403,7 +469,7 @@ class GMDataManager:
                 else:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
-                    return np.array([list(h5file.root.profile.kms[x.nrow]) for x in h5file.root.meta.bin.where(condition)])
+                    return np.array([list(h5file.root.profile.kms[x.nrow]) for x in h5file.root.meta.contigs.where(condition)])
         except:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
@@ -509,14 +575,22 @@ class GMDataManager:
 #------------------------------------------------------------------------------
 # FILE / IO 
 
-    def dumpBins(self, table):
+    def dumpContigs(self, table):
+        """Raw dump of contig information"""
+        print "-----------------------------------"
+        print "Contigs table"
+        print "-----------------------------------"
+        for row in table:
+            print row['cid'],",",row['length'],",",row['bid'],",",row['core']
+
+    def dumpbins(self, table):
+        """Raw dump of bin information"""
         print "-----------------------------------"
         print "Bins table"
         print "-----------------------------------"
-        for row in table:
-            print row['cid'],",",row['length'],",",row['bin'],",",row['core']
 
     def dumpMeta(self, table):
+        """Raw dump of metadata"""
         print "-----------------------------------"
         print "MetaData table"
         print "-----------------------------------"
@@ -548,7 +622,7 @@ class GMDataManager:
     
                 bamParser.dumpCovTable(h5file.root.profile.coverage, stoitColNames)
                 conParser.dumpTnTable(h5file.root.profile.kms, kse.kmerCols)
-                self.dumpBins(h5file.root.meta.bin)
+                self.dumpContigs(h5file.root.meta.contigs)
                 self.dumpMeta(h5file.root.meta.meta)
         except:
             print "Error opening database:", dbFileName, sys.exc_info()[0]
