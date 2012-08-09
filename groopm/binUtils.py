@@ -69,6 +69,26 @@ import time
 import mstore
 
 np.seterr(all='raise')
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+class BinNotFoundException(BaseException):
+    pass
+
+import traceback
+class Tracer:
+    def __init__(self, oldstream):
+        self.oldstream = oldstream
+        self.count = 0
+        self.lastStack = None
+   
+    def write(self, s):
+        newStack = traceback.format_stack()
+        if newStack != self.lastStack:
+            self.oldstream.write("".join(newStack))
+            self.lastStack = newStack
+        self.oldstream.write(s)
 
 ###############################################################################
 ###############################################################################
@@ -77,10 +97,18 @@ np.seterr(all='raise')
 
 class BinManager:
     """Class used for manipulating bins"""
-    def __init__(self, dbFileName):
-        self.DB = mstore.DataBlob(dbFileName)
+    def __init__(self, dbFileName="", pm=None, isBad=False):
+        # data storage
+        if(dbFileName != ""):
+            self.PM = mstore.ProfileManager(dbFileName)
+        elif(pm is not None):
+            self.PM = pm
         
         # all about bins
+        self.isBad = isBad                          # is this a "bad" bin manager?
+        self.nextFreeBinId = 0                      # increment before use!
+        if(self.isBad):
+            self.nextFreeBinId = 1000000            # bad bins start higher!
         self.bins = {}                              # bid -> Bin
         self.binCentroidPoints = np.array([])       # array of bin centers
         self.binCentroidColours = np.array([])      # average colour of each bin 
@@ -107,7 +135,7 @@ class BinManager:
             loadKmerSigs=True
             loadCovProfiles=True
         
-        self.DB.loadData(bids=bids,
+        self.PM.loadData(bids=bids,
                          condition=condition,
                          silent=silent,
                          loadCovProfiles=loadCovProfiles,
@@ -118,9 +146,10 @@ class BinManager:
                          loadBins=True,
                          loadCores=False
                         )
+        
         self.initialiseContainers()
         if(makeBins):
-            self.DB.transformCP()
+            self.PM.transformCP(silent=silent)
             self.makeBins()
 
     def initialiseContainers(self):
@@ -128,31 +157,176 @@ class BinManager:
         # initialise these containers
         self.binMembers[0] = []
         self.binSizes[0] = 0
-        for bid in self.DB.validBinIds.keys():
+        for bid in self.PM.validBinIds.keys():
             self.binSizes[bid] = 0;
             self.binMembers[bid] = []
         # fill them up
-        for index in range(0, np.size(self.DB.indicies)):
-            self.binMembers[self.DB.binIds[index]].append(index)
-            self.binSizes[self.DB.binIds[index]] += self.DB.contigLengths[index]
+        for index in range(0, np.size(self.PM.indicies)):
+            self.binMembers[self.PM.binIds[index]].append(index)
+            self.binSizes[self.PM.binIds[index]] += self.PM.contigLengths[index]
+
+        # we need to get the largest BinId in use
+        bids = []
+        if(not self.isBad):     # we need the next longest after accounting for bad Ids
+            bids = [x for x in self.PM.getBinStats().keys() if x < 1000000]
+        else:
+            bids = self.PM.getBinStats().keys()
+        if(len(bids) > 0):
+            self.nextFreeBinId = np.max(bids)
 
     def makeBins(self):
         """Make bin objects from loaded data"""
-        for bid in self.DB.validBinIds.keys():
-            self.bins[bid] = Bin(np.array(self.binMembers[bid]), self.DB.kmerSigs, bid)
-            self.bins[bid].makeBinDist(self.DB.transformedCP, self.DB.kmerSigs)       
+        for bid in self.PM.validBinIds.keys():
+            self.bins[bid] = Bin(np.array(self.binMembers[bid]), self.PM.kmerSigs, bid)
+            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)      
+            self.bins[bid].calcTotalSize(self.PM.contigLengths)
+
+    def saveBins(self, doCores=True, saveBinStats=True):
+        """Save binning results"""
+        c2b_update = {}
+        core_update = {}
+        if doCores:
+            (c2b_update, core_update) = self.getCoreBinUpdates()
+            self.PM.saveCores(core_update)
+        else:
+            c2b_update = self.getBinUpdates()
+        self.PM.saveBinIds(c2b_update)
+        self.PM.setClustered()
+        if saveBinStats:
+            self.saveBinStats()
+    
+    def saveBinStats(self):
+        """Update / overwrite the table holding the bin stats
+        
+        Note that this call effectively nukes the existing table
+        and should only be used during initial coring. BID must be somewhere!
+        """
+        bin_updates = {}
+        for bid in self.bins:
+            bin_updates[bid] = np.size(self.bins[bid].indicies)
+        self.PM.saveValidBinIds(bin_updates)
+
+    def updateBinStats(self, updates):
+        """Update the table holding the bin stats
+        
+        This is an update in the true sense of the word
+        updates looks like { bid : numMembers }
+        if numMember == 0 then this bid is removed
+        from the table
+        """
+        self.PM.updateValidBinIds(updates)
+
+    def getCoreBinUpdates(self):
+        """Merge the bids, raw DB indexes and core information so we can save to disk"""
+        # at this stage, all bins are cores
+        core_update = dict(zip(self.PM.indicies, [False]*np.size(self.PM.indicies)))
+        for index in range(0, self.PM.numContigs):
+            if index in self.PM.binnedIndicies:
+                core_update[self.PM.indicies[index]] = True
+
+        bin_update = getBinUpdates()
+
+        return (bin_update, core_update)
+
+    def getBinUpdates(self):
+        """Merge the bids, raw DB indexes and core information so we can save to disk"""
+        bin_update = dict(zip(self.PM.indicies, [0]*np.size(self.PM.indicies)))
+
+        # we need a mapping from cid (or local index) to binID
+        c2b = dict(zip(range(0,np.size(self.PM.indicies)), [0]*np.size(self.PM.indicies)))
+        for bid in self.bins:
+            for index in self.bins[bid].indicies:
+                c2b[index] = bid
+
+        for index in range(0, self.PM.numContigs):
+            if index in self.PM.binnedIndicies:
+                bin_update[self.PM.indicies[index]] = c2b[index]
+
+        return bin_update
 
 #------------------------------------------------------------------------------
 # BIN UTILITIES 
-    
-    def split(self, bid, parts):
+    # an enum anyone?
+    kmer, coverage = range(2)
+
+    def split(self, bid, parts, mode=kmer):
         """split a bin into n parts"""
         pass
 
-    def merge(self, bids, force=False, newBid=0):
+    def merge(self, bids, auto=False, newBid=False):
         """Merge two or more bins"""
-        pass
+        parent_bin = None
+        if(newBid):
+            # we need to make this into a new bin
+            parent_bin = makeNewBin()
+            # now merge it with the first in the new list
+            dead_bin = self.getBin(bids[0])
+            parent_bin.consume(self.PM.transformedCP, self.PM.kmerSigs, self.PM.contigLengths, dead_bin)
+            self.deleteBin(bids[0])
+            # update now!
+            self.updateBinStats({bids[0]:0, parent_bin.id:parent_bin.binSize})
+        else:
+            # just use the first given as the parent
+            parent_bin = self.getBin(bids[0])
+        
+        # let this guy consume all the other guys
+        for i in range(1,len(bids)):
+            continue_merge = False
+            dead_bin = self.getBin(bids[i])
+            if(auto):
+                continue_merge = True
+            else:
+                self.plotSideBySide([parent_bin.id,dead_bin.id])
+                if(self.promptOnMerge(bids=[parent_bin.id,dead_bin.id])):
+                    continue_merge=True
+            if(continue_merge):
+                parent_bin.consume(self.PM.transformedCP, self.PM.kmerSigs, self.PM.contigLengths, dead_bin)
+                self.deleteBin(bids[i])
+                self.updateBinStats({bids[i]:0, parent_bin.id:parent_bin.binSize})
 
+        self.saveBins(doCores=False, saveBinStats=False)
+
+        #parent_bin.plotBin(self.PM.transformedCP, self.PM.contigColours)
+
+    def promptOnMerge(self, bids=[]):
+        """Check that the user is ok with this merge"""
+        bin_str = ""
+        if(len(bids) != 0):
+            bin_str = ": "+str(bids[0])
+            for i in range(1, len(bids)):
+                bin_str += " and "+str(bids[i])
+        option = raw_input(" ****WARNING**** About to merge bins"+bin_str+"\n" \
+                           " If you continue you *WILL* overwrite existing bins!\n" \
+                           " You have been shown a 3d plot of the bins to be merged.\n" \
+                           " Continue only if you're sure this is what you want to do!" \
+                           " Merge? (y,n) : ")
+        print "****************************************************************"
+        if(option.upper() != "Y"):
+            print "Merge skipped"
+            return False
+        return True
+
+    def getBin(self, bid):
+        """get a bin or raise an error"""
+        if bid in self.bins:
+            return self.bins[bid]
+        else:
+            raise BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
+            
+    def deleteBin(self, bid):
+        """Purge a bin from our lists"""
+        if bid in self.bins:
+            del self.bins[bid]
+        else:
+            raise BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
+        
+    def makeNewBin(self, indicies=np.array([]), bid=None):
+        """Make a new bin and add to the list of existing bins"""
+        if bid is None:
+            self.nextFreeBinId +=1
+            bid = self.nextFreeBinId
+        self.bins[bid] = Bin(indicies, self.PM.kmerSigs, bid)        
+        return self.bins[bid]
 #------------------------------------------------------------------------------
 # BIN STATS 
 
@@ -168,7 +342,7 @@ class BinManager:
             self.binCentroidPoints[outer_index] = self.bins[bid].covMeans
             cum_colour = np.array([])
             for index in self.bins[bid].indicies:
-                cum_colour = np.append(cum_colour, self.DB.contigColours[index])
+                cum_colour = np.append(cum_colour, self.PM.contigColours[index])
             cum_colour = np.reshape(cum_colour, (self.bins[bid].binSize, 3))
             ave_colour = np.mean(cum_colour, axis=0)
             self.binCentroidColours = np.append(self.binCentroidColours, ave_colour)
@@ -190,28 +364,28 @@ class BinManager:
         for bid in self.bins:
             bkworking = np.array([])
             for index in self.bins[bid].indicies:
-                bkworking = np.append(bkworking, self.DB.kmerSigs[index])
-            bkworking = np.reshape(bkworking, (self.bins[bid].binSize, np.size(self.DB.kmerSigs[0])))
+                bkworking = np.append(bkworking, self.PM.kmerSigs[index])
+            bkworking = np.reshape(bkworking, (self.bins[bid].binSize, np.size(self.PM.kmerSigs[0])))
             bids = np.append(bids, [bid])
             means = np.append(means, np.mean(bkworking, axis=0))
             stdevs = np.append(stdevs, np.std(bkworking, axis=0))
             
-        means = np.reshape(means, (len(self.bins), np.size(self.DB.kmerSigs[0])))
-        stdevs = np.reshape(stdevs, (len(self.bins), np.size(self.DB.kmerSigs[0])))
+        means = np.reshape(means, (len(self.bins), np.size(self.PM.kmerSigs[0])))
+        stdevs = np.reshape(stdevs, (len(self.bins), np.size(self.PM.kmerSigs[0])))
         
         # now work out the between and within core variances
         between = np.std(means, axis=0)
         within = np.median(stdevs, axis=0)
 
-        B = np.arange(0, np.size(self.DB.kmerSigs[0]), 1)
-        names = self.DB.getMerColNames().split(',')
+        B = np.arange(0, np.size(self.PM.kmerSigs[0]), 1)
+        names = self.PM.getMerColNames().split(',')
         
         # we'd like to find the indicies of the worst 10% for each type so we can ignore them
         # specifically, we'd like to remove the least variable between core kms and the 
         # most variable within core kms.
         sort_between_indicies = np.argsort(between)
         sort_within_indicies = np.argsort(within)[::-1]
-        number_to_trim = int(outlierTrim* float(np.size(self.DB.kmerSigs[0])))
+        number_to_trim = int(outlierTrim* float(np.size(self.PM.kmerSigs[0])))
         
         return_indicies =[]
         for i in range(0,number_to_trim):
@@ -264,20 +438,20 @@ class BinManager:
             print "#\"bid\"\t\"totalBP\"\t\"numCons\""
             for bid in self.binMembers:
                 if(np.size(self.binMembers[bid]) > 0):
-                    print str(bid)+"\t"+str(self.binSizes[bid])+"\t"+str(self.DB.validBinIds[bid])
+                    print str(bid)+"\t"+str(self.binSizes[bid])+"\t"+str(self.PM.validBinIds[bid])
         elif(outFormat == 'full'):
             for bid in self.binMembers:
                 if(np.size(self.binMembers[bid]) > 0):
-                    print "#bid_"+str(bid)+"_totalBP_"+str(self.binSizes[bid])+"_numCons_"+str(self.DB.validBinIds[bid])
+                    print "#bid_"+str(bid)+"_totalBP_"+str(self.binSizes[bid])+"_numCons_"+str(self.PM.validBinIds[bid])
                     print "#\"bid\"\t\"cid\"\t\"length\""            
                     for member in self.binMembers[bid]:
-                        print bid, self.DB.contigNames[member], self.DB.contigLengths[member]
+                        print bid, self.PM.contigNames[member], self.PM.contigLengths[member]
         elif(outFormat == 'minimal'):
             print "#\"bid\"\t\"cid\"\t\"length\""            
             for bid in self.binMembers:
                 if(np.size(self.binMembers[bid]) > 0):
                     for member in self.binMembers[bid]:
-                        print bid, self.DB.contigNames[member], self.DB.contigLengths[member]
+                        print bid, self.PM.contigNames[member], self.PM.contigLengths[member]
             pass
         else:
             print "Error: Unrecognised format:", outFormat
@@ -285,12 +459,15 @@ class BinManager:
     def plotProfileDistributions(self):
         """Plot the coverage and kmer distributions for each bin"""
         for bid in self.bins:
-            self.bins[bid].plotProfileDistributions(self.DB.transformedCP, self.DB.kmerSigs, fileName="PROFILE_"+str(bid))
+            self.bins[bid].plotProfileDistributions(self.PM.transformedCP, self.PM.kmerSigs, fileName="PROFILE_"+str(bid))
 
-    def plotBins(self, FNPrefix="BIN"):
+    def plotBins(self, FNPrefix="BIN", sideBySide=False):
         """Make plots of all the bins"""
-        for bid in self.bins:
-            self.bins[bid].plotBin(self.DB.transformedCP, self.DB.contigColours, fileName=FNPrefix+"_"+str(bid),)
+        if(sideBySide):
+            self.plotSideBySide(self.bins.keys(), tag=FNPrefix)
+        else:
+            for bid in self.bins:
+                self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, fileName=FNPrefix+"_"+str(bid),)
 
     def plotSideBySide(self, bids, fileName="", tag=""):
         """Plot two bins side by side in 3d"""
@@ -300,7 +477,7 @@ class BinManager:
         for bid in bids:
             spn = front_nums+end_num
             end_num +=1 
-            title = self.bins[bid].plotOnAx(fig, self.DB.transformedCP, self.DB.contigColours, subPlotNum=spn, fileName=fileName, tag=tag)
+            title = self.bins[bid].plotOnAx(fig, self.PM.transformedCP, self.PM.contigColours, subPlotNum=spn, fileName=fileName, tag=tag)
             plt.title(title)
         if(fileName != ""):
             try:
@@ -326,8 +503,8 @@ class BinManager:
 class BinExplorer:
     """Inspect bins, used for validation"""
     def __init__(self, dbFileName, bids=[]):
-        self.DB = mstore.DataBlob(dbFileName)   # based on user specified length
-        self.BM = BinManager(dbFileName)        # bins
+        self.PM = mstore.ProfileManager(dbFileName)   # based on user specified length
+        self.BM = BinManager(dbFileName=dbFileName)   # bins
         if bids is None:
             self.bids = []
         else:
@@ -341,8 +518,8 @@ class BinExplorer:
     
     def plotSideBySide(self, coreCut):
         """Plot cores side by side with their contigs"""
-        self.DB.loadData(condition="length >= "+str(coreCut))
-        self.DB.transformCP()
+        self.PM.loadData(condition="length >= "+str(coreCut))
+        self.PM.transformCP()
         self.BM.loadBins(makeBins=True,bids=self.bids)
         print "Creating side by side plots"
         self.BM.findCoreCentres()
@@ -356,7 +533,7 @@ class BinExplorer:
         """Render the image for validating cores"""
         fig = plt.figure()
         ax1 = fig.add_subplot(121, projection='3d')
-        ax1.scatter(self.DB.transformedCP[:,0], self.DB.transformedCP[:,1], self.DB.transformedCP[:,2], edgecolors=self.DB.contigColours, c=self.DB.contigColours, marker='.')
+        ax1.scatter(self.PM.transformedCP[:,0], self.PM.transformedCP[:,1], self.PM.transformedCP[:,2], edgecolors=self.PM.contigColours, c=self.PM.contigColours, marker='.')
         ax2 = fig.add_subplot(122, projection='3d')
         ax2.scatter(self.BM.binCentroidPoints[:,0], self.BM.binCentroidPoints[:,1], self.BM.binCentroidPoints[:,2], edgecolors=self.BM.binCentroidColours, c=self.BM.binCentroidColours)
         try:
@@ -452,11 +629,13 @@ class Bin:
 
         return False
     
-    def consume(self, transformedCP, kmerSigs, contigLengths, deadBin):
+    def consume(self, transformedCP, kmerSigs, contigLengths, deadBin, verbose=False):
         """Combine the contigs of another bin with this one"""
         # consume all the other bins indicies
+        if(verbose):
+            print "BIN:",deadBin.id,"will be consumed by BIN:",self.id
         self.indicies = np.concatenate([self.indicies, deadBin.indicies])
-        self.binSize += deadBin.binSize
+        self.binSize  = self.indicies.shape[0]
         
         # fix the stats on our bin
         self.makeBinDist(transformedCP, kmerSigs)

@@ -74,8 +74,8 @@ class ClusterEngine:
     """Top level interface for clustering contigs"""
     def __init__(self, dbFileName, plot=False, outFile="", force=False):
         # worker classes
-        self.DB = mstore.DataBlob(dbFileName)
-        self.CB = ClusterBlob(self.DB, debugPlots=plot)
+        self.PM = mstore.ProfileManager(dbFileName)
+        self.CB = ClusterBlob(self.PM, debugPlots=plot)
     
         # misc
         self.plot = plot
@@ -91,16 +91,16 @@ class ClusterEngine:
         # get some data
         t0 = time.time()
         print "Load data"
-        self.DB.loadData(condition="length >= "+str(coreCut))
+        self.PM.loadData(condition="length >= "+str(coreCut))
         t1 = time.time()
         print "\tTHIS: [",self.secondsToStr(t1-t0),"]\tTOTAL: [",self.secondsToStr(t1-t0),"]"
         
         # transform the data
         print "Apply data transformations"
-        self.DB.transformCP()
+        self.PM.transformCP()
         # plot the transformed space (if we've been asked to...)
         if(self.plot):
-            self.DB.renderTransCPData()
+            self.PM.renderTransCPData()
         t2 = time.time()
         print "\tTHIS: [",self.secondsToStr(t2-t1),"]\tTOTAL: [",self.secondsToStr(t2-t0),"]"
         
@@ -133,14 +133,14 @@ class ClusterEngine:
     def saveBins(self):
         """Save binning results"""
         (c2b_update, core_update) = self.CB.getCoreBinUpdates()
-        self.DB.saveBins(c2b_update)
-        self.DB.saveCores(core_update)
-        self.DB.setClustered()
+        self.PM.saveBinIds(c2b_update)
+        self.PM.saveCores(core_update)
+        self.PM.setClustered()
         # Merge bids and number of members so we can save to disk
         bin_updates = {}
         for bid in self.CB.bins:
             bin_updates[bid] = np.size(self.CB.bins[bid].indicies)
-        self.DB.saveBinIds(bin_updates)
+        self.PM.saveValidBinIds(bin_updates)
         
     def expandBins(self):
         """Load cores and expand bins"""
@@ -151,7 +151,7 @@ class ClusterEngine:
         # get some data
         t0 = time.time()
         print "Load data"
-        self.DB.loadData(condition="length >= 10000")#(length >= 4000 ) & (length <= 4300)")
+        self.PM.loadData(condition="length >= 10000")#(length >= 4000 ) & (length <= 4300)")
         t1 = time.time()
         print "\tTHIS: [",self.secondsToStr(t1-t0),"]\tTOTAL: [",self.secondsToStr(t1-t0),"]"
 
@@ -163,8 +163,8 @@ class ClusterEngine:
     def promptForOverwrite(self):
         """Check that the user is ok with possibly overwriting the DB"""
         if(not self.forceWriting):
-            if(self.DB.isClustered()):
-                option = raw_input(" ****WARNING**** Database: '"+self.DB.dbFileName+"' has already been clustered.\n" \
+            if(self.PM.isClustered()):
+                option = raw_input(" ****WARNING**** Database: '"+self.PM.dbFileName+"' has already been clustered.\n" \
                                    " If you continue you *MAY* overwrite existing bins!\n" \
                                    " Overwrite? (y,n) : ")
                 print "****************************************************************"
@@ -172,11 +172,11 @@ class ClusterEngine:
                     print "Operation cancelled"
                     return False
                 else:
-                    print "Overwriting database",self.DB.dbFileName
-                    self.DB.dataManager.nukeBins(self.DB.dbFileName)
-        elif(self.DB.isClustered()):
-            print "Overwriting database",self.DB.dbFileName
-            self.DB.dataManager.nukeBins(self.DB.dbFileName)
+                    print "Overwriting database",self.PM.dbFileName
+                    self.PM.dataManager.nukeBins(self.PM.dbFileName)
+        elif(self.PM.isClustered()):
+            print "Overwriting database",self.PM.dbFileName
+            self.PM.dataManager.nukeBins(self.PM.dbFileName)
         return True
     
     def secondsToStr(self, t):
@@ -193,10 +193,10 @@ class ClusterBlob:
     All the bits and bobs you'll need to cluster and bin out 
     pre-transformed primary data
     """    
-    def __init__(self, dataBlob, debugPlots=False):
+    def __init__(self, profileManager, debugPlots=False):
         # See DataTransformer for details about these variables
-        self.DB = dataBlob
-        self.scaleFactor = self.DB.scaleFactor
+        self.PM = profileManager
+        self.scaleFactor = self.PM.scaleFactor
         
         # get enough memory for three heat maps
         self.imageMaps = np.zeros((3,self.scaleFactor,self.scaleFactor))
@@ -205,7 +205,6 @@ class ClusterBlob:
         
         # we need a way to reference from the imageMaps back onto the transformed data
         self.mappedIndicies = {}
-        self.binnedIndicies = {}
 
         # store our bins
         self.nextFreeBinId = 0          # increment before use!
@@ -227,7 +226,7 @@ class ClusterBlob:
         small_bin_cutoff = 10           # anything with less than this many contigs is not a real bin
         num_below_cutoff = 0            # how many consecutive attempts have produced small bins
         breakout_point = 50             # how many will we allow before we stop this loop
-        tmp_num_bins = 10000            # gotta keep count, high numbered bins ar baaad!
+        tmp_bid_counter = 10000            # gotta keep count, high numbered bins ar baaad!
         
         cum_contigs_used_good = 0
         cum_contigs_used_bad = 0
@@ -254,25 +253,25 @@ class ClusterBlob:
                 self.roundNumber += 1
                 
                 # time to make a bin
-                tmp_num_bins += 1
-                bin = binUtils.Bin(center_indicies, self.DB.kmerSigs, tmp_num_bins)
+                tmp_bid_counter += 1
+                bin = binUtils.Bin(center_indicies, self.PM.kmerSigs, tmp_bid_counter)
                 
                 # work out the distribution in points in this bin
-                bin.makeBinDist(self.DB.transformedCP, self.DB.kmerSigs)     
+                bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)     
                 
                 # Plot?
                 if(self.debugPlots):          
-                    bin.plotBin(self.DB.transformedCP, self.DB.contigColours, fileName="Image_"+str(self.imageCounter), tag="Initial")
+                    bin.plotBin(self.PM.transformedCP, self.PM.contigColours, fileName="Image_"+str(self.imageCounter), tag="Initial")
                     self.imageCounter += 1
         
                 # make the bin more gooder
                 is_good_bin = True
-                bin_size = bin.recruit(self.DB.transformedCP, self.DB.kmerSigs, self.mappedIndicies, self.binnedIndicies)
-                if(bin.calcTotalSize(self.DB.contigLengths) < minVol):    # less than the good volume
+                bin_size = bin.recruit(self.PM.transformedCP, self.PM.kmerSigs, self.mappedIndicies, self.PM.binnedIndicies)
+                if(bin.calcTotalSize(self.PM.contigLengths) < minVol):    # less than the good volume
                     if(bin_size < small_bin_cutoff):
                         is_good_bin = False
                         cum_contigs_used_bad += bin_size
-                        self.badBins[tmp_num_bins] = bin
+                        self.badBins[tmp_bid_counter] = bin
                         num_below_cutoff += 1
                         print "-",
                     # else bin is large enough!
@@ -284,7 +283,7 @@ class ClusterBlob:
                     self.bins[self.nextFreeBinId] = bin
                     # Plot?
                     if(self.debugPlots):          
-                        bin.plotBin(self.DB.transformedCP, self.DB.contigColours, fileName="Image_"+str(self.imageCounter), tag="CORE")
+                        bin.plotBin(self.PM.transformedCP, self.PM.contigColours, fileName="Image_"+str(self.imageCounter), tag="CORE")
                         self.imageCounter += 1
                     num_below_cutoff = 0
                     print "+",
@@ -301,7 +300,7 @@ class ClusterBlob:
                 # append this bins list of mapped indicies to the main list
                 self.updatePostBin(bin)
         print ""
-        perc = "%.2f" % round((float(cum_contigs_used_good)/float(self.DB.numContigs))*100,2)
+        perc = "%.2f" % round((float(cum_contigs_used_good)/float(self.PM.numContigs))*100,2)
         print "\t",cum_contigs_used_good,"contigs are distributed across",len(self.bins),"cores (",perc,"% )"
         print "\t",cum_contigs_used_bad,"contigs are distributed across",len(self.badBins),"pseudo cores"
         
@@ -338,12 +337,12 @@ class ClusterBlob:
                         # pick the bin with the highest kDistStdev
                         if(query_upper > subject_upper):
                             for index in subject_bin.indicies:
-                                k_dists = np.append(k_dists, query_bin.getKDist(self.DB.kmerSigs[index]))
+                                k_dists = np.append(k_dists, query_bin.getKDist(self.PM.kmerSigs[index]))
                             if np.median(k_dists) <= query_upper:
                                 continue_check = True
                         else:
                             for index in query_bin.indicies:
-                                k_dists = np.append(k_dists, subject_bin.getKDist(self.DB.kmerSigs[index]))
+                                k_dists = np.append(k_dists, subject_bin.getKDist(self.PM.kmerSigs[index]))
                             if np.median(k_dists) <= subject_upper:
                                 continue_check = True
 
@@ -360,11 +359,11 @@ class ClusterBlob:
             num_cores_consumed += 1
             if dead_index in self.badBins:
                 contigs_upgraded += all_bins_sorted[dead_index].binSize
-            print all_bins_sorted[dead_index].id,"consumed by:",all_bins_sorted[consumed_indicies[dead_index]].id
-            all_bins_sorted[consumed_indicies[dead_index]].consume(self.DB.transformedCP,
-                                                                       self.DB.kmerSigs,
-                                                                       self.DB.contigLengths,
-                                                                       all_bins_sorted[dead_index]
+            all_bins_sorted[consumed_indicies[dead_index]].consume(self.PM.transformedCP,
+                                                                       self.PM.kmerSigs,
+                                                                       self.PM.contigLengths,
+                                                                       all_bins_sorted[dead_index],
+                                                                       verbose=True
                                                                        )
             # save this guy for the killing!
             dead_bids.append(all_bins_sorted[dead_index].id)
@@ -396,7 +395,7 @@ class ClusterBlob:
                     else:
                         # we need to free these indicies!
                         for index in self.badBins[bid].indicies:
-                             del self.binnedIndicies[index]
+                             del self.PM.binnedIndicies[index]
                              contigs_freed += 1
                         num_cores_deleted += 1
                         dead_cores.append(bid)
@@ -421,27 +420,27 @@ class ClusterBlob:
             print "\tUpgraded:",num_cores_upgraded,"psuedo cores"
             print "\tDeleted:",num_cores_deleted,"psuedo cores"
             cumContigsUsedGood += contigs_upgraded
-            perc = "%.2f" % round((float(cumContigsUsedGood)/float(self.DB.numContigs))*100,2)
+            perc = "%.2f" % round((float(cumContigsUsedGood)/float(self.PM.numContigs))*100,2)
             print "\t",(cumContigsUsedGood),"contigs are distributed across",self.numBins,"cores (",perc,"% )"
             print "\t",contigs_freed,"contigs free'd"
         return changed
 
     def getCoreBinUpdates(self):
         """Merge the bids, raw DB indexes and core information so we can save to disk"""
-        core_update = dict(zip(self.DB.indicies, [False]*np.size(self.DB.indicies)))
-        bin_update = dict(zip(self.DB.indicies, [0]*np.size(self.DB.indicies)))
+        core_update = dict(zip(self.PM.indicies, [False]*np.size(self.PM.indicies)))
+        bin_update = dict(zip(self.PM.indicies, [0]*np.size(self.PM.indicies)))
 
         # we need a mapping from cid (or local index) to binID
-        c2b = dict(zip(range(0,np.size(self.DB.indicies)), [0]*np.size(self.DB.indicies)))
+        c2b = dict(zip(range(0,np.size(self.PM.indicies)), [0]*np.size(self.PM.indicies)))
         for bid in self.bins:
             for index in self.bins[bid].indicies:
                 c2b[index] = bid
         
         # at this stage, all bins are cores
-        for index in range(0, self.DB.numContigs):
-            if index in self.binnedIndicies:
-                bin_update[self.DB.indicies[index]] = c2b[index]
-                core_update[self.DB.indicies[index]] = True
+        for index in range(0, self.PM.numContigs):
+            if index in self.PM.binnedIndicies:
+                bin_update[self.PM.indicies[index]] = c2b[index]
+                core_update[self.PM.indicies[index]] = True
 
         return (bin_update, core_update)
 
@@ -453,11 +452,11 @@ class ClusterBlob:
         
         # add to the grid wherever we find a contig
         index = -1
-        for point in np.around(self.DB.transformedCP):
+        for point in np.around(self.PM.transformedCP):
             index += 1
 
             # can only bin things once!
-            if index not in self.binnedIndicies:
+            if index not in self.PM.binnedIndicies:
                 # readability
                 px = point[0]
                 py = point[1]
@@ -474,7 +473,7 @@ class ClusterBlob:
                 # for each point we encounter we incrmement
                 # it's position + the positions to each side
                 # and touching each corner
-                multiplier = np.log10(self.DB.contigLengths[index])
+                multiplier = np.log10(self.PM.contigLengths[index])
                 self.incrementAboutPoint(0, px, py, multiplier=multiplier)
                 self.incrementAboutPoint(1, self.scaleFactor - pz - 1, py, multiplier=multiplier)
                 self.incrementAboutPoint(2, self.scaleFactor - pz - 1, self.scaleFactor - px - 1, multiplier=multiplier)
@@ -482,15 +481,15 @@ class ClusterBlob:
     def updatePostBin(self, bin):
         """Update data structures after assigning contigs to a new bin"""
         for index in bin.indicies:
-            self.binnedIndicies[index] = True
+            self.PM.binnedIndicies[index] = bin.id
             
             # now update the image map, decrement
-            point = np.around(self.DB.transformedCP[index])
+            point = np.around(self.PM.transformedCP[index])
             # readability
             px = point[0]
             py = point[1]
             pz = point[2]
-            multiplier = np.log10(self.DB.contigLengths[index])
+            multiplier = np.log10(self.PM.contigLengths[index])
             self.decrementAboutPoint(0, px, py, multiplier=multiplier)
             self.decrementAboutPoint(1, self.scaleFactor - pz - 1, py, multiplier=multiplier)
             self.decrementAboutPoint(2, self.scaleFactor - pz - 1, self.scaleFactor - px - 1, multiplier=multiplier)
@@ -695,9 +694,9 @@ class ClusterBlob:
                     # check that the point is real and that it has not yet been binned
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
-                            if index not in self.binnedIndicies:
+                            if index not in self.PM.binnedIndicies:
                                 # this is an unassigned point. 
-                                multiplier = np.log10(self.DB.contigLengths[index])
+                                multiplier = np.log10(self.PM.contigLengths[index])
                                 self.incrementAboutPoint3D(working_block, x-x_lower, y-y_lower, z,multiplier=multiplier)
 
         # blur and find the highest value
@@ -725,9 +724,9 @@ class ClusterBlob:
                 for y in range(y_lower, y_upper):
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
-                            if index not in self.binnedIndicies:
-                                center_values = np.append(center_values, self.DB.kmerSigs[index])
-                                cv_colours = np.append(cv_colours, self.DB.contigColours[index])
+                            if index not in self.PM.binnedIndicies:
+                                center_values = np.append(center_values, self.PM.kmerSigs[index])
+                                cv_colours = np.append(cv_colours, self.PM.contigColours[index])
                                 c_inc += 1
 
         # make sure we have something to go on here
@@ -735,7 +734,7 @@ class ClusterBlob:
             return (np.array([]), -1)
 
         # reshape these guys!
-        center_values = np.reshape(center_values, (c_inc, np.size(self.DB.kmerSigs[0])))
+        center_values = np.reshape(center_values, (c_inc, np.size(self.PM.kmerSigs[0])))
         cv_colours = np.reshape(cv_colours, (c_inc, 3))
         
         # transform them into one dimensional points
@@ -793,9 +792,9 @@ class ClusterBlob:
                     # check that the point is real and that it has not yet been binned
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
-                            if(index not in center_indicies) and (index not in self.binnedIndicies):
+                            if(index not in center_indicies) and (index not in self.PM.binnedIndicies):
                                 # make sure the kmer sig is close enough
-                                dist = np.linalg.norm(self.DB.kmerSigs[index] - centroid_sig)
+                                dist = np.linalg.norm(self.PM.kmerSigs[index] - centroid_sig)
                                 if(dist < upper_dist):
                                     center_indicies = np.append(center_indicies, index)
         if(np.size(center_indicies) > 0):
@@ -815,7 +814,7 @@ class ClusterBlob:
     def plotBins(self, FNPrefix="BIN_"):
         """Make plots of all the bins"""
         for bid in self.bins:
-            self.bins[bid].plotBin(self.DB.transformedCP, self.DB.contigColours, fileName=FNPrefix+str(bid),)
+            self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, fileName=FNPrefix+str(bid),)
             
     def plotRegion(self, px, py, pz, fileName="", tag="", column=False):
         """Plot the region surrounding a point """
@@ -836,10 +835,10 @@ class ClusterBlob:
                 for y in range(y_lower, y_upper):
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
-                            if index not in self.binnedIndicies:
+                            if index not in self.PM.binnedIndicies:
                                 num_points += 1
-                                disp_vals = np.append(disp_vals, self.DB.transformedCP[index])
-                                disp_cols = np.append(disp_cols, self.DB.contigColours[index])
+                                disp_vals = np.append(disp_vals, self.PM.transformedCP[index])
+                                disp_cols = np.append(disp_cols, self.PM.contigColours[index])
         
         # make a black mark at the max values
         small_span = self.span/2
@@ -852,9 +851,9 @@ class ClusterBlob:
                 for y in range(y_lower, y_upper):
                     if((x,y,realz) in self.mappedIndicies):
                         for index in self.mappedIndicies[(x,y,realz)]:
-                            if index not in self.binnedIndicies:
+                            if index not in self.PM.binnedIndicies:
                                 num_points += 1
-                                disp_vals = np.append(disp_vals, self.DB.transformedCP[index])
+                                disp_vals = np.append(disp_vals, self.PM.transformedCP[index])
                                 disp_cols = np.append(disp_cols, colorsys.hsv_to_rgb(0,0,0))
         # reshape
         disp_vals = np.reshape(disp_vals, (num_points, 3))

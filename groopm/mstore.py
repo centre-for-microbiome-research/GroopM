@@ -911,7 +911,7 @@ def getBamDescriptor(fullPath):
 ###############################################################################
 ###############################################################################
 ###############################################################################
-class DataBlob:
+class ProfileManager:
     """Interacts with the groopm DataManager and local data fields
     
     Mostly a wrapper around a group of numpy arrays and a pytables quagmire
@@ -936,6 +936,7 @@ class DataBlob:
 
         # meta                
         self.validBinIds = {}               # valid bin ids -> numMembers
+        self.binnedIndicies = {}            # list of those indicies which belong to some bin
         self.numContigs = 0                 # this depends on the condition given
         self.numStoits = 0                  # this depends on the data which was parsed
 
@@ -1017,6 +1018,12 @@ class DataBlob:
                 else:
                     self.validBinIds = self.getBinStats()
 
+                # fix the binned indicies
+                self.binnedIndicies = {}
+                for i in range(0, len(self.indicies)):
+                    if(self.binIds[i] != 0):
+                        self.binnedIndicies[i] = self.binIds[i] 
+
             if(loadCores):
                 if(verbose):
                     print "\tLoading core info"
@@ -1082,7 +1089,7 @@ class DataBlob:
         """Go through all the "bins" array and make a list of unique bin ids vs number of contigs"""
         return self.dataManager.getBinStats(self.dbFileName)
     
-    def saveBins(self, updates):
+    def saveBinIds(self, updates):
         """Save our bins into the DB"""
         self.dataManager.setBins(self.dbFileName, updates)
     
@@ -1090,7 +1097,7 @@ class DataBlob:
         """Save our core flags into the DB"""
         self.dataManager.setCores(self.dbFileName, updates)
 
-    def saveBinIds(self, updates):
+    def saveValidBinIds(self, updates):
         """Store the valid bin Ids and number of members
                 
         updates is a dictionary which looks like:
@@ -1099,10 +1106,40 @@ class DataBlob:
         self.dataManager.setBinStats(self.dbFileName, updates)
         self.setNumBins(len(updates.keys()))
 
+    def updateValidBinIds(self, updates):
+        """Store the valid bin Ids and number of members
+        
+        updates is a dictionary which looks like:
+        { bid : numMembers }
+        if numMembers == 0 then the bid is removed from the table
+        if bid is not in the table yet then it is added
+        otherwise it is updated
+        """
+        # get the current guys
+        existing_bin_stats = self.dataManager.getBinStats(self.dbFileName)
+        num_bins = self.getNumBins()
+        # now update this dict
+        for bid in updates.keys():
+            if bid in existing_bin_stats:
+                if updates[bid] == 0:
+                    # remove this guy
+                    del existing_bin_stats[bid]
+                    num_bins -= 1
+                else:
+                    # update the count
+                    existing_bin_stats[bid] = updates[bid]
+            else:
+                # new guy!
+                existing_bin_stats[bid] = updates[bid]
+                num_bins += 1
+        
+        # finally , save
+        self.saveValidBinIds(existing_bin_stats)
+
 #------------------------------------------------------------------------------
 # DATA TRANSFORMATIONS 
 
-    def transformCP(self):
+    def transformCP(self, silent=False):
         """Do the main ransformation on the coverage profile data"""
         # Update this guy now we know how big he has to be
         # do it this way because we may apply successive transforms to this
@@ -1111,7 +1148,8 @@ class DataBlob:
         self.transformedCP = np.zeros(s)
         tmp_data = np.array([])
 
-        print "\tRadial mapping"
+        if(not silent):
+            print "\tRadial mapping"
         # first we shift the edge values accordingly and then 
         # map each point onto the surface of a hyper-sphere
         # the vector we wish to move closer to...
@@ -1139,7 +1177,8 @@ class DataBlob:
         # 2 dimensional plane, thus making the data usefuller
         index = 0
         if(self.numStoits == 2):
-            print "Skip dimensionality reduction (dim < 3)"
+            if(not silent):
+                print "Skip dimensionality reduction (dim < 3)"
             for point in self.covProfiles:
                 self.transformedCP[index,0] = tmp_data[index,0]
                 self.transformedCP[index,1] = tmp_data[index,1]
@@ -1148,7 +1187,8 @@ class DataBlob:
         else:    
             # Project the points onto a 2d plane which is orthonormal
             # to the Z axis
-            print "\tDimensionality reduction"
+            if(not silent):
+                print "\tDimensionality reduction"
             PCA.Center(tmp_data,verbose=0)
             p = PCA.PCA(tmp_data)
             components = p.pc()

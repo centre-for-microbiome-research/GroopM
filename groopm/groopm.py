@@ -117,8 +117,18 @@ class GroopMOptionsParser():
             print "****************************************************************"
             print " [[GroopM]] Running in bin splitting mode..."
             print "****************************************************************"
-            BM = binUtils.BinManager(options.dbname)
+            BM = binUtils.BinManager(dbFileName=options.dbname)
+            BM.loadBins(makeBins=True, silent=False, bids=[options.bid])
             BM.split(options.bid, options.parts)
+
+        elif(options.subparser_name == 'merge'):
+            # make bin cores
+            print "****************************************************************"
+            print " [[GroopM]] Running in bin merging mode..."
+            print "****************************************************************"
+            BM = binUtils.BinManager(dbFileName=options.dbname)
+            BM.loadBins(makeBins=True, silent=True, bids=options.bids)
+            BM.merge(options.bids, options.automatic)
 
         elif(options.subparser_name == 'explore'):
             # make bin cores
@@ -149,15 +159,15 @@ class GroopMOptionsParser():
             print "****************************************************************"
             print " [[GroopM]] Plot bins..."
             print "****************************************************************"
-            BM = binUtils.BinManager(options.dbname)
+            BM = binUtils.BinManager(dbFileName=options.dbname)
             bids = []
             if options.bids is not None:
                 bids = options.bids
             BM.loadBins(makeBins=True, silent=False, bids=bids)
-            BM.plotBins(FNPrefix=options.tag)
+            BM.plotBins(FNPrefix=options.tag, sideBySide=options.sidebyside)
             
         elif(options.subparser_name == 'print'):
-            BM = binUtils.BinManager(options.dbname)
+            BM = binUtils.BinManager(dbFileName=options.dbname)
             bids = []
             if options.bids is not None:
                 bids = options.bids
