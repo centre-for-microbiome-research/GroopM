@@ -136,7 +136,6 @@ class GMDataManager:
         # load all the passed vars
         dbFileName = dbFileName
         contigsFile = contigs
-        bamFiles = bamFiles.split(",")
         stoitColNames = []
         
         kse = KmerSigEngine(kmerSize)
@@ -936,7 +935,7 @@ class ProfileManager:
 
         # meta                
         self.validBinIds = {}               # valid bin ids -> numMembers
-        self.binnedIndicies = {}            # list of those indicies which belong to some bin
+        self.binnedRowIndicies = {}         # dictionary of those indicies which belong to some bin
         self.numContigs = 0                 # this depends on the condition given
         self.numStoits = 0                  # this depends on the data which was parsed
 
@@ -1019,10 +1018,10 @@ class ProfileManager:
                     self.validBinIds = self.getBinStats()
 
                 # fix the binned indicies
-                self.binnedIndicies = {}
-                for i in range(0, len(self.indicies)):
+                self.binnedRowIndicies = {}
+                for i in range(len(self.indicies)):
                     if(self.binIds[i] != 0):
-                        self.binnedIndicies[i] = self.binIds[i] 
+                        self.binnedRowIndicies[i] = True 
 
             if(loadCores):
                 if(verbose):

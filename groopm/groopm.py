@@ -112,6 +112,18 @@ class GroopMOptionsParser():
                                        )
             CE.makeCores(coreCut=options.cutoff, minSize=options.size, minVol=options.bp)
 
+        elif(options.subparser_name == 'condense'):
+            # make bin cores
+            print "****************************************************************"
+            print " [[GroopM]] Running in core condensing mode..."
+            print "****************************************************************"
+            BM = binUtils.BinManager(dbFileName=options.dbname)
+            BM.loadBins(makeBins=True, silent=False)
+            if(options.auto):
+                BM.condenseWrapper(2,2,5,5,save=True,auto=True)
+            else:
+                BM.condenseWrapper(2,2,5,5,save=True)
+
         elif(options.subparser_name == 'split'):
             # make bin cores
             print "****************************************************************"
@@ -128,7 +140,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             BM = binUtils.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=True, bids=options.bids)
-            BM.merge(options.bids, options.automatic)
+            BM.merge(options.bids, options.auto, saveBins=True)
 
         elif(options.subparser_name == 'explore'):
             # make bin cores
