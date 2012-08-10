@@ -49,112 +49,12 @@ __status__ = "Development"
 
 ###############################################################################
 import sys
-import numpy as np
-
-# GroopM imports
-import mstore
-import cluster
 
 ###############################################################################
 ###############################################################################
 ###############################################################################
 ###############################################################################
-class PrintEngine:
-    """Print bin information"""
-    def __init__(self, dbFileName, outFormat, fileName=""):
-        self.dbFileName = dbFileName
-        self.dataManager = mstore.GMDataManager()
-        self.fileName = fileName
-        self.format = outFormat
-
-        # primary data storage
-        self.indicies = np.array([])
-        self.contigNames = np.array([])
-        self.contigLengths = np.array([])
-        self.bins = np.array([])
-        self.numBins = 0
-        
-        # munged data 
-        self.bin_sizes = {}
-        self.bin_members = {}
-        
-    def loadData(self, getUnbinned=False, bins=[]):
-        """load information from the DB"""
-        if(getUnbinned):
-            # get the lot!
-            self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName)
-        else:
-            # only get those with a non-zero bin ID
-            if(len(bins) == 0):
-                self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName,
-                                                                        condition='bin != 0')
-            else:
-                # get only those we're told to get
-                condition = "((bin == "+str(bins[0])+")"
-                for index in range (1,len(bins)):
-                    condition += " | (bin == "+str(bins[index])+")"
                 
-                condition += ")"
-                self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName,
-                                                                        condition=condition)
-        self.contigNames = self.dataManager.getContigNames(self.dbFileName,
-                                                           indicies=self.indicies)
-        self.contigLengths = self.dataManager.getContigLengths(self.dbFileName,
-                                                           indicies=self.indicies)
-        self.bins = self.dataManager.getBins(self.dbFileName, indicies=self.indicies)
-        self.numBins = self.dataManager.getNumBins(self.dbFileName)
-        
-        self.initialiseContainers()
-
-    def initialiseContainers(self):
-        """Munge the raw data into something more usable"""
-        # intialise these containers
-        for index in range(0,self.numBins+1):
-            self.bin_sizes[index] = 0;
-            self.bin_members[index] = []
-        
-        # fill them up
-        for index in range(0, np.size(self.indicies)):
-            self.bin_members[self.bins[index]].append(index)
-            self.bin_sizes[self.bins[index]] += self.contigLengths[index]
-
-    def printBins(self):
-        """Wrapper for print handles piping to file or stdout"""
-        if("" != self.fileName):
-            try:
-                # redirect stdout to a file
-                sys.stdout = open(self.fileName, 'w')
-                self.printInner()
-            except:
-                print "Error diverting stout to file:", fileName, sys.exc_info()[0]
-                raise
-        else:
-            self.printInner()           
-        
-    def printInner(self):
-        """Print bin information to STDOUT"""
-        if(self.format == 'summary'):
-            print "#\"bid\"\t\"totalBP\"\t\"numCons\""
-            for bid in self.bin_members:
-                if(np.size(self.bin_members[bid]) > 0):
-                    print str(bid)+"\t"+str(self.bin_sizes[bid])+"\t"+str(np.size(self.bin_members[bid]))
-        elif(self.format == 'full'):
-            for bid in self.bin_members:
-                if(np.size(self.bin_members[bid]) > 0):
-                    print "#bid_"+str(bid)+"_totalBP_"+str(self.bin_sizes[bid])+"_numCons_"+str(np.size(self.bin_members[bid]))
-                    print "#\"bid\"\t\"cid\"\t\"length\""            
-                    for member in self.bin_members[bid]:
-                        print bid, self.contigNames[member], self.contigLengths[member]
-        elif(self.format == 'minimal'):
-            print "#\"bid\"\t\"cid\"\t\"length\""            
-            for bid in self.bin_members:
-                if(np.size(self.bin_members[bid]) > 0):
-                    for member in self.bin_members[bid]:
-                        print bid, self.contigNames[member], self.contigLengths[member]
-            pass
-        else:
-            print "Error: Unrecognised format:", self.format
-        
 ###############################################################################
 ###############################################################################
 ###############################################################################

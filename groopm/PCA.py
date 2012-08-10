@@ -71,6 +71,9 @@ class PCA:
         self.sumvariance = np.cumsum(self.eigen)
         self.sumvariance /= self.sumvariance[-1]
         self.npc = np.searchsorted( self.sumvariance, fraction ) + 1
+        while(self.npc == 1):   # prevents less than 2 pcs being found
+            fraction *= 1.1
+            self.npc = np.searchsorted( self.sumvariance, fraction ) + 1
         self.dinv = np.array([ 1/d if d > self.d[0] * 1e-6  else 0
                                 for d in self.d ])
 

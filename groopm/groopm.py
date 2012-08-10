@@ -60,7 +60,7 @@ import atexit
 # GroopM imports
 import mstore
 import cluster
-import groopmUtils
+import binUtils
 
 ###############################################################################
 ###############################################################################
@@ -112,13 +112,37 @@ class GroopMOptionsParser():
                                        )
             CE.makeCores(coreCut=options.cutoff, minSize=options.size, minVol=options.bp)
 
-        elif(options.subparser_name == 'coreval'):
+        elif(options.subparser_name == 'split'):
             # make bin cores
             print "****************************************************************"
-            print " [[GroopM]] Running in core validation mode..."
+            print " [[GroopM]] Running in bin splitting mode..."
             print "****************************************************************"
-            CV = cluster.CoreValidator(options.dbname)
-            CV.validate(coreCut=options.cutoff)
+            BM = binUtils.BinManager(dbFileName=options.dbname)
+            BM.loadBins(makeBins=True, silent=False, bids=[options.bid])
+            BM.split(options.bid, options.parts)
+
+        elif(options.subparser_name == 'merge'):
+            # make bin cores
+            print "****************************************************************"
+            print " [[GroopM]] Running in bin merging mode..."
+            print "****************************************************************"
+            BM = binUtils.BinManager(dbFileName=options.dbname)
+            BM.loadBins(makeBins=True, silent=True, bids=options.bids)
+            BM.merge(options.bids, options.automatic)
+
+        elif(options.subparser_name == 'explore'):
+            # make bin cores
+            print "****************************************************************"
+            print " [[GroopM]] Running in bin explorer mode..."
+            print "****************************************************************"
+            bids = []
+            if options.bids is not None:
+                bids = options.bids
+            BE = binUtils.BinExplorer(options.dbname, bids=bids)
+            if(options.profiles):
+                BE.plotBinProfiles()
+            else:
+                BE.plotSideBySide(coreCut=options.cutoff)
             
         elif(options.subparser_name == 'expand'):
             # make bin cores
@@ -131,22 +155,25 @@ class GroopMOptionsParser():
                                        )
             CE.expandBins()
         
-        elif(options.subparser_name == 'complete'):
+        elif(options.subparser_name == 'plot'):
             print "****************************************************************"
-            print " [[GroopM]] All in one!..."
+            print " [[GroopM]] Plot bins..."
             print "****************************************************************"
-
-        elif(options.subparser_name == 'print'):
-            PE = groopmUtils.PrintEngine(options.dbname,
-                                         options.format,
-                                         fileName=options.outfile
-                                         )
-            bins = []
-            if(options.bins != ""):
-                bins = options.bins.split(',')
-            PE.loadData(getUnbinned=options.unbinned, bins=bins)
-            PE.printBins()
+            BM = binUtils.BinManager(dbFileName=options.dbname)
+            bids = []
+            if options.bids is not None:
+                bids = options.bids
+            BM.loadBins(makeBins=True, silent=False, bids=bids)
+            BM.plotBins(FNPrefix=options.tag, sideBySide=options.sidebyside)
             
+        elif(options.subparser_name == 'print'):
+            BM = binUtils.BinManager(dbFileName=options.dbname)
+            bids = []
+            if options.bids is not None:
+                bids = options.bids
+            BM.loadBins(getUnbinned=options.unbinned, bids=bids)
+            BM.printBins(options.format, fileName=options.outfile)
+
         else:
             print "****************************************************************"
             print " [[GroopM]] - Use -h for help"
