@@ -417,7 +417,7 @@ class BinManager:
     def split(self, bid, n, mode='kmer', auto=False, saveBins=False, verbose=False, printInstructions=True):
         """split a bin into n parts"""
         # we need to work out which profile to cluster on
-         if(printInstructions):
+        if(printInstructions):
             self.printSplitInstructions()
        
         bin = self.getBin(bid)
