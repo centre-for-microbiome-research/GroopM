@@ -469,12 +469,12 @@ class BinManager:
             if(mode == "cov"):
                 print "Already doing split based on coverage profile"
             else:
-                self.split(bid, n, mode='cov', auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False):
+                self.split(bid, n, mode='cov', auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False)
         elif(continue_split == 'K'):
             if(mode == "kmer"):
                 print "Already doing split based on kmer profile"
             else:
-                self.split(bid, n, mode='kmer', auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False):
+                self.split(bid, n, mode='kmer', auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False)
         
 
     def merge(self, bids, auto=False, newBid=False, saveBins=False, verbose=False, printInstructions=True):
