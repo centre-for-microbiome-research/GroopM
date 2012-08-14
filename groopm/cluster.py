@@ -195,7 +195,7 @@ class ClusterEngine:
                 
                 # Plot?
                 if(self.debugPlots):          
-                    bin.plotBin(self.PM.transformedCP, self.PM.contigColours, fileName="Image_"+str(self.imageCounter), tag="Initial")
+                    bin.plotBin(self.PM.transformedCP, self.PM.contigColours, fileName="Image_"+str(self.imageCounter))
                     self.imageCounter += 1
         
                 # make the bin more gooder
@@ -204,14 +204,13 @@ class ClusterEngine:
                 if(bin.calcTotalSize(self.PM.contigLengths) < minVol):    # less than the good volume
                     if(bin_size < small_bin_cutoff):
                         is_good_bin = False
-                        num_binned_contigs += bin_size
                         num_below_cutoff += 1
                         print "-",
                     # else bin is large enough!
                 if(is_good_bin):
                     # Plot?
                     if(self.debugPlots):          
-                        bin.plotBin(self.PM.transformedCP, self.PM.contigColours, fileName="Image_"+str(self.imageCounter), tag="CORE")
+                        bin.plotBin(self.PM.transformedCP, self.PM.contigColours, fileName="Image_"+str(self.imageCounter))
                         self.imageCounter += 1
                     num_below_cutoff = 0
                     print "+",

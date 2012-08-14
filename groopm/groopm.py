@@ -112,7 +112,18 @@ class GroopMOptionsParser():
                                        )
             CE.makeCores(coreCut=options.cutoff, minSize=options.size, minVol=options.bp)
 
-        elif(options.subparser_name == 'condense'):
+        elif(options.subparser_name == 'expand'):
+            # make bin cores
+            print "****************************************************************"
+            print " [[GroopM]] Running in bin expansion mode..."
+            print "****************************************************************"
+            CE = cluster.ClusterEngine(options.dbname,
+                                       force=options.force,
+                                       plot=options.plot
+                                       )
+            CE.expandBins()
+        
+        elif(options.subparser_name == 'refine'):
             # make bin cores
             print "****************************************************************"
             print " [[GroopM]] Running in core condensing mode..."
@@ -120,18 +131,21 @@ class GroopMOptionsParser():
             BM = binUtils.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
             if(options.auto):
-                BM.condenseWrapper(2,2,5,5,save=True,auto=True)
+                BM.condenseWrapper(3,3,5,5,save=True,auto=True)
             else:
-                BM.condenseWrapper(2,2,5,5,save=True)
+                BM.condenseWrapper(3,3,5,5,save=True)
 
-        elif(options.subparser_name == 'split'):
+        elif(options.subparser_name == 'separate'):
             # make bin cores
             print "****************************************************************"
-            print " [[GroopM]] Running in bin splitting mode..."
+            print " [[GroopM]] Running in core separating mode..."
             print "****************************************************************"
             BM = binUtils.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True, silent=False, bids=[options.bid])
-            BM.split(options.bid, options.parts)
+            BM.loadBins(makeBins=True, silent=False)
+            if(options.auto):
+                BM.chimeraWrapper(save=True,auto=True)
+            else:
+                BM.chimeraWrapper(save=True)
 
         elif(options.subparser_name == 'merge'):
             # make bin cores
@@ -141,6 +155,15 @@ class GroopMOptionsParser():
             BM = binUtils.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=True, bids=options.bids)
             BM.merge(options.bids, options.auto, saveBins=True)
+
+        elif(options.subparser_name == 'split'):
+            # make bin cores
+            print "****************************************************************"
+            print " [[GroopM]] Running in bin splitting mode..."
+            print "****************************************************************"
+            BM = binUtils.BinManager(dbFileName=options.dbname)
+            BM.loadBins(makeBins=True, silent=False, bids=[options.bid])
+            BM.split(options.bid, options.parts, options.mode)
 
         elif(options.subparser_name == 'explore'):
             # make bin cores
@@ -156,17 +179,14 @@ class GroopMOptionsParser():
             else:
                 BE.plotSideBySide(coreCut=options.cutoff)
             
-        elif(options.subparser_name == 'expand'):
-            # make bin cores
-            print "****************************************************************"
-            print " [[GroopM]] Running in bin expansion mode..."
-            print "****************************************************************"
-            CE = cluster.ClusterEngine(options.dbname,
-                                       force=options.force,
-                                       plot=options.plot
-                                       )
-            CE.expandBins()
-        
+        elif(options.subparser_name == 'print'):
+            BM = binUtils.BinManager(dbFileName=options.dbname)
+            bids = []
+            if options.bids is not None:
+                bids = options.bids
+            BM.loadBins(getUnbinned=options.unbinned, bids=bids)
+            BM.printBins(options.format, fileName=options.outfile)
+
         elif(options.subparser_name == 'plot'):
             print "****************************************************************"
             print " [[GroopM]] Plot bins..."
@@ -178,14 +198,6 @@ class GroopMOptionsParser():
             BM.loadBins(makeBins=True, silent=False, bids=bids)
             BM.plotBins(FNPrefix=options.tag, sideBySide=options.sidebyside)
             
-        elif(options.subparser_name == 'print'):
-            BM = binUtils.BinManager(dbFileName=options.dbname)
-            bids = []
-            if options.bids is not None:
-                bids = options.bids
-            BM.loadBins(getUnbinned=options.unbinned, bids=bids)
-            BM.printBins(options.format, fileName=options.outfile)
-
         else:
             print "****************************************************************"
             print " [[GroopM]] - Use -h for help"

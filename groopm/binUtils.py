@@ -245,12 +245,6 @@ class BinManager:
 
 #------------------------------------------------------------------------------
 # BIN UTILITIES 
-    # an enum anyone?
-    kmer, coverage = range(2)
-
-    def split(self, bid, parts, mode=kmer):
-        """split a bin into n parts"""
-        pass
 
     def condenseWrapper(self,
                       lowerKmerStdev,      # lower limits mean we can just munch away
@@ -364,10 +358,124 @@ class BinManager:
         # Merge them in the order they were seen in
         for merge_job in merged_order:
             num_cores_merged += 1
-            self.merge(merge_job[0], auto=(merge_job[1]^True), saveBins=save, verbose=verbose)
+            self.merge(merge_job[0], auto=(merge_job[1]^True), saveBins=save, verbose=verbose, printInstructions=False)
             any_merged = True
 
         return num_cores_merged
+
+    def chimeraWrapper(self, auto=False, save=False, verbose=False, printInstructions=False):
+        """Automatically search for and separate chimeric bins"""
+        b_means = np.array([])
+        b_stdevs = np.array([])
+        names = []
+        nums = []
+        
+        for bid in self.bins:
+            self.bins[bid].getKmerColourStats(self.PM.contigColours)
+            b_means = np.append(b_means, self.bins[bid].kValMean)
+            b_stdevs = np.append(b_stdevs, self.bins[bid].kValStdev)
+            names.append("BIN: %d" % bid)
+            nums.append(np.log10(self.bins[bid].binSize)/10)
+            
+        sorted_stdevs = np.argsort(b_stdevs)
+        sorted_means = np.argsort(b_means)
+        
+        sm = []
+        nm = []
+        cm = []
+        ss = []
+        ns = []
+        cs = []
+        stdev_median = np.median(b_stdevs)
+        for i in range(len(self.bins)):
+            if(b_stdevs[sorted_stdevs[i]] > stdev_median):
+                ss.append(b_stdevs[sorted_stdevs[i]])
+                ns.append(names[sorted_stdevs[i]])
+                cs.append(nums[sorted_stdevs[i]])
+            if(b_stdevs[sorted_means[i]] > stdev_median):
+                sm.append(b_stdevs[sorted_means[i]])
+                nm.append(names[sorted_means[i]])
+                cm.append(nums[sorted_means[i]])
+
+        bs = np.arange(0, len(ns), 1)
+        bm = np.arange(0, len(nm), 1)
+        
+        plt.figure(1)
+        
+        plt.subplot(211)
+        plt.plot(bs, ss, 'b--', bs, cs, 'g--')
+        plt.xticks(bs, ns, rotation=90)
+        plt.grid()
+
+        plt.subplot(212)
+        plt.plot(bm, sm, 'b--', bm, cm, 'g--')
+        plt.xticks(bm, nm, rotation=90)
+        plt.grid()
+        
+        plt.show()
+
+    def split(self, bid, n, mode='kmer', auto=False, saveBins=False, verbose=False, printInstructions=True):
+        """split a bin into n parts"""
+        # we need to work out which profile to cluster on
+         if(printInstructions):
+            self.printSplitInstructions()
+       
+        bin = self.getBin(bid)
+        obs = np.array([])
+        if(mode=='kmer'):
+            for row_index in bin.rowIndicies:
+                obs = np.append(obs, self.PM.kmerSigs[row_index])
+            obs = np.reshape(obs, (len(bin.rowIndicies),len(self.PM.kmerSigs[0])))
+        elif(mode=='cov'):
+            for row_index in bin.rowIndicies:
+                obs = np.append(obs, self.PM.covProfiles[row_index])
+            obs = np.reshape(obs, (len(bin.rowIndicies),len(self.PM.covProfiles[0])))
+        
+        # do the clustering
+        from scipy.cluster.vq import kmeans,vq
+        centroids,_ = kmeans(obs,n)
+        idx,_ = vq(obs,centroids)
+        
+        # plot some stuff
+        idx_sorted = np.argsort(np.array(idx))
+        current_group = -1
+        bids = [bid]
+        holding_array = np.array([])
+        for i in idx_sorted:
+            if(idx[i] != current_group):
+                if(current_group != -1):
+                    # bin is full!
+                    split_bin = self.makeNewBin(holding_array)
+                    split_bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
+                    split_bin.calcTotalSize(self.PM.contigLengths)
+                    bids.append(split_bin.id)
+                    holding_array = np.array([])
+                current_group = idx[i]
+            holding_array = np.append(holding_array, bin.rowIndicies[i])
+        if(np.size(holding_array) != 0):
+            split_bin = self.makeNewBin(holding_array)
+            split_bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
+            split_bin.calcTotalSize(self.PM.contigLengths)
+            bids.append(split_bin.id)
+            
+        self.plotSideBySide(bids)
+        continue_split = self.promptOnSplit(n)
+        if(continue_split == 'Y'):
+            # go ahead
+            pass
+        elif(continue_split == 'N'):
+            return
+        elif(continue_split == 'C'):
+            if(mode == "cov"):
+                print "Already doing split based on coverage profile"
+            else:
+                self.split(bid, n, mode='cov', auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False):
+        elif(continue_split == 'K'):
+            if(mode == "kmer"):
+                print "Already doing split based on kmer profile"
+            else:
+                self.split(bid, n, mode='kmer', auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False):
+        
 
     def merge(self, bids, auto=False, newBid=False, saveBins=False, verbose=False, printInstructions=True):
         """Merge two or more bins"""
@@ -413,32 +521,76 @@ class BinManager:
         raw_input( "****************************************************************\n" +
                    " MERGING INSTRUCTIONS - PLEASE READ CAREFULLY\n"+
                    "****************************************************************\n" +
-                   " You will be shown side by side plots to help you determine if\n" +
-                   " the bins should be merged. Look carefully at each plot and then\n" +
-                   " close the plot window to continue\n\n" +
-                   " Press any key to produce plots...\n")
+                   " The computer cannot always be trusted to perform bin mergers\n"
+                   " automatically, so during merging you may be shown a 3D plot\n"
+                   " which should help YOU determine whether or not the bins should\n" +
+                   " be merged. Look carefully at each plot and then close the plot\n" +
+                   " to continue with the merging operation.\n\n" +
+                   " Press any key to produce plots...")
         print "****************************************************************"        
 
     def promptOnMerge(self, bids=[], minimal=False):
         """Check that the user is ok with this merge"""
+        input_not_ok = True
+        valid_responses = ['Y','N']
         bin_str = ""
         if(len(bids) != 0):
             bin_str = ": "+str(bids[0])
             for i in range(1, len(bids)):
                 bin_str += " and "+str(bids[i])
-        if(minimal):
-            option = raw_input(" Merge? (y,n) : ")
-        else: 
-            option = raw_input(" ****WARNING**** About to merge bins"+bin_str+"\n" \
-                               " If you continue you *WILL* overwrite existing bins!\n" \
-                               " You have been shown a 3d plot of the bins to be merged.\n" \
-                               " Continue only if you're sure this is what you want to do!\n" \
-                               " Merge? (y,n) : ")
-        print "****************************************************************"
-        if(option.upper() != "Y"):
-            print "Merge skipped"
-            return False
-        return True
+        while(input_not_ok):
+            if(minimal):
+                option = raw_input(" Merge? (y,n) : ")
+            else: 
+                option = raw_input(" ****WARNING**** About to merge bins"+bin_str+"\n" \
+                                   " If you continue you *WILL* overwrite existing bins!\n" \
+                                   " You have been shown a 3d plot of the bins to be merged.\n" \
+                                   " Continue only if you're sure this is what you want to do!\n" \
+                                   " Merge? (y,n) : ")
+            if(option.upper() in valid_responses):
+                if(option.upper() != "Y"):
+                    print "Merge skipped"
+                    print "****************************************************************"
+                    return False
+                print "****************************************************************"
+                return True
+            else:
+                print "Error, unrecognised choice '"+option.upper()+"'"
+                minimal = True
+
+    def printSplitInstructions(self):
+        raw_input( "****************************************************************\n" +
+                   " SPLITTING INSTRUCTIONS - PLEASE READ CAREFULLY\n"+
+                   "****************************************************************\n" +
+                   " The computer cannot always be trusted to perform bin splits\n"
+                   " automatically, so during splitting you may be shown a 3D plot\n"
+                   " which should help YOU determine whether or not the bin should\n" +
+                   " be split. Look carefully at each plot and then close the plot\n" +
+                   " to continue with the splitting operation.\n\n" +
+                   " Press any key to produce plots...")
+        print "****************************************************************"        
+
+    def promptOnSplit(self, parts, minimal=False):
+        """Check that the user is ok with this split"""
+        input_not_ok = True
+        valid_responses = ['Y','N','C','K']
+        while(input_not_ok):
+            if(minimal):
+                option = raw_input(" Split? (y,n,c,k) : ")
+            else: 
+                option = raw_input(" ****WARNING**** About to split bin into "+str(parts)+" parts\n" \
+                                   " If you continue you *WILL* overwrite existing bins!\n" \
+                                   " You have been shown a 3d plot of the bin after splitting.\n" \
+                                   " Continue only if you're sure this is what you want to do!\n" \
+                                   " y = yes, n = no, c = redo but use coverage profile,\n" \
+                                   " k = redo but use kmer profile\n" \
+                                   " Split? (y,n,c,k) : ")
+            if(option.upper() in valid_responses):
+                print "****************************************************************"
+                return option.upper()
+            else:
+                print "Error, unrecognised choice '"+option.upper()+"'"
+                minimal = True
 
     def getBin(self, bid):
         """get a bin or raise an error"""
@@ -603,7 +755,7 @@ class BinManager:
             self.plotSideBySide(self.bins.keys(), tag=FNPrefix)
         else:
             for bid in self.bins:
-                self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, fileName=FNPrefix+"_"+str(bid),)
+                self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, fileName=FNPrefix+"_"+str(bid))
 
     def plotSideBySide(self, bids, fileName="", tag=""):
         """Plot two bins side by side in 3d"""
@@ -614,7 +766,7 @@ class BinManager:
         plot_cols = np.ceil(float(num_plots)/plot_rows)
         plot_num = 1
         for bid in bids:
-            title = self.bins[bid].plotOnAx(fig, plot_rows, plot_cols, plot_num, self.PM.transformedCP, self.PM.contigColours, fileName=fileName, tag=tag)
+            title = self.bins[bid].plotOnAx(fig, plot_rows, plot_cols, plot_num, self.PM.transformedCP, self.PM.contigColours, fileName=fileName)
             plot_num += 1
             plt.title(title)
         if(fileName != ""):
@@ -793,6 +945,8 @@ class Bin:
         self.merZeros = np.zeros((np.size(kmerSigs[0])))
         self.kDistMean = 0
         self.kDistStdev = 0
+        self.kValMean = 0
+        self.kValStdev = 0
         self.kDistUpperLimit = 0
         
     def makeBinDist(self, transformedCP, kmerSigs):
@@ -835,7 +989,7 @@ class Bin:
             k_dists = np.append(k_dists, np.linalg.norm(sig-self.merZeros))
         self.kDistMean = np.mean(k_dists)
         self.kDistStdev = np.std(k_dists)
-        
+
         # set the acceptance ranges
         self.makeLimits()
         
@@ -849,6 +1003,18 @@ class Bin:
             self.covLowerLimits[i] = int(self.covMeans[i] - pt * self.covStdevs[i])
             self.covUpperLimits[i] = int(self.covMeans[i] + pt * self.covStdevs[i]) + 1  # so range will look neater!
         self.kDistUpperLimit = self.kDistMean + st * self.kDistStdev
+        
+    def getKmerColourStats(self, contigColours):
+        """Determine the mean and stdev of the kmer profile colours"""
+        kmer_vals = np.array([])
+        for row_index in self.rowIndicies:
+            kmer_vals = np.append(kmer_vals, colorsys.rgb_to_hsv(contigColours[row_index][0],
+                                                                 contigColours[row_index][1],
+                                                                 contigColours[row_index][2]
+                                                                 )[0]
+                                  )
+        self.kValMean = np.mean(kmer_vals)
+        self.kValStdev = np.std(kmer_vals)
         
     def getKDist(self, sig, centroid=None):
         """Get the distance of this sig from the centroid"""
@@ -981,10 +1147,10 @@ class Bin:
         del fig
             
         
-    def plotBin(self, transformedCP, contigColours, fileName="", tag=""):
+    def plotBin(self, transformedCP, contigColours, fileName=""):
         """Plot a single bin"""
         fig = plt.figure()
-        title = self.plotOnAx(fig, 1, 1, 1, transformedCP, contigColours, fileName=fileName, tag=tag)
+        title = self.plotOnAx(fig, 1, 1, 1, transformedCP, contigColours, fileName=fileName)
         plt.title(title)
         if(fileName != ""):
             try:
@@ -1002,7 +1168,7 @@ class Bin:
         plt.close(fig)
         del fig
 
-    def plotOnAx(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigColours, fileName="", tag=""):
+    def plotOnAx(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigColours, fileName=""):
         """Plot a bin in a given subplot"""
         disp_vals = np.array([])
         disp_cols = np.array([])
@@ -1013,7 +1179,7 @@ class Bin:
             disp_cols = np.append(disp_cols, contigColours[row_index])
 
         # make a black mark at the max values
-        self.makeLimits(pt=1, st=1)
+        self.makeLimits()
         px = int(self.covMeans[0])
         py = int(self.covMeans[1])
         pz = int(self.covMeans[2])
@@ -1023,7 +1189,8 @@ class Bin:
         
         # fix these
         self.makeLimits()
-        
+        self.getKmerColourStats(contigColours)
+
         # reshape
         disp_vals = np.reshape(disp_vals, (num_points, 3))
         disp_cols = np.reshape(disp_cols, (num_points, 3))
@@ -1032,10 +1199,10 @@ class Bin:
         ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors=disp_cols, c=disp_cols, marker='.')
         from locale import format, setlocale, LC_ALL # purdy commas
         setlocale(LC_ALL, "")
-        title = str.join(" ", ["Bin:",str(self.id),"--",tag,"\n",
-                               "Focus at: (",str(px), str(py), str(pz),")\n",
-                               "Contains:",str(self.binSize),"contigs\n",
-                               "Total:",format('%d', self.totalBP, True),"BP"
+        title = str.join(" ", ["Bin:",str(self.id),":",str(self.binSize),"contigs : ",format('%d', self.totalBP, True),"BP\n",
+                               "Coverage centroid: (",str(px), str(py), "[",str(self.covLowerLimits[2]),"-",str(self.covUpperLimits[2]),"])\n",
+                               "Kmers: mean: %.4f stdev: %.4f" % (self.kValMean, self.kValStdev),"\n",
+                               
                                ])
         return title
     

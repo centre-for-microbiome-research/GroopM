@@ -83,36 +83,43 @@ if __name__ == '__main__':
     core_builder.add_argument('-b', '--bp', default=1000000, help="cumulative size of contigs which define a core regardless of number of contigs. Default: 1000000")
 
     # refine bins
-    bin_condenser = subparsers.add_parser('condense', help='identify and merge similar cores')
-    bin_condenser.add_argument('dbname', help="name of the database to open")
-    bin_condenser.add_argument('-a', '--auto', action="store_true", default=False, help="do everything automatically")
-    bin_condenser.add_argument('-m', '--manual', action="store_true", default=False, help="do everything manually")
+    bin_refiner = subparsers.add_parser('refine', help='merge similar bins / split chimeric ones')
+    bin_refiner.add_argument('dbname', help="name of the database to open")
+    bin_refiner.add_argument('-a', '--auto', action="store_true", default=False, help="do everything automatically")
+    bin_refiner.add_argument('-m', '--manual', action="store_true", default=False, help="do everything manually")
 
-    # load cores and visualise
-    bin_explorer = subparsers.add_parser('explore', help='explore and validate bins')
-    bin_explorer.add_argument('dbname', help="name of the database to open")
-    bin_explorer.add_argument('-c', '--cutoff', default=10000, help="cutoff size for core creation. Default 10000")
-    bin_explorer.add_argument('-p', '--profiles', action="store_true", default=False, help="plot kmer and cov profile distributions")
-    bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot. Default: all bins")
-
-    # split a bin into two parts
-    bin_splitter = subparsers.add_parser('split', help='split a core into n pieces') 
-    bin_splitter.add_argument('dbname', help="name of the database to open")
-    bin_splitter.add_argument('bid', type=int, help="bin id to split")
-    bin_splitter.add_argument('parts', type=int, help="number of parts to split the bin into")
-    
-    # combine two or more bins into one
-    bin_merger = subparsers.add_parser('merge', help='merge 2 or more cores')
-    bin_merger.add_argument('dbname', help="name of the database to open")
-    bin_merger.add_argument('bids', nargs='+', type=int, help="bin ids to merge.")
-    bin_merger.add_argument('-a', '--auto', action="store_true", default=False, help="merge without prompting")
-    
     # load saved data and enlarge bins
     bin_expander = subparsers.add_parser('expand', help='load DB and enlarge bins')
     bin_expander.add_argument('dbname', help="name of the database to open")
     bin_expander.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing db file without prompting")
     bin_expander.add_argument('-D', '--plot', action="store_true", default=False, help="create plots during bin expansion. Default: no plots")
     
+    # refine bins
+    bin_separator = subparsers.add_parser('separate', help='identify and separate chimeric bins')
+    bin_separator.add_argument('dbname', help="name of the database to open")
+    bin_separator.add_argument('-a', '--auto', action="store_true", default=False, help="do everything automatically")
+    bin_separator.add_argument('-m', '--manual', action="store_true", default=False, help="do everything manually")
+
+    # combine two or more bins into one
+    bin_merger = subparsers.add_parser('merge', help='merge 2 or more bins')
+    bin_merger.add_argument('dbname', help="name of the database to open")
+    bin_merger.add_argument('bids', nargs='+', type=int, help="bin ids to merge.")
+    bin_merger.add_argument('-a', '--auto', action="store_true", default=False, help="merge without prompting")
+    
+    # split a bin into two parts
+    bin_splitter = subparsers.add_parser('split', help='split a bin into n pieces') 
+    bin_splitter.add_argument('dbname', help="name of the database to open")
+    bin_splitter.add_argument('bid', type=int, help="bin id to split")
+    bin_splitter.add_argument('parts', type=int, help="number of parts to split the bin into")
+    bin_splitter.add_argument('-m', '--mode', default="kmer", help="profile to split on 'kmer' or 'cov'. Default: kmer")
+    
+    # load bins and visualise
+    bin_explorer = subparsers.add_parser('explore', help='explore and validate bins')
+    bin_explorer.add_argument('dbname', help="name of the database to open")
+    bin_explorer.add_argument('-c', '--cutoff', default=10000, help="cutoff size. Default 10000")
+    bin_explorer.add_argument('-p', '--profiles', action="store_true", default=False, help="plot kmer and cov profile distributions")
+    bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot. Default: all bins")
+
     # print bin information       
     bin_printer = subparsers.add_parser('print', help='print bin information')
     bin_printer.add_argument('dbname', help="name of the database to open")
