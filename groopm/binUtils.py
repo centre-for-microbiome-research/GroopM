@@ -259,15 +259,15 @@ class BinManager:
         total_num_bins_condensed = 0
         num_bins_condensed = 0
         while True: # do while loop anyone?
-            num_bins_condensed = self.condenseBins(lowerKmerStdev,
-                                                      lowerCoverageStdev,
-                                                      upperKmerStdev,
-                                                      upperCoverageStdev,
-                                                      auto=auto,      
-                                                      save=save
-                                                      )
+            (num_bins_condensed,continue_merging) = self.condenseBins(lowerKmerStdev,
+                                                                      lowerCoverageStdev,
+                                                                      upperKmerStdev,
+                                                                      upperCoverageStdev,
+                                                                      auto=auto,      
+                                                                      save=save
+                                                                      )
             total_num_bins_condensed += num_bins_condensed 
-            if(num_bins_condensed == 0):
+            if(num_bins_condensed == 0 or continue_merging == False):
                 break
         print "\t",total_num_bins_condensed,"bins condensed.",len(self.bins),"bins remain"
                         
@@ -357,11 +357,12 @@ class BinManager:
         
         # Merge them in the order they were seen in
         for merge_job in merged_order:
-            num_cores_merged += 1
-            self.merge(merge_job[0], auto=(merge_job[1]^True), saveBins=save, verbose=verbose, printInstructions=False)
-            any_merged = True
-
-        return num_cores_merged
+            merge_status = self.merge(merge_job[0], auto=auto, saveBins=save, verbose=verbose, printInstructions=False) 
+            if(merge_status == 2):
+                num_cores_merged += 1
+            elif(merge_status == 0):
+                return (num_cores_merged,False)
+        return (num_cores_merged,True)
 
     def chimeraWrapper(self, auto=False, save=False, verbose=False, printInstructions=False):
         """Automatically search for and separate chimeric bins"""
@@ -435,46 +436,79 @@ class BinManager:
         from scipy.cluster.vq import kmeans,vq
         centroids,_ = kmeans(obs,n)
         idx,_ = vq(obs,centroids)
-        
-        # plot some stuff
+
+        # build some temp bins        
         idx_sorted = np.argsort(np.array(idx))
         current_group = -1
         bids = [bid]
+        bin_stats = {} # bin id to bin size
+        bin_stats[bid]=0
+        bin_update = {} # row index to bin id
         holding_array = np.array([])
+        split_bin = None
         for i in idx_sorted:
             if(idx[i] != current_group):
                 if(current_group != -1):
                     # bin is full!
                     split_bin = self.makeNewBin(holding_array)
+                    for row_index in holding_array:
+                        bin_update[self.PM.indicies[row_index]] = split_bin.id
+                    bin_stats[split_bin.id] = split_bin.binSize  
                     split_bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
                     split_bin.calcTotalSize(self.PM.contigLengths)
                     bids.append(split_bin.id)
                     holding_array = np.array([])
                 current_group = idx[i]
             holding_array = np.append(holding_array, bin.rowIndicies[i])
+        # do the last one
         if(np.size(holding_array) != 0):
             split_bin = self.makeNewBin(holding_array)
+            for row_index in holding_array:
+                bin_update[self.PM.indicies[row_index]] = split_bin.id  
+            bin_stats[split_bin.id] = split_bin.binSize  
             split_bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
             split_bin.calcTotalSize(self.PM.contigLengths)
             bids.append(split_bin.id)
-            
-        self.plotSideBySide(bids)
-        continue_split = self.promptOnSplit(n)
-        if(continue_split == 'Y'):
-            # go ahead
-            pass
-        elif(continue_split == 'N'):
+
+        if(auto and saveBins):
+            self.updateBinStats(bin_stats)
+            self.PM.saveBinIds(bin_update)
             return
-        elif(continue_split == 'C'):
+            
+        # plot some stuff
+        self.plotSideBySide(bids)
+        # remove this query from the list so we don't delete him
+        del bids[0]
+        user_option = self.promptOnSplit(n)
+        if(user_option == 'Y'):
+            if(saveBins):
+                # save the temp bins
+                self.updateBinStats(bin_stats)
+                self.PM.saveBinIds(bin_update)
+            return
+        # delete the temp bins
+        self.deleteBins(bids, force=True)
+        
+        # see what the user wants to do
+        if(user_option == 'N'):
+            return
+        elif(user_option == 'C'):
             if(mode == "cov"):
                 print "Already doing split based on coverage profile"
             else:
                 self.split(bid, n, mode='cov', auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False)
-        elif(continue_split == 'K'):
+        elif(user_option == 'K'):
             if(mode == "kmer"):
                 print "Already doing split based on kmer profile"
             else:
                 self.split(bid, n, mode='kmer', auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False)
+        elif(user_option == 'P'):
+            try:
+                parts = int(raw_input("Enter new number of parts:"))
+            except ValueError:
+                print "You need to enter an integer value!"
+                parts = int(raw_input("Enter new number of parts:"))
+            self.split(bid, parts, mode=mode, auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False)   
         
 
     def merge(self, bids, auto=False, newBid=False, saveBins=False, verbose=False, printInstructions=True):
@@ -490,7 +524,7 @@ class BinManager:
             # now merge it with the first in the new list
             dead_bin = self.getBin(bids[0])
             parent_bin.consume(self.PM.transformedCP, self.PM.kmerSigs, self.PM.contigLengths, dead_bin, verbose=verbose)
-            self.deleteBin(bids[0])
+            self.deleteBins([bids[0]], force=True)
             bin_stats[bids[0]] = 0
             bin_stats[parent_bin.id] = parent_bin.binSize
         else:
@@ -498,18 +532,30 @@ class BinManager:
             parent_bin = self.getBin(bids[0])
         
         # let this guy consume all the other guys
+        ret_val = 0
         for i in range(1,len(bids)):
             continue_merge = False
             dead_bin = self.getBin(bids[i])
             if(auto):
                 continue_merge = True
             else:
-                self.plotSideBySide([parent_bin.id,dead_bin.id])
-                if(self.promptOnMerge(bids=[parent_bin.id,dead_bin.id])):
+                tmp_bin = self.makeNewBin(np.concatenate([parent_bin.rowIndicies,dead_bin.rowIndicies]))
+                self.plotSideBySide([parent_bin.id,dead_bin.id,tmp_bin.id])
+                self.deleteBins([tmp_bin.id], force=True)
+                user_option = self.promptOnMerge(bids=[parent_bin.id,dead_bin.id]) 
+                if(user_option == "N"):
+                    print "Merge skipped"
+                    ret_val = 1                    
+                    continue_merge=False
+                elif(user_option == "Q"):
+                    print "All mergers skipped"
+                    return 0
+                else:
+                    ret_val = 2
                     continue_merge=True
             if(continue_merge):
                 parent_bin.consume(self.PM.transformedCP, self.PM.kmerSigs, self.PM.contigLengths, dead_bin, verbose=verbose)
-                self.deleteBin(bids[i])
+                self.deleteBins([bids[i]], force=True)
                 bin_stats[bids[i]] = 0
                 bin_stats[parent_bin.id] = parent_bin.binSize
 
@@ -517,6 +563,50 @@ class BinManager:
             self.updateBinStats(bin_stats)
             self.saveBins(doCores=False, saveBinStats=False)
             
+        return ret_val
+
+    def getBin(self, bid):
+        """get a bin or raise an error"""
+        if bid in self.bins:
+            return self.bins[bid]
+        else:
+            raise BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
+            
+    def deleteBins(self, bids, force=False, freeBinnedRowIndicies=False, saveBins=False):
+        """Purge a bin from our lists"""
+        if(not force):
+            user_option = self.promptOnDelete(bids)
+            if(user_option != 'Y'):
+                return False
+        bin_stats = {}
+        bin_update = {}
+        for bid in bids:
+            if bid in self.bins:
+                if(freeBinnedRowIndicies):
+                    for row_index in self.bins[bid].rowIndicies:
+                        del self.PM.binnedRowIndicies[row_index]
+                        bin_update[self.PM.indicies[row_index]] = 0 
+                bin_stats[bid] = 0
+                del self.bins[bid]
+            else:
+                raise BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
+            
+        if(saveBins):
+            self.updateBinStats(bin_stats)
+            self.PM.saveBinIds(bin_update)
+        return True
+        
+    def makeNewBin(self, rowIndicies=np.array([]), bid=None):
+        """Make a new bin and add to the list of existing bins"""
+        if bid is None:
+            self.nextFreeBinId +=1
+            bid = self.nextFreeBinId
+        self.bins[bid] = Bin(rowIndicies, self.PM.kmerSigs, bid)        
+        return self.bins[bid]
+
+#------------------------------------------------------------------------------
+# BIN STATS 
+    
     def printMergeInstructions(self):
         raw_input( "****************************************************************\n" +
                    " MERGING INSTRUCTIONS - PLEASE READ CAREFULLY\n"+
@@ -525,38 +615,10 @@ class BinManager:
                    " automatically, so during merging you may be shown a 3D plot\n"
                    " which should help YOU determine whether or not the bins should\n" +
                    " be merged. Look carefully at each plot and then close the plot\n" +
-                   " to continue with the merging operation.\n\n" +
+                   " to continue with the merging operation.\n" +
+                   " The image on the far right shows the bins after merging\n" +
                    " Press any key to produce plots...")
         print "****************************************************************"        
-
-    def promptOnMerge(self, bids=[], minimal=False):
-        """Check that the user is ok with this merge"""
-        input_not_ok = True
-        valid_responses = ['Y','N']
-        bin_str = ""
-        if(len(bids) != 0):
-            bin_str = ": "+str(bids[0])
-            for i in range(1, len(bids)):
-                bin_str += " and "+str(bids[i])
-        while(input_not_ok):
-            if(minimal):
-                option = raw_input(" Merge? (y,n) : ")
-            else: 
-                option = raw_input(" ****WARNING**** About to merge bins"+bin_str+"\n" \
-                                   " If you continue you *WILL* overwrite existing bins!\n" \
-                                   " You have been shown a 3d plot of the bins to be merged.\n" \
-                                   " Continue only if you're sure this is what you want to do!\n" \
-                                   " Merge? (y,n) : ")
-            if(option.upper() in valid_responses):
-                if(option.upper() != "Y"):
-                    print "Merge skipped"
-                    print "****************************************************************"
-                    return False
-                print "****************************************************************"
-                return True
-            else:
-                print "Error, unrecognised choice '"+option.upper()+"'"
-                minimal = True
 
     def printSplitInstructions(self):
         raw_input( "****************************************************************\n" +
@@ -570,21 +632,26 @@ class BinManager:
                    " Press any key to produce plots...")
         print "****************************************************************"        
 
-    def promptOnSplit(self, parts, minimal=False):
-        """Check that the user is ok with this split"""
+    def promptOnMerge(self, bids=[], minimal=False):
+        """Check that the user is ok with this merge"""
         input_not_ok = True
-        valid_responses = ['Y','N','C','K']
+        valid_responses = ['Y','N','Q']
+        vrs = ",".join([str.lower(str(x)) for x in valid_responses])
+        bin_str = ""
+        if(len(bids) != 0):
+            bin_str = ": "+str(bids[0])
+            for i in range(1, len(bids)):
+                bin_str += " and "+str(bids[i])
         while(input_not_ok):
             if(minimal):
-                option = raw_input(" Split? (y,n,c,k) : ")
+                option = raw_input(" Merge? ("+vrs+") : ")
             else: 
-                option = raw_input(" ****WARNING**** About to split bin into "+str(parts)+" parts\n" \
+                option = raw_input(" ****WARNING**** About to merge bins"+bin_str+"\n" \
                                    " If you continue you *WILL* overwrite existing bins!\n" \
-                                   " You have been shown a 3d plot of the bin after splitting.\n" \
+                                   " You have been shown a 3d plot of the bins to be merged.\n" \
                                    " Continue only if you're sure this is what you want to do!\n" \
-                                   " y = yes, n = no, c = redo but use coverage profile,\n" \
-                                   " k = redo but use kmer profile\n" \
-                                   " Split? (y,n,c,k) : ")
+                                   " y = yes, n = no, q = no and quit merging\n" \
+                                   " Merge? ("+vrs+") : ")
             if(option.upper() in valid_responses):
                 print "****************************************************************"
                 return option.upper()
@@ -592,27 +659,52 @@ class BinManager:
                 print "Error, unrecognised choice '"+option.upper()+"'"
                 minimal = True
 
-    def getBin(self, bid):
-        """get a bin or raise an error"""
-        if bid in self.bins:
-            return self.bins[bid]
-        else:
-            raise BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
-            
-    def deleteBin(self, bid):
-        """Purge a bin from our lists"""
-        if bid in self.bins:
-            del self.bins[bid]
-        else:
-            raise BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
-        
-    def makeNewBin(self, rowIndicies=np.array([]), bid=None):
-        """Make a new bin and add to the list of existing bins"""
-        if bid is None:
-            self.nextFreeBinId +=1
-            bid = self.nextFreeBinId
-        self.bins[bid] = Bin(rowIndicies, self.PM.kmerSigs, bid)        
-        return self.bins[bid]
+    def promptOnSplit(self, parts, minimal=False):
+        """Check that the user is ok with this split"""
+        input_not_ok = True
+        valid_responses = ['Y','N','C','K','P']
+        vrs = ",".join([str.lower(str(x)) for x in valid_responses])
+        while(input_not_ok):
+            if(minimal):
+                option = raw_input(" Split? ("+vrs+") : ")
+            else: 
+                option = raw_input(" ****WARNING**** About to split bin into "+str(parts)+" parts\n" \
+                                   " If you continue you *WILL* overwrite existing bins!\n" \
+                                   " You have been shown a 3d plot of the bin after splitting.\n" \
+                                   " Continue only if you're sure this is what you want to do!\n" \
+                                   " y = yes, n = no, c = redo but use coverage profile,\n" \
+                                   " k = redo but use kmer profile, p = choose new number of parts\n" \
+                                   " Split? ("+vrs+") : ")
+            if(option.upper() in valid_responses):
+                print "****************************************************************"
+                return option.upper()
+            else:
+                print "Error, unrecognised choice '"+option.upper()+"'"
+                minimal = True
+
+    def promptOnDelete(self, bids, minimal=False):
+        """Check that the user is ok with this split"""
+        input_not_ok = True
+        valid_responses = ['Y','N']
+        vrs = ",".join([str.lower(str(x)) for x in valid_responses])
+        bids_str = ",".join([str.lower(str(x)) for x in bids])
+        while(input_not_ok):
+            if(minimal):
+                option = raw_input(" Delete? ("+vrs+") : ")
+            else: 
+                option = raw_input(" ****WARNING**** About to delete bin(s):\n" \
+                                   " "+bids_str+"\n" \
+                                   " If you continue you *WILL* overwrite existing bins!\n" \
+                                   " Continue only if you're sure this is what you want to do!\n" \
+                                   " y = yes, n = no\n"\
+                                   " Delete? ("+vrs+") : ")
+            if(option.upper() in valid_responses):
+                print "****************************************************************"
+                return option.upper()
+            else:
+                print "Error, unrecognised choice '"+option.upper()+"'"
+                minimal = True
+
 #------------------------------------------------------------------------------
 # BIN STATS 
 
@@ -711,36 +803,32 @@ class BinManager:
             try:
                 # redirect stdout to a file
                 sys.stdout = open(fileName, 'w')
-                self.printInner()
+                self.printInner(outFormat)
             except:
                 print "Error diverting stout to file:", fileName, sys.exc_info()[0]
                 raise
         else:
             self.printInner(outFormat)           
-        
+
     def printInner(self, outFormat):
         """Print bin information to STDOUT"""
+        # handle the headers first
+        separator = "\t"
         if(outFormat == 'summary'):
-            print "#\"bid\"\t\"totalBP\"\t\"numCons\""
-            for bid in self.binMembers:
-                if(np.size(self.binMembers[bid]) > 0):
-                    print str(bid)+"\t"+str(self.binSizes[bid])+"\t"+str(self.PM.validBinIds[bid])
-        elif(outFormat == 'full'):
-            for bid in self.binMembers:
-                if(np.size(self.binMembers[bid]) > 0):
-                    print "#bid_"+str(bid)+"_totalBP_"+str(self.binSizes[bid])+"_numCons_"+str(self.PM.validBinIds[bid])
-                    print "#\"bid\"\t\"cid\"\t\"length\""            
-                    for member in self.binMembers[bid]:
-                        print bid, self.PM.contigNames[member], self.PM.contigLengths[member]
+            print separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"kMean\"","\"kStdev\""]) 
         elif(outFormat == 'minimal'):
-            print "#\"bid\"\t\"cid\"\t\"length\""            
-            for bid in self.binMembers:
-                if(np.size(self.binMembers[bid]) > 0):
-                    for member in self.binMembers[bid]:
-                        print bid, self.PM.contigNames[member], self.PM.contigLengths[member]
+            print separator.join(["#\"bid\"","\"cid\"","\"length\""])            
+        elif(outFormat == 'full'):
             pass
         else:
             print "Error: Unrecognised format:", outFormat
+            return
+
+        for bid in self.bins:
+            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
+            self.bins[bid].getKmerColourStats(self.PM.contigColours)
+            self.bins[bid].calcTotalSize(self.PM.contigLengths)
+            self.bins[bid].printBin(self.PM.contigNames, self.PM.contigLengths, outFormat=outFormat, separator=separator)
 
     def plotProfileDistributions(self):
         """Plot the coverage and kmer distributions for each bin"""
@@ -1003,7 +1091,7 @@ class Bin:
             self.covLowerLimits[i] = int(self.covMeans[i] - pt * self.covStdevs[i])
             self.covUpperLimits[i] = int(self.covMeans[i] + pt * self.covStdevs[i]) + 1  # so range will look neater!
         self.kDistUpperLimit = self.kDistMean + st * self.kDistStdev
-        
+
     def getKmerColourStats(self, contigColours):
         """Determine the mean and stdev of the kmer profile colours"""
         kmer_vals = np.array([])
@@ -1022,6 +1110,13 @@ class Bin:
         if centroid is None:
             centroid = self.merZeros
         return np.linalg.norm((sig-self.merMeans)/self.merStdevs - centroid)
+    
+    def calcTotalSize(self, contigLengths):
+        """Work out the total size of this bin in BP"""
+        totalBP = 0
+        for row_index in self.rowIndicies:
+            totalBP += contigLengths[row_index]
+        self.totalBP = totalBP
     
 #------------------------------------------------------------------------------
 # Grow the bin 
@@ -1067,13 +1162,6 @@ class Bin:
                                     self.rowIndicies = np.append(self.rowIndicies,row_index)
                                     num_recruited += 1
         return num_recruited
-
-    def calcTotalSize(self, contigLengths):
-        """Work out the total size of this bin in BP"""
-        totalBP = 0
-        for row_index in self.rowIndicies:
-            totalBP += contigLengths[row_index]
-        self.totalBP = totalBP
 
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
@@ -1205,22 +1293,34 @@ class Bin:
                                
                                ])
         return title
-    
-    def printContents(self):
-        """Dump the contents of the object"""
-        print "--------------------------------------"
-        print "Bin:", self.id
-        print "Bin size:", self.binSize
-        print "Total BP:", self.totalBP
-        print "--------------------------------------"
-    
-    def dumpContigIDs(self, contigNames):
-        """Print out the contigIDs"""
-        from cStringIO import StringIO
-        file_str = StringIO()
-        for row_index in self.rowIndicies:
-            file_str.write(contigNames[row_index]+"\t")
-        return file_str.getvalue()
+
+    def printBin(self, contigNames, contigLengths, outFormat="summary", separator="\t"):
+        """print this bin info in csvformat"""
+        kvm_str = "%.4f" % self.kValMean
+        kvs_str = "%.4f" % self.kValStdev
+        if(outFormat == 'summary'):
+            #print separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"kMean\"","\"kStdev\""]) 
+            print separator.join([str(self.id), str(self.totalBP), str(self.binSize), kvm_str, kvs_str])
+        elif(outFormat == 'full'):
+            print("#bid_"+str(self.id)+
+                  "_totalBP_"+str(self.totalBP)+
+                  "_numCons_"+str(self.binSize)+
+                  "_kMean_"+kvm_str+
+                  "_kStdev_"+kvs_str
+                  )
+            print separator.join(["#\"bid\"","\"cid\"","\"length\""])
+            for row_index in self.rowIndicies:
+                print separator.join([str(self.id), contigNames[row_index], str(contigLengths[row_index])])
+        elif(outFormat == 'minimal'):
+            #print separator.join(["#\"bid\"","\"cid\"","\"length\""])            
+            for row_index in self.rowIndicies:
+                print separator.join([str(self.id), contigNames[row_index], str(contigLengths[row_index])])
+        else:
+            print "--------------------------------------"
+            print "Bin:", self.id
+            print "Bin size:", self.binSize
+            print "Total BP:", self.totalBP
+            print "--------------------------------------"
 
 ###############################################################################
 ###############################################################################

@@ -153,7 +153,7 @@ class GroopMOptionsParser():
             print " [[GroopM]] Running in bin merging mode..."
             print "****************************************************************"
             BM = binUtils.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True, silent=True, bids=options.bids)
+            BM.loadBins(makeBins=True, silent=False)
             BM.merge(options.bids, options.auto, saveBins=True)
 
         elif(options.subparser_name == 'split'):
@@ -162,8 +162,17 @@ class GroopMOptionsParser():
             print " [[GroopM]] Running in bin splitting mode..."
             print "****************************************************************"
             BM = binUtils.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True, silent=False, bids=[options.bid])
-            BM.split(options.bid, options.parts, options.mode)
+            BM.loadBins(makeBins=True, silent=False)
+            BM.split(options.bid, options.parts, mode=options.mode, saveBins=True, auto=options.auto)
+
+        elif(options.subparser_name == 'delete'):
+            # make bin cores
+            print "****************************************************************"
+            print " [[GroopM]] Running in bin deleting mode..."
+            print "****************************************************************"
+            BM = binUtils.BinManager(dbFileName=options.dbname)
+            BM.loadBins(makeBins=True, silent=True, bids=options.bids)
+            BM.deleteBins(options.bids, force=options.force, saveBins=True, freeBinnedRowIndicies=True)
 
         elif(options.subparser_name == 'explore'):
             # make bin cores
@@ -184,7 +193,7 @@ class GroopMOptionsParser():
             bids = []
             if options.bids is not None:
                 bids = options.bids
-            BM.loadBins(getUnbinned=options.unbinned, bids=bids)
+            BM.loadBins(getUnbinned=options.unbinned, makeBins=True, silent=True, bids=bids)
             BM.printBins(options.format, fileName=options.outfile)
 
         elif(options.subparser_name == 'plot'):
