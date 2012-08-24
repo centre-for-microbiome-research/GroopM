@@ -130,10 +130,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             BM = binUtils.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
-            if(options.auto):
-                BM.condenseWrapper(3,3,5,5,save=True,auto=True)
-            else:
-                BM.condenseWrapper(3,3,5,5,save=True)
+            BM.condenseWrapper(save=True,auto=options.auto)
 
         elif(options.subparser_name == 'separate'):
             # make bin cores
@@ -142,10 +139,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             BM = binUtils.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
-            if(options.auto):
-                BM.chimeraWrapper(save=True,auto=True)
-            else:
-                BM.chimeraWrapper(save=True)
+            BM.chimeraWrapper(save=True,auto=options.auto)
 
         elif(options.subparser_name == 'merge'):
             # make bin cores
@@ -163,7 +157,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             BM = binUtils.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
-            BM.split(options.bid, options.parts, mode=options.mode, saveBins=True, auto=options.auto)
+            BM.split(options.bid, options.parts, mode=options.mode, saveBins=True, test=options.auto, auto=False)
 
         elif(options.subparser_name == 'delete'):
             # make bin cores
@@ -183,7 +177,9 @@ class GroopMOptionsParser():
             if options.bids is not None:
                 bids = options.bids
             BE = binUtils.BinExplorer(options.dbname, bids=bids)
-            if(options.profiles):
+            if(options.flyover):
+                BE.plotFlyOver()
+            elif(options.profiles):
                 BE.plotBinProfiles()
             else:
                 BE.plotSideBySide(coreCut=options.cutoff)

@@ -146,12 +146,12 @@ class ClusterEngine:
         
         # now we assume that some true bins may be separated across two cores
         # try to condense things a little
-        #self.BM.plotBins(FNPrefix="PRE_")
+        self.BM.plotBins(FNPrefix="PRE_")
         print "Condense cores"
-        self.condenseCores(2, 2, 2, 2) # set quite tight restrictions in this round
+        self.condenseCores()
         t4 = time.time()
         print "\tTHIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
-        #self.BM.plotBins()
+        self.BM.plotBins()
 
         # Now save all the stuff to disk!
         print "Saving bins"
@@ -198,22 +198,33 @@ class ClusterEngine:
                     bin.plotBin(self.PM.transformedCP, self.PM.contigColours, fileName="Image_"+str(self.imageCounter))
                     self.imageCounter += 1
         
-                # make the bin more gooder
-                is_good_bin = True
+                # neaten up the bin
+                self.removeOutliers(bin.id, fixBinnedRI=False)
+                
+                # recruit more contigs
                 bin_size = bin.recruit(self.PM.transformedCP, self.PM.kmerSigs, self.im2RowIndicies, self.PM.binnedRowIndicies)
+
+                is_good_bin = False
                 if(bin.calcTotalSize(self.PM.contigLengths) < minVol):    # less than the good volume
-                    if(bin_size < small_bin_cutoff):
-                        is_good_bin = False
-                        num_below_cutoff += 1
-                        print "-",
-                    # else bin is large enough!
+                    if(bin_size > small_bin_cutoff):                      # but has enough contigs
+                        is_good_bin = True
+                else:                                                     # contains enough bp to pass regardless of number of contigs
+                    is_good_bin = True
                 if(is_good_bin):
                     # Plot?
                     if(self.debugPlots):          
                         bin.plotBin(self.PM.transformedCP, self.PM.contigColours, fileName="Image_"+str(self.imageCounter))
                         self.imageCounter += 1
+                    # append this bins list of mapped rowIndicies to the main list
+                    self.updatePostBin(bin)
                     num_below_cutoff = 0
                     print "+",
+                else:
+                    # we just throw these indicies away for now
+                    self.restrictRowIndicies(bin.rowIndicies)
+                    self.BM.deleteBins([bin.id], force=True)
+                    num_below_cutoff += 1
+                    print "-",
 
                 # make the printing prettier
                 new_line_counter += 1
@@ -222,33 +233,48 @@ class ClusterEngine:
                     print "\n\t",
                                         
                 if(self.debugPlots):
-                    self.plotHeat("3X3_"+str(self.roundNumber)+".png", max=max_blur_value)
-
-                # append this bins list of mapped rowIndicies to the main list
-                self.updatePostBin(bin)
+                    self.plotHeat("HM_"+str(self.roundNumber)+".png", max=max_blur_value)
+        
+        print "\n\t. . . . . . . . . ."
+        
+        # neaten up the bins
+        self.removeOutliersWrapper()
+        
+        # remove possible chmimeras        
+        self.BM.removeChimeras()
+        
         num_binned = len(self.PM.binnedRowIndicies.keys())
         perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
         print "\n\t",num_binned,"contigs are distributed across",len(self.BM.bins.keys()),"cores (",perc,"% )"
 
-    def condenseCores(self,
-                      upperKmerStdev,      # upper limits mean we can consume but we need to ask for permission first
-                      upperCoverageStdev, 
-                      lowerKmerStdev,      # lower limits mean we can just munch away
-                      lowerCoverageStdev,
-                      auto = False          # do we need to ask permission at all?                      
-                      ):
+    def removeOutliersWrapper(self, mode="kmer"):
+        """remove the outliers for all bins"""
+        print "\tRemoving outliers"
+        for bid in self.BM.bins:
+            self.removeOutliers(bid, mode=mode)
+
+    def removeOutliers(self, bid, fixBinnedRI=True, mode="kmer"):
+        """remove outliers for a single bin"""
+        dead_row_indicies = self.BM.bins[bid].findOutliers(self.PM.transformedCP, self.PM.kmerSigs, mode=mode)
+        if(len(dead_row_indicies)>0):
+            if(fixBinnedRI):
+                for row_index in dead_row_indicies:
+                    self.setRowIndexUnassigned(row_index)
+            self.BM.bins[bid].purge(dead_row_indicies,
+                                    self.PM.transformedCP,
+                                    self.PM.kmerSigs,
+                                    self.PM.contigLengths,
+                                    self.PM.contigColours)
+
+    def condenseCores(self, auto=False):
         """Itterative wrapper for the BinManager method"""
         condensing_round = 0
         num_cores_condensed = 0
         while True: # do while loop anyone?
             condensing_round += 1
-            num_cores_condensed = self.BM.condenseBins(lowerKmerStdev,
-                                                      lowerCoverageStdev,
-                                                      upperKmerStdev,
-                                                      upperCoverageStdev,
-                                                      verbose=True,
-                                                      auto=auto      
-                                                      )
+            (num_cores_condensed,continue_merge) = self.BM.condenseBins(verbose=True,
+                                                                        auto=auto      
+                                                                       )
             if(num_cores_condensed == 0):
                 break
             else:
@@ -275,7 +301,7 @@ class ClusterEngine:
             row_index += 1
 
             # can only bin things once!
-            if row_index not in self.PM.binnedRowIndicies:
+            if row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies:
                 # readability
                 px = point[0]
                 py = point[1]
@@ -296,6 +322,30 @@ class ClusterEngine:
                 self.incrementAboutPoint(0, px, py, multiplier=multiplier)
                 self.incrementAboutPoint(1, self.PM.scaleFactor - pz - 1, py, multiplier=multiplier)
                 self.incrementAboutPoint(2, self.PM.scaleFactor - pz - 1, self.PM.scaleFactor - px - 1, multiplier=multiplier)
+
+    def incrementViaRowIndex(self, rowIndex):
+        """Wrapper to increment about point"""
+        point = np.around(self.PM.transformedCP[rowIndex])
+        # readability
+        px = point[0]
+        py = point[1]
+        pz = point[2]
+        multiplier = np.log10(self.PM.contigLengths[rowIndex])
+        self.incrementAboutPoint(0, px, py, multiplier=multiplier)
+        self.incrementAboutPoint(1, self.PM.scaleFactor - pz - 1, py, multiplier=multiplier)
+        self.incrementAboutPoint(2, self.PM.scaleFactor - pz - 1, self.PM.scaleFactor - px - 1, multiplier=multiplier)
+
+    def decrementViaRowIndex(self, rowIndex):
+        """Wrapper to decrement about point"""
+        point = np.around(self.PM.transformedCP[rowIndex])
+        # readability
+        px = point[0]
+        py = point[1]
+        pz = point[2]
+        multiplier = np.log10(self.PM.contigLengths[rowIndex])
+        self.decrementAboutPoint(0, px, py, multiplier=multiplier)
+        self.decrementAboutPoint(1, self.PM.scaleFactor - pz - 1, py, multiplier=multiplier)
+        self.decrementAboutPoint(2, self.PM.scaleFactor - pz - 1, self.PM.scaleFactor - px - 1, multiplier=multiplier)
 
     def incrementAboutPoint(self, view_index, px, py, valP=1, valS=0.6, valC=0.2, multiplier=1):
         """Increment value at a point in the 2D image maps
@@ -497,7 +547,7 @@ class ClusterEngine:
                     # check that the point is real and that it has not yet been binned
                     if((x,y,realz) in self.im2RowIndicies):
                         for row_index in self.im2RowIndicies[(x,y,realz)]:
-                            if row_index not in self.PM.binnedRowIndicies:
+                            if row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies:
                                 # this is an unassigned point. 
                                 multiplier = np.log10(self.PM.contigLengths[row_index])
                                 self.incrementAboutPoint3D(working_block, x-x_lower, y-y_lower, z,multiplier=multiplier)
@@ -527,13 +577,13 @@ class ClusterEngine:
                 for y in range(y_lower, y_upper):
                     if((x,y,realz) in self.im2RowIndicies):
                         for row_index in self.im2RowIndicies[(x,y,realz)]:
-                            if row_index not in self.PM.binnedRowIndicies:
+                            if row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies:
                                 center_values = np.append(center_values, self.PM.kmerSigs[row_index])
                                 cv_colours = np.append(cv_colours, self.PM.contigColours[row_index])
                                 c_inc += 1
 
         # make sure we have something to go on here
-        if(np.size(center_values) == 0):
+        if(np.size(center_values) == 0 or c_inc < 2):
             return (np.array([]), -1)
 
         # reshape these guys!
@@ -595,7 +645,7 @@ class ClusterEngine:
                     # check that the point is real and that it has not yet been binned
                     if((x,y,realz) in self.im2RowIndicies):
                         for row_index in self.im2RowIndicies[(x,y,realz)]:
-                            if(row_index not in center_row_indicies) and (row_index not in self.PM.binnedRowIndicies):
+                            if(row_index not in center_row_indicies) and (row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies):
                                 # make sure the kmer sig is close enough
                                 dist = np.linalg.norm(self.PM.kmerSigs[row_index] - centroid_sig)
                                 if(dist < upper_dist):
@@ -614,19 +664,35 @@ class ClusterEngine:
     def updatePostBin(self, bin):
         """Update data structures after assigning contigs to a new bin"""
         for row_index in bin.rowIndicies:
-            self.PM.binnedRowIndicies[row_index] = True
+            self.setRowIndexAssigned(row_index)
             
-            # now update the image map, decrement
-            point = np.around(self.PM.transformedCP[row_index])
-            # readability
-            px = point[0]
-            py = point[1]
-            pz = point[2]
-            multiplier = np.log10(self.PM.contigLengths[row_index])
-            self.decrementAboutPoint(0, px, py, multiplier=multiplier)
-            self.decrementAboutPoint(1, self.PM.scaleFactor - pz - 1, py, multiplier=multiplier)
-            self.decrementAboutPoint(2, self.PM.scaleFactor - pz - 1, self.PM.scaleFactor - px - 1, multiplier=multiplier)
+    def setRowIndexAssigned(self, rowIndex):
+        """fix the data structures to indicate that rowIndex belongs to a bin
+        
+        Use only during initial core creation
+        """        
+        self.PM.binnedRowIndicies[rowIndex] = True
+        
+        # now update the image map, decrement
+        self.decrementViaRowIndex(rowIndex)
 
+    def setRowIndexUnassigned(self, rowIndex):
+        """fix the data structures to indicate that rowIndex no longer belongs to a bin
+        
+        Use only during initial core creation
+        """
+        del self.PM.binnedRowIndicies[rowIndex]
+        
+        # now update the image map, decrement
+        self.incrementViaRowIndex(rowIndex)
+
+    def restrictRowIndicies(self, indicies):
+        """Add these indicies to the restricted list"""
+        for row_index in indicies:
+            self.PM.restrictedRowIndicies[row_index] = True
+            # now update the image map, decrement
+            self.decrementViaRowIndex(row_index)
+        
 #------------------------------------------------------------------------------
 # MISC 
 
@@ -656,7 +722,7 @@ class ClusterEngine:
                 for y in range(y_lower, y_upper):
                     if((x,y,realz) in self.im2RowIndicies):
                         for row_index in self.im2RowIndicies[(x,y,realz)]:
-                            if row_index not in self.PM.binnedRowIndicies:
+                            if row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies:
                                 num_points += 1
                                 disp_vals = np.append(disp_vals, self.PM.transformedCP[row_index])
                                 disp_cols = np.append(disp_cols, self.PM.contigColours[row_index])
@@ -672,7 +738,7 @@ class ClusterEngine:
                 for y in range(y_lower, y_upper):
                     if((x,y,realz) in self.im2RowIndicies):
                         for row_index in self.im2RowIndicies[(x,y,realz)]:
-                            if row_index not in self.PM.binnedRowIndicies:
+                            if row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies:
                                 num_points += 1
                                 disp_vals = np.append(disp_vals, self.PM.transformedCP[row_index])
                                 disp_cols = np.append(disp_cols, colorsys.hsv_to_rgb(0,0,0))

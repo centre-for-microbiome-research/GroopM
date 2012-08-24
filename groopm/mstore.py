@@ -936,6 +936,7 @@ class ProfileManager:
         # meta                
         self.validBinIds = {}               # valid bin ids -> numMembers
         self.binnedRowIndicies = {}         # dictionary of those indicies which belong to some bin
+        self.restrictedRowIndicies = {}     # dictionary of those indicies which can not be binned yet
         self.numContigs = 0                 # this depends on the condition given
         self.numStoits = 0                  # this depends on the data which was parsed
 
@@ -1032,6 +1033,22 @@ class ProfileManager:
             print "Error loading DB:", self.dbFileName, sys.exc_info()[0]
             raise
 
+    def reduceIndicies(self, deadRowIndicies):
+        """purge indicies from the data structures
+        
+        Be sure that deadRowIndicies are sorted ascending
+        """
+        # strip out the other values        
+        self.indicies = np.delete(self.indicies, deadRowIndicies, axis=0)
+        self.covProfiles = np.delete(self.covProfiles, deadRowIndicies, axis=0)
+        self.transformedCP = np.delete(self.transformedCP, deadRowIndicies, axis=0)
+        self.contigNames = np.delete(self.contigNames, deadRowIndicies, axis=0)
+        self.contigLengths = np.delete(self.contigLengths, deadRowIndicies, axis=0)
+        self.contigColours = np.delete(self.contigColours, deadRowIndicies, axis=0)
+        self.kmerSigs = np.delete(self.kmerSigs, deadRowIndicies, axis=0)
+        self.binIds = np.delete(self.binIds, deadRowIndicies, axis=0)
+        self.isCore = np.delete(self.isCore, deadRowIndicies, axis=0)
+        
 #------------------------------------------------------------------------------
 # GET / SET 
 
@@ -1298,7 +1315,7 @@ class ProfileManager:
         self.renderTransData(tag+"_front.png",azim = 0, elev = 0)
         self.renderTransData(tag+"_side.png",azim = 90, elev = 0)
 
-    def renderTransCPData(self, fileName="", show=True, elev=45, azim=45, all=False):
+    def renderTransCPData(self, fileName="", show=True, elev=45, azim=45, all=False, showAxis=False, primaryWidth=12, primarySpace=3, dpi=300, format='png'):
         """Plot transformed data in 3D"""
         fig = plt.figure()
         if(all):
@@ -1315,6 +1332,15 @@ class ProfileManager:
             ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
             ax.azim = 0
             ax.elev = 0
+            ax.set_xlim3d(0,self.scaleFactor)
+            ax.set_ylim3d(0,self.scaleFactor)
+            ax.set_zlim3d(0,self.scaleFactor)
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_zticklabels([])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
             for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
                 for elt in axis.get_ticklines() + axis.get_ticklabels():
                     elt.set_visible(False)
@@ -1326,6 +1352,15 @@ class ProfileManager:
             ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
             ax.azim = 90
             ax.elev = 0
+            ax.set_xlim3d(0,self.scaleFactor)
+            ax.set_ylim3d(0,self.scaleFactor)
+            ax.set_zlim3d(0,self.scaleFactor)
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_zticklabels([])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
             for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
                 for elt in axis.get_ticklines() + axis.get_ticklabels():
                     elt.set_visible(False)
@@ -1337,6 +1372,15 @@ class ProfileManager:
             ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
             ax.azim = 0
             ax.elev = 90
+            ax.set_xlim3d(0,self.scaleFactor)
+            ax.set_ylim3d(0,self.scaleFactor)
+            ax.set_zlim3d(0,self.scaleFactor)
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_zticklabels([])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
             for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
                 for elt in axis.get_ticklines() + axis.get_ticklabels():
                     elt.set_visible(False)
@@ -1345,18 +1389,28 @@ class ProfileManager:
             ax.w_zaxis._AXINFO = myAXINFO
         else:
             ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='none', c=self.contigColours, s=2, marker='.')
             ax.azim = azim
             ax.elev = elev
-            ax.set_axis_off()
+            ax.set_xlim3d(0,self.scaleFactor)
+            ax.set_ylim3d(0,self.scaleFactor)
+            ax.set_zlim3d(0,self.scaleFactor)
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_zticklabels([])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
+            if(not showAxis):
+                ax.set_axis_off()
 
         if(fileName != ""):
             try:
                 if(all):
-                    fig.set_size_inches(42,12)
+                    fig.set_size_inches(3*primaryWidth+2*primarySpace,primaryWidth)
                 else:
-                    fig.set_size_inches(12,12)            
-                plt.savefig(fileName,dpi=300)
+                    fig.set_size_inches(primaryWidth,primaryWidth)            
+                plt.savefig(fileName,dpi=dpi,format=format)
                 plt.close(fig)
             except:
                 print "Error saving image",fileName, sys.exc_info()[0]

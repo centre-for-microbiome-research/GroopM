@@ -125,6 +125,7 @@ if __name__ == '__main__':
     bin_explorer.add_argument('dbname', help="name of the database to open")
     bin_explorer.add_argument('-c', '--cutoff', default=10000, help="cutoff size. Default 10000")
     bin_explorer.add_argument('-p', '--profiles', action="store_true", default=False, help="plot kmer and cov profile distributions")
+    bin_explorer.add_argument('-f', '--flyover', action="store_true", default=False, help="plot flyover frames")
     bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot. Default: all bins")
 
     # print bin information       
