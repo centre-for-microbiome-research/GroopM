@@ -130,7 +130,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             BM = binUtils.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
-            BM.condenseWrapper(save=True,manual=options.manual)
+            BM.condenseWrapper(save=True,manual=options.manual,plotter=options.plotter)
 
         elif(options.subparser_name == 'merge'):
             # make bin cores
@@ -162,18 +162,22 @@ class GroopMOptionsParser():
         elif(options.subparser_name == 'explore'):
             # make bin cores
             print "****************************************************************"
-            print " [[GroopM]] Running in bin explorer mode..."
+            print " [[GroopM]] Running in bin explorer mode (",options.mode,")..."
             print "****************************************************************"
             bids = []
             if options.bids is not None:
                 bids = options.bids
             BE = binUtils.BinExplorer(options.dbname, bids=bids)
-            if(options.flyover):
+            if(options.mode == 'ids'):
+                BE.plotIds()
+            elif(options.mode == 'flyover'):
                 BE.plotFlyOver()
-            elif(options.profiles):
+            elif(options.mode == 'profile'):
                 BE.plotBinProfiles()
-            else:
+            elif(options.mode == 'compare'):
                 BE.plotSideBySide(coreCut=options.cutoff)
+            else:
+                print "**Error: unknown mode:",options.mode
             
         elif(options.subparser_name == 'print'):
             BM = binUtils.BinManager(dbFileName=options.dbname)

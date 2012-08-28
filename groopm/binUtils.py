@@ -449,9 +449,13 @@ class BinManager:
         
     def condenseWrapper(self,
                       manual=False,          # do we need to ask permission every time?
-                      save=False
+                      save=False,
+                      plotter=False
                       ):
         """Iterative wrapper for the condense function"""
+        if(plotter):
+            self.plotterCondenseBins()
+            return
         if(manual):
             self.printMergeInstructions()
         print "    Calculating preliminary stats"
@@ -459,7 +463,7 @@ class BinManager:
         total_num_bins_condensed = 0
         num_bins_condensed = 0
         while True: # do while loop anyone?
-            (num_bins_condensed,continue_merging) = self.condenseBins(manual=manual,     
+            (num_bins_condensed,continue_merging) = self.autoCondenseBins(manual=manual,     
                                                                       save=save,
                                                                       medianVariance=medianSs
                                                                       )
@@ -471,13 +475,30 @@ class BinManager:
                 break
         print "    ",total_num_bins_condensed,"bins condensed.",len(self.bins),"bins remain"
                         
-    def condenseBins(self, 
+    def plotterCondenseBins(self):
+        """combine similar bins using 3d plots"""
+        self.printCondensePlotterInstructions()
+        self.plotBinIds()
+        continue_merge = True
+        while(continue_merge):
+            user_option = self.promptOnPlotterCondense()
+            if(user_option == 'R'):
+                self.plotBinIds()
+            elif(user_option == 'M'):
+                merge_bids = self.getPlotterMergeIds()
+                if(not len(merge_bids) == 0):
+                    self.merge(merge_bids, auto=False, manual=True, newBid=False, saveBins=True, verbose=False, printInstructions=False)
+            else:
+                return
+        return
+                    
+    def autoCondenseBins(self, 
                       verbose=True,
                       manual=False,          # do we need to ask permission every merge?
                       save=False,            # should we save the merges as we go?
                       medianVariance=-1
                       ):
-        """combine similar bins"""
+        """combine similar bins using super auto algorithm"""
         any_merged = False
         merged = {}       # who is getting merged by who?
         merged_order = [] # and in what order to merge!
@@ -764,30 +785,87 @@ class BinManager:
 #------------------------------------------------------------------------------
 # UI 
     
+    def printCondensePlotterInstructions(self):
+        raw_input( "****************************************************************\n"
+                   " CONDENSING INSTRUCTIONS - PLEASE READ CAREFULLY\n"+
+                   "****************************************************************\n"
+                   " You have chosen to refine in plotter mode. Congratulations!\n"
+                   " You will be shown a 3d plot of all the bins, coloured by kmer\n"
+                   " profile. Bin Ids in close proximity and similar colour may need\n"
+                   " to be merged. Follow the instructions to merge these bins\n"
+                   " Good Luck!\n"
+                   " Press any key to produce plots...")
+        print "****************************************************************"        
+    
     def printMergeInstructions(self):
-        raw_input( "****************************************************************\n" +
-                   " MERGING INSTRUCTIONS - PLEASE READ CAREFULLY\n"+
-                   "****************************************************************\n" +
+        raw_input( "****************************************************************\n"
+                   " MERGING INSTRUCTIONS - PLEASE READ CAREFULLY\n"
+                   "****************************************************************\n"
                    " The computer cannot always be trusted to perform bin mergers\n"
                    " automatically, so during merging you may be shown a 3D plot\n"
-                   " which should help YOU determine whether or not the bins should\n" +
-                   " be merged. Look carefully at each plot and then close the plot\n" +
-                   " to continue with the merging operation.\n" +
-                   " The image on the far right shows the bins after merging\n" +
+                   " which should help YOU determine whether or not the bins should\n"
+                   " be merged. Look carefully at each plot and then close the plot\n"
+                   " to continue with the merging operation.\n"
+                   " The image on the far right shows the bins after merging\n"
                    " Press any key to produce plots...")
         print "****************************************************************"        
 
     def printSplitInstructions(self):
-        raw_input( "****************************************************************\n" +
-                   " SPLITTING INSTRUCTIONS - PLEASE READ CAREFULLY\n"+
-                   "****************************************************************\n" +
+        raw_input( "****************************************************************\n"
+                   " SPLITTING INSTRUCTIONS - PLEASE READ CAREFULLY\n"
+                   "****************************************************************\n"
                    " The computer cannot always be trusted to perform bin splits\n"
                    " automatically, so during splitting you may be shown a 3D plot\n"
-                   " which should help YOU determine whether or not the bin should\n" +
-                   " be split. Look carefully at each plot and then close the plot\n" +
-                   " to continue with the splitting operation.\n\n" +
+                   " which should help YOU determine whether or not the bin should\n"
+                   " be split. Look carefully at each plot and then close the plot\n"
+                   " to continue with the splitting operation.\n\n"
                    " Press any key to produce plots...")
         print "****************************************************************"        
+
+    def promptOnPlotterCondense(self, minimal=False):
+        """Find out what the user wishes to do next when refining bins"""
+        input_not_ok = True
+        valid_responses = ['R','M','Q']
+        vrs = ",".join([str.lower(str(x)) for x in valid_responses])
+        while(input_not_ok):
+            if(minimal):
+                option = raw_input(" What next? ("+vrs+") : ")
+            else:
+                option = raw_input(" You have been shown a 3D plot of the bins\n" \
+                                   " How do you want to continue?\n" \
+                                   " r = replot, m = merge, q = quit\n" \
+                                   " What next? ("+vrs+") : ")
+            if(option.upper() in valid_responses):
+                return option.upper()
+            else:
+                print "Error, unrecognised choice '"+option+"'"
+
+    def getPlotterMergeIds(self):
+        """Prompt the user for ids to be merged and check that it's all good"""
+        input_not_ok = True
+        ret_bids = []
+        while(input_not_ok):
+            ret_bids = []
+            option = raw_input("Please enter 'space' separated bin Ids or 'q' to quit: ")
+            if(option.upper() == 'Q'):
+                return []
+            bids = option.split(" ")
+            for bid in bids:
+                try:
+                    # check that it's an int
+                    i_bid = int(bid)
+                    # check that it's in the bins list
+                    if(i_bid not in self.bins):
+                        print "**Error: bin",bid,"not found"
+                        input_not_ok = True
+                        break
+                    input_not_ok = False
+                    ret_bids.append(i_bid)
+                except ValueError:
+                    print "**Error: invalid value:", bid
+                    input_not_ok = True
+                    break
+        return ret_bids
 
     def promptOnMerge(self, bids=[], minimal=False):
         """Check that the user is ok with this merge"""
@@ -1059,6 +1137,33 @@ class BinManager:
         plt.close(fig)
         del fig
 
+    def plotBinIds(self):
+        """Render 3d image of core ids"""
+        (bin_centroid_points, bin_centroid_colours) = self.findCoreCentres()
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        outer_index = 0
+        for bid in self.bins.keys():
+            ax.text(bin_centroid_points[outer_index,0], 
+                    bin_centroid_points[outer_index,1], 
+                    bin_centroid_points[outer_index,2], 
+                    str(bid), 
+                    color=bin_centroid_colours[outer_index]
+                    )
+            outer_index += 1
+        
+        ax.set_xlim3d(0, 1000)
+        ax.set_ylim3d(0, 1000)
+        ax.set_zlim3d(0, 1000)
+        try:
+            plt.show()
+            plt.close(fig)
+        except:
+            print "Error showing image", sys.exc_info()[0]
+            raise
+        del fig
+
+
 ###############################################################################
 ###############################################################################
 ###############################################################################
@@ -1139,6 +1244,14 @@ class BinExplorer:
         self.BM.analyseBinKVariance()
         self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colours)
 
+    def plotIds(self):
+        """Make a 3d plot of the bins but use IDs instead of points
+        
+        This function will help users know which bins to merge
+        """
+        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.BM.plotBinIds()
+        
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
 
