@@ -325,7 +325,7 @@ class GMDataManager:
 
     def nukeBins(self, dbFileName):
         """Reset all bin information, completely"""
-        print "\tClearing all old bin information from",dbFileName
+        print "    Clearing all old bin information from",dbFileName
         contig_names = {}
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
@@ -969,26 +969,26 @@ class ProfileManager:
             self.numStoits = self.getNumStoits()
             self.condition = condition
             if(verbose):
-                print "\tLoading indicies (", condition,")"
+                print "    Loading indicies (", condition,")"
             self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName, condition=condition)
             self.numContigs = len(self.indicies)
             
             if(not silent):
-                print "\tWorking with:",self.numContigs,"contigs"
+                print "    Working with:",self.numContigs,"contigs"
 
             if(loadCovProfiles):
                 if(verbose):
-                    print "\tLoading coverage profiles"
+                    print "    Loading coverage profiles"
                 self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indicies=self.indicies)
 
             if(loadKmerSigs):
                 if(verbose):
-                    print "\tLoading kmer sigs"
+                    print "    Loading kmer sigs"
                 self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indicies=self.indicies)
 
                 if(makeColours):
                     if(verbose):
-                        print "\tCreating colour profiles"
+                        print "    Creating colour profiles"
                     colourProfile = self.makeColourProfile()
                     # use HSV to RGB to generate colours
                     S = 1       # SAT and VAL remain fixed at 1. Reduce to make
@@ -999,17 +999,17 @@ class ProfileManager:
 
             if(loadContigNames):
                 if(verbose):
-                    print "\tLoading contig names"
+                    print "    Loading contig names"
                 self.contigNames = self.dataManager.getContigNames(self.dbFileName, indicies=self.indicies)
             
             if(loadContigLengths):
                 if(verbose):
-                    print "\tLoading contig lengths"
+                    print "    Loading contig lengths"
                 self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indicies=self.indicies)
             
             if(loadBins):
                 if(verbose):
-                    print "\tLoading bins"
+                    print "    Loading bins"
                 self.binIds = self.dataManager.getBins(self.dbFileName, indicies=self.indicies)
                 if(len(bids) != 0): # need to make sure we're not restricted in terms of bins
                     tmp_bids = self.getBinStats()
@@ -1026,7 +1026,7 @@ class ProfileManager:
 
             if(loadCores):
                 if(verbose):
-                    print "\tLoading core info"
+                    print "    Loading core info"
                 self.isCore = self.dataManager.getCores(self.dbFileName, indicies=self.indicies)
             
         except:
@@ -1165,7 +1165,7 @@ class ProfileManager:
         tmp_data = np.array([])
 
         if(not silent):
-            print "\tRadial mapping"
+            print "    Radial mapping"
         # first we shift the edge values accordingly and then 
         # map each point onto the surface of a hyper-sphere
         # the vector we wish to move closer to...
@@ -1204,7 +1204,7 @@ class ProfileManager:
             # Project the points onto a 2d plane which is orthonormal
             # to the Z axis
             if(not silent):
-                print "\tDimensionality reduction"
+                print "    Dimensionality reduction"
             PCA.Center(tmp_data,verbose=0)
             p = PCA.PCA(tmp_data)
             components = p.pc()

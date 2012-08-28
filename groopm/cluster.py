@@ -127,7 +127,7 @@ class ClusterEngine:
         print "Load data"
         self.PM.loadData(condition="length >= "+str(coreCut))
         t1 = time.time()
-        print "\tTHIS: [",self.secondsToStr(t1-t0),"]\tTOTAL: [",self.secondsToStr(t1-t0),"]"
+        print "    THIS: [",self.secondsToStr(t1-t0),"]\tTOTAL: [",self.secondsToStr(t1-t0),"]"
         
         # transform the data
         print "Apply data transformations"
@@ -136,28 +136,28 @@ class ClusterEngine:
         if(self.debugPlots):
             self.PM.renderTransCPData()
         t2 = time.time()
-        print "\tTHIS: [",self.secondsToStr(t2-t1),"]\tTOTAL: [",self.secondsToStr(t2-t0),"]"
+        print "    THIS: [",self.secondsToStr(t2-t1),"]\tTOTAL: [",self.secondsToStr(t2-t0),"]"
         
         # cluster and bin!
         print "Create cores"
         cum_contigs_used_good = self.initialiseCores(minVol)
         t3 = time.time()
-        print "\tTHIS: [",self.secondsToStr(t3-t2),"]\tTOTAL: [",self.secondsToStr(t3-t0),"]"
+        print "    THIS: [",self.secondsToStr(t3-t2),"]\tTOTAL: [",self.secondsToStr(t3-t0),"]"
         
         # now we assume that some true bins may be separated across two cores
         # try to condense things a little
-        self.BM.plotBins(FNPrefix="PRE_")
+        #self.BM.plotBins(FNPrefix="PRE_")
         print "Condense cores"
-        self.condenseCores()
+        #self.condenseCores()
         t4 = time.time()
-        print "\tTHIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
-        self.BM.plotBins()
+        print "    THIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
+        #self.BM.plotBins()
 
         # Now save all the stuff to disk!
         print "Saving bins"
         self.BM.saveBins(doCores=True, saveBinStats=True)
         t5 = time.time()
-        print "\tTHIS: [",self.secondsToStr(t5-t4),"]\tTOTAL: [",self.secondsToStr(t5-t0),"]"
+        print "    THIS: [",self.secondsToStr(t5-t4),"]\tTOTAL: [",self.secondsToStr(t5-t0),"]"
 
     def initialiseCores(self, minVol):
         """Process contigs and form CORE bins"""
@@ -168,7 +168,8 @@ class ClusterEngine:
         # First we need to find the centers of each blob.
         # We can make a heat map and look for hot spots
         self.populateImageMaps()
-        print "\t",
+        print "    .... .... .... .... .... .... .... .... .... ...."
+        print "   ",
         new_line_counter = 0
         while(num_below_cutoff < breakout_point):
             #if(self.numBins > 3):
@@ -218,24 +219,24 @@ class ClusterEngine:
                     # append this bins list of mapped rowIndicies to the main list
                     self.updatePostBin(bin)
                     num_below_cutoff = 0
-                    print "+",
+                    print "%04d"%bin_size,
                 else:
                     # we just throw these indicies away for now
                     self.restrictRowIndicies(bin.rowIndicies)
                     self.BM.deleteBins([bin.id], force=True)
                     num_below_cutoff += 1
-                    print "-",
+                    print str(bin_size).rjust(4,'X'),
 
                 # make the printing prettier
                 new_line_counter += 1
                 if(new_line_counter > 9):
                     new_line_counter = 0
-                    print "\n\t",
+                    print "\n   ",
                                         
                 if(self.debugPlots):
                     self.plotHeat("HM_"+str(self.roundNumber)+".png", max=max_blur_value)
         
-        print "\n\t. . . . . . . . . ."
+        print "\n    .... .... .... .... .... .... .... .... .... ...."
         
         # neaten up the bins
         self.removeOutliersWrapper()
@@ -245,11 +246,11 @@ class ClusterEngine:
         
         num_binned = len(self.PM.binnedRowIndicies.keys())
         perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
-        print "\n\t",num_binned,"contigs are distributed across",len(self.BM.bins.keys()),"cores (",perc,"% )"
+        print "\n   ",num_binned,"contigs are distributed across",len(self.BM.bins.keys()),"cores (",perc,"% )"
 
     def removeOutliersWrapper(self, mode="kmer"):
         """remove the outliers for all bins"""
-        print "\tRemoving outliers"
+        print "    Removing outliers"
         for bid in self.BM.bins:
             self.removeOutliers(bid, mode=mode)
 
@@ -278,11 +279,11 @@ class ClusterEngine:
             if(num_cores_condensed == 0):
                 break
             else:
-                print "\tCore condensing round:", condensing_round, "Incorporated", num_cores_condensed, "cores into larger cores"
+                print "    Core condensing round:", condensing_round, "Incorporated", num_cores_condensed, "cores into larger cores"
         
         num_binned = len(self.PM.binnedRowIndicies.keys())
         perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
-        print "\t",num_binned,"contigs are distributed across",len(self.BM.bins.keys()),"cores (",perc,"% )"
+        print "   ",num_binned,"contigs are distributed across",len(self.BM.bins.keys()),"cores (",perc,"% )"
             
         return 
         
