@@ -307,246 +307,6 @@ class BinManager:
             # make these guys here
             self.bins[bid].getKmerColourStats(self.PM.contigColours)
 
-    def condenseWrapper(self,
-                      auto=False,          # do we need to ask permission at all?
-                      save=False
-                      ):
-        """Iterative wrapper for the condense function"""
-        if(not auto):
-            self.printMergeInstructions()
-        total_num_bins_condensed = 0
-        num_bins_condensed = 0
-        while True: # do while loop anyone?
-            (num_bins_condensed,continue_merging) = self.condenseBins(auto=auto,     
-                                                                      save=save
-                                                                      )
-            total_num_bins_condensed += num_bins_condensed 
-            if(num_bins_condensed == 0 or continue_merging == False):
-                break
-        print "    ",total_num_bins_condensed,"bins condensed.",len(self.bins),"bins remain"
-                        
-    def condenseBins(self, 
-                      verbose=True,
-                      auto=False,          # do we need to ask permission at all?
-                      save=False           # should we save the merges as we go?
-                      ):
-        """combine similar bins"""
-        any_merged = False
-        merged = {}       # who is getting merged by who?
-        merged_order = [] # and in what order to merge!
-        num_cores_merged = 0
-
-        # we'd like to know beforehand, whom can merge with who
-        # the following function returns a graph of such relationships 
-        (merge_allowed, scores) = self.calculateAllowableMergers(self.bins.keys())
-        # we should join large cliques first
-        all_cliques = []
-        for clique in nx.find_cliques(merge_allowed):
-            all_cliques.append(clique)
-
-        ordered_cliques = sorted(all_cliques, key=len)[::-1]
-        for clique in ordered_cliques:
-            cl = len(clique)
-            if(cl > 1):
-                for i in range(cl):
-                    subject_bid = clique[i] # subject may already be merged. It's ok, we'll fix it up below
-                    subject_bin = self.getBin(subject_bid)
-                    (subject_cM, subject_cS, subject_cR) = subject_bin.getInnerVariance(self.PM.transformedCP, mode="cov")
-                    (subject_kM, subject_kS, subject_kR) = subject_bin.getInnerVariance(self.PM.kmerSigs)
-                    j = i + 1
-                    while(j < cl):
-                        query_bid = clique[j]
-                        if(query_bid not in merged):                    
-                            query_bin = self.getBin(query_bid)
-                            # always test against the unchanged subject
-                            continue_merge = self.shouldMerge(subject_bin, query_bin, bin1_cM=subject_cM, bin1_kM=subject_kM)
-                            if(continue_merge):
-                                # work out if this merge can be done on the fly or if we need someone to look it over
-                                auto = True
-                                if(scores[self.makeBidKey(subject_bid,query_bid)] < 2):
-                                    auto = False
-                                elif(np.abs(subject_bin.kValMean - query_bin.kValMean) > 0.05):
-                                    auto = False
-                                # change the subject now if it's been merged
-                                if(subject_bid in merged):
-                                    subject_bid = merged[subject_bid]   
-                                if(subject_bid != query_bid):          # make sure there are no loops 
-                                    merged[query_bid] = subject_bid    # subject consumes query, enforce the tree structure
-                                    merged_order.append([subject_bid,query_bid,auto])
-                        j += 1
-        
-        # Merge them in the order they were seen in
-        for merge_job in merged_order:
-            m_bids = [merge_job[0],merge_job[1]]
-            merge_status = self.merge(m_bids, auto=merge_job[2], saveBins=save, verbose=verbose, printInstructions=False)
-            if(merge_status == 2):
-                num_cores_merged += 1
-            elif(merge_status == 0):
-                return (num_cores_merged,False)
-        return (num_cores_merged,True)
-
-    def calculateMergeLimits(self, bid, tolerance):
-        """Calculate allowable upper and lower limits"""
-        bin = self.getBin(bid)
-        return [[bin.covMeans[0] - tolerance * bin.covStdevs[0],
-                 bin.covMeans[1] - tolerance * bin.covStdevs[1],
-                 bin.covMeans[2] - tolerance * bin.covStdevs[2],
-                 bin.kValMean - tolerance * bin.kValStdev],
-                [bin.covMeans[0] + tolerance * bin.covStdevs[0],
-                 bin.covMeans[1] + tolerance * bin.covStdevs[1],
-                 bin.covMeans[2] + tolerance * bin.covStdevs[2],
-                 bin.kValMean + tolerance * bin.kValStdev]]
-
-    def calculateAllowableMergers(self, bids, tolerance=3.0):
-        """Create a list of allowable but not necessary mergers"""
-        merge_allowed = nx.Graph()
-        scores = {}
-        lower_limits = {}
-        upper_limits = {}
-        bins = []
-
-        # make sure everyone has stats!
-        for bid in bids:
-            bin = self.getBin(bid)
-            bins.append(bin)
-            bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
-            bin.getKmerColourStats(self.PM.contigColours)
-            [lower_limits[bid],upper_limits[bid]] = self.calculateMergeLimits(bid, tolerance)
-            merge_allowed.add_node(bid)
-            
-        # sort bins according to kmer profile (kValMean)
-        bins_sorted = sorted(bins)
-        for i in range(len(bids)):
-            subject_bin = bins_sorted[i]
-            #print "SUB",subject_bin.id,lower_limits[subject_bin.id],upper_limits[subject_bin.id]
-            for j in range(i+1,len(bids)):
-                query_bin = bins_sorted[j]
-                #print "QRY",query_bin.id,query_bin.covMeans[0],query_bin.covMeans[1],query_bin.covMeans[2],query_bin.kValMean
-                k_test_1 = (query_bin.kValMean >= lower_limits[subject_bin.id][3] and
-                            query_bin.kValMean <= upper_limits[subject_bin.id][3])
-                k_test_2 = (subject_bin.kValMean >= lower_limits[query_bin.id][3] and
-                            subject_bin.kValMean <= upper_limits[query_bin.id][3])
-                still_allowed = False
-                score = 0
-                if(k_test_1 and k_test_2):
-                    still_allowed = True
-                    score = 2
-                elif(k_test_1 or k_test_2):
-                    still_allowed = True
-                    score= 1
-                if(still_allowed):
-                    #print "t1",
-                    for k in range(3):
-                        still_allowed &= ((query_bin.covMeans[k] >= lower_limits[subject_bin.id][k] and
-                                           query_bin.covMeans[k] <= upper_limits[subject_bin.id][k]) or
-                                          (subject_bin.covMeans[k] >= lower_limits[query_bin.id][k] and
-                                           subject_bin.covMeans[k] <= upper_limits[query_bin.id][k]))
-                        #print still_allowed, 
-                    if(still_allowed):
-                        #print "\nt2"
-                        merge_allowed.add_edge(query_bin.id, subject_bin.id)
-                        scores[self.makeBidKey(query_bin.id, subject_bin.id)] = score
-                    #else:
-                    #    print "\nf2"
-                else:
-                    #print "f1"
-                    break
-
-        return (merge_allowed, scores)
-
-    def makeBidKey(self, bid1, bid2):
-        """Make a unique key from two bids"""
-        if(bid1 < bid2):
-            return bid1 * 1000000 + bid2
-        return bid2 * 1000000 + bid1
-
-    def chimeraWrapper(self, auto=False, save=False, verbose=False, printInstructions=False):
-        """Automatically search for and separate chimeric bins"""
-        b_means = np.array([])
-        b_stdevs = np.array([])
-        names = []
-        nums = []
-        
-        for bid in self.bins:
-            self.bins[bid].getKmerColourStats(self.PM.contigColours)
-            b_means = np.append(b_means, self.bins[bid].kValMean)
-            b_stdevs = np.append(b_stdevs, self.bins[bid].kValStdev)
-            names.append("BIN: %d" % bid)
-            nums.append(np.log10(self.bins[bid].binSize)/10)
-            
-        sorted_stdevs = np.argsort(b_stdevs)
-        sorted_means = np.argsort(b_means)
-        
-        sm = []
-        nm = []
-        cm = []
-        ss = []
-        ns = []
-        cs = []
-        stdev_median = np.median(b_stdevs)
-        for i in range(len(self.bins)):
-            if(b_stdevs[sorted_stdevs[i]] > stdev_median):
-                ss.append(b_stdevs[sorted_stdevs[i]])
-                ns.append(names[sorted_stdevs[i]])
-                cs.append(nums[sorted_stdevs[i]])
-            if(b_stdevs[sorted_means[i]] > stdev_median):
-                sm.append(b_stdevs[sorted_means[i]])
-                nm.append(names[sorted_means[i]])
-                cm.append(nums[sorted_means[i]])
-
-        bs = np.arange(0, len(ns), 1)
-        bm = np.arange(0, len(nm), 1)
-        
-        plt.figure(1)
-        
-        plt.subplot(211)
-        plt.plot(bs, ss, 'b--', bs, cs, 'g--')
-        plt.xticks(bs, ns, rotation=90)
-        plt.grid()
-
-        plt.subplot(212)
-        plt.plot(bm, sm, 'b--', bm, cm, 'g--')
-        plt.xticks(bm, nm, rotation=90)
-        plt.grid()
-        
-        plt.show()
-
-    def shouldMerge(self, bin1, bin2, kDistWobble=1.1, cDistWobble=1.1, bin1_cM=0.0, bin1_kM=0.0):
-        """Should two bins be merged?"""
-        
-        # make the bin that would be if it should be
-        tmp_bin = self.makeNewBin(np.concatenate([bin1.rowIndicies,bin2.rowIndicies]))
-        tmp_bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
-        tmp_bin.calcTotalSize(self.PM.contigLengths)
-        
-        # coverage is cheaper to test first
-        (bin2_cM, bin2_cS, bin2_cR) = bin2.getInnerVariance(self.PM.transformedCP, mode="cov")
-        if(bin1_cM==0):
-            (bin1_cM, bin1_cS, bin1_cR) = bin1.getInnerVariance(self.PM.transformedCP, mode="cov")
-        c_cut = cDistWobble * np.max([bin1_cM, bin2_cM])
-        (tmp_cM, tmp_cS, tmp_cR) = tmp_bin.getInnerVariance(self.PM.transformedCP, mode="cov")
-
-        #print "------------------"
-        #bin1.printBin(self.PM.contigNames, self.PM.contigLengths, outFormat="summary", separator="\t")
-        #bin2.printBin(self.PM.contigNames, self.PM.contigLengths, outFormat="summary", separator="\t")
-
-        if(tmp_cM < c_cut):
-            # coverage passed, test kmerness
-            (bin2_kM, bin2_kS, bin2_kR) = bin2.getInnerVariance(self.PM.kmerSigs)
-            if(bin1_kM==0):
-                (bin1_kM, bin1_kS, bin1_kR) = bin1.getInnerVariance(self.PM.kmerSigs) 
-            k_cut = kDistWobble * np.max([bin1_kM, bin2_kM])
-            (tmp_kM, tmp_kS, tmp_kR) = tmp_bin.getInnerVariance(self.PM.kmerSigs)
-            if(tmp_kM < k_cut):
-                self.deleteBins([tmp_bin.id], force=True)
-                #print bin1.id, bin2.id, bin1_cM, bin2_cM, c_cut, tmp_cM, bin1_kM, bin2_kM, k_cut, tmp_kM, True
-                #print "------------------"
-                return True
-        self.deleteBins([tmp_bin.id], force=True)
-        #print bin1.id, bin2.id, bin1_cM, bin2_cM, c_cut, tmp_cM, False
-        #print "------------------"
-        return False
-
     def split(self, bid, n, mode='kmer', MCut=0.0, auto=False, test=False, saveBins=False, verbose=False, printInstructions=True):
         """split a bin into n parts
         
@@ -687,13 +447,219 @@ class BinManager:
                 parts = int(raw_input("Enter new number of parts:"))
             self.split(bid, parts, mode=mode, auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False)   
         
+    def condenseWrapper(self,
+                      manual=False,          # do we need to ask permission every time?
+                      save=False
+                      ):
+        """Iterative wrapper for the condense function"""
+        if(manual):
+            self.printMergeInstructions()
+        print "    Calculating preliminary stats"
+        (meanMs, stdMs, medianSs, stdSs) = self.measureBinVariance(verbose=False)
+        total_num_bins_condensed = 0
+        num_bins_condensed = 0
+        while True: # do while loop anyone?
+            (num_bins_condensed,continue_merging) = self.condenseBins(manual=manual,     
+                                                                      save=save,
+                                                                      medianVariance=medianSs
+                                                                      )
+            print "********************************************************************************"
+            print "    End of round:",num_bins_condensed,"condensed"
+            print "********************************************************************************"
+            total_num_bins_condensed += num_bins_condensed 
+            if(num_bins_condensed == 0 or continue_merging == False):
+                break
+        print "    ",total_num_bins_condensed,"bins condensed.",len(self.bins),"bins remain"
+                        
+    def condenseBins(self, 
+                      verbose=True,
+                      manual=False,          # do we need to ask permission every merge?
+                      save=False,            # should we save the merges as we go?
+                      medianVariance=-1
+                      ):
+        """combine similar bins"""
+        any_merged = False
+        merged = {}       # who is getting merged by who?
+        merged_order = [] # and in what order to merge!
+        num_cores_merged = 0
 
-    def merge(self, bids, auto=False, newBid=False, saveBins=False, verbose=False, printInstructions=True):
-        """Merge two or more bins"""
+        # we'd like to know beforehand, whom can merge with who
+        # the following function returns a graph of such relationships 
+        (merge_allowed, scores) = self.calculateAllowableMergers(self.bins.keys())
+        # we should join large cliques first
+        all_cliques = []
+        for clique in nx.find_cliques(merge_allowed):
+            all_cliques.append(clique)
+
+        ordered_cliques = sorted(all_cliques, key=len)[::-1]
+        for clique in ordered_cliques:
+            cl = len(clique)
+            if(cl > 1):
+                for i in range(cl):
+                    subject_bid = clique[i] # subject may already be merged. It's ok, we'll fix it up below
+                    subject_bin = self.getBin(subject_bid)
+                    (subject_cM, subject_cS, subject_cR) = subject_bin.getInnerVariance(self.PM.transformedCP, mode="cov")
+                    (subject_kM, subject_kS, subject_kR) = subject_bin.getInnerVariance(self.PM.kmerSigs)
+                    j = i + 1
+                    while(j < cl):
+                        query_bid = clique[j]
+                        if(query_bid not in merged):                    
+                            query_bin = self.getBin(query_bid)
+                            # always test against the unchanged subject
+                            (continue_merge,m_auto) = self.shouldMerge(subject_bin, query_bin, bin1_cM=subject_cM, bin1_kM=subject_kM, medianVariance=medianVariance)
+                            if(continue_merge):
+                                # work out if this merge can be done on the fly or if we need someone to look it over
+                                auto = True
+                                if(manual):
+                                    auto = False
+                                else:
+                                    if(not m_auto):
+                                        if(scores[self.makeBidKey(subject_bid,query_bid)] < 2):
+                                            auto = False
+                                        elif(np.abs(subject_bin.kValMean - query_bin.kValMean) > 0.05):
+                                            auto = False
+                                
+                                # change the subject now if it's been merged
+                                if(subject_bid in merged):
+                                    subject_bid = merged[subject_bid]   
+                                if(subject_bid != query_bid):          # make sure there are no loops 
+                                    merged[query_bid] = subject_bid    # subject consumes query, enforce the tree structure
+                                    merged_order.append([subject_bid,query_bid,auto])
+                        j += 1
+        
+        # Merge them in the order they were seen in
+        for merge_job in merged_order:
+            m_bids = [merge_job[0],merge_job[1]]
+            merge_status = self.merge(m_bids, auto=merge_job[2], manual=manual, saveBins=save, verbose=verbose, printInstructions=False)
+            if(merge_status == 2):
+                num_cores_merged += 1
+            elif(merge_status == 0):
+                return (num_cores_merged,False)
+        return (num_cores_merged,True)
+
+    def calculateMergeLimits(self, bid, tolerance):
+        """Calculate allowable upper and lower limits"""
+        bin = self.getBin(bid)
+        return [[bin.covMeans[0] - tolerance * bin.covStdevs[0],
+                 bin.covMeans[1] - tolerance * bin.covStdevs[1],
+                 bin.covMeans[2] - tolerance * bin.covStdevs[2],
+                 bin.kValMean - tolerance * bin.kValStdev],
+                [bin.covMeans[0] + tolerance * bin.covStdevs[0],
+                 bin.covMeans[1] + tolerance * bin.covStdevs[1],
+                 bin.covMeans[2] + tolerance * bin.covStdevs[2],
+                 bin.kValMean + tolerance * bin.kValStdev]]
+
+    def calculateAllowableMergers(self, bids, tolerance=3.0):
+        """Create a list of allowable but not necessary mergers"""
+        merge_allowed = nx.Graph()
+        scores = {}
+        lower_limits = {}
+        upper_limits = {}
+        bins = []
+
+        # make sure everyone has stats!
+        for bid in bids:
+            bin = self.getBin(bid)
+            bins.append(bin)
+            bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
+            bin.getKmerColourStats(self.PM.contigColours)
+            [lower_limits[bid],upper_limits[bid]] = self.calculateMergeLimits(bid, tolerance)
+            merge_allowed.add_node(bid)
+            
+        # sort bins according to kmer profile (kValMean)
+        bins_sorted = sorted(bins)
+        for i in range(len(bids)):
+            subject_bin = bins_sorted[i]
+            #print "SUB",subject_bin.id,lower_limits[subject_bin.id],upper_limits[subject_bin.id]
+            for j in range(i+1,len(bids)):
+                query_bin = bins_sorted[j]
+                #print "QRY",query_bin.id,query_bin.covMeans[0],query_bin.covMeans[1],query_bin.covMeans[2],query_bin.kValMean
+                k_test_1 = (query_bin.kValMean >= lower_limits[subject_bin.id][3] and
+                            query_bin.kValMean <= upper_limits[subject_bin.id][3])
+                k_test_2 = (subject_bin.kValMean >= lower_limits[query_bin.id][3] and
+                            subject_bin.kValMean <= upper_limits[query_bin.id][3])
+                still_allowed = False
+                score = 0
+                if(k_test_1 and k_test_2):
+                    still_allowed = True
+                    score = 2
+                elif(k_test_1 or k_test_2):
+                    still_allowed = True
+                    score= 1
+                if(still_allowed):
+                    #print "t1",
+                    for k in range(3):
+                        still_allowed &= ((query_bin.covMeans[k] >= lower_limits[subject_bin.id][k] and
+                                           query_bin.covMeans[k] <= upper_limits[subject_bin.id][k]) or
+                                          (subject_bin.covMeans[k] >= lower_limits[query_bin.id][k] and
+                                           subject_bin.covMeans[k] <= upper_limits[query_bin.id][k]))
+                        #print still_allowed, 
+                    if(still_allowed):
+                        #print "\nt2"
+                        merge_allowed.add_edge(query_bin.id, subject_bin.id)
+                        scores[self.makeBidKey(query_bin.id, subject_bin.id)] = score
+                    #else:
+                    #    print "\nf2"
+                else:
+                    #print "f1"
+                    break
+
+        return (merge_allowed, scores)
+
+    def shouldMerge(self, bin1, bin2, kDistWobble=1.1, cDistWobble=1.1, bin1_cM=0.0, bin1_kM=0.0, medianVariance=-1):
+        """Should two bins be merged?"""
+        
+        # make the bin that would be if it should be
+        tmp_bin = self.makeNewBin(np.concatenate([bin1.rowIndicies,bin2.rowIndicies]))
+        tmp_bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
+        tmp_bin.calcTotalSize(self.PM.contigLengths)
+        
+        # coverage is cheaper to test first
+        (bin2_cM, bin2_cS, bin2_cR) = bin2.getInnerVariance(self.PM.transformedCP, mode="cov")
+        if(bin1_cM==0):
+            (bin1_cM, bin1_cS, bin1_cR) = bin1.getInnerVariance(self.PM.transformedCP, mode="cov")
+        c_cut = cDistWobble * np.max([bin1_cM, bin2_cM])
+        (tmp_cM, tmp_cS, tmp_cR) = tmp_bin.getInnerVariance(self.PM.transformedCP, mode="cov")
+
+        #print "------------------"
+        #bin1.printBin(self.PM.contigNames, self.PM.contigLengths, outFormat="summary", separator="\t")
+        #bin2.printBin(self.PM.contigNames, self.PM.contigLengths, outFormat="summary", separator="\t")
+
+        if(tmp_cM < c_cut):
+            # coverage passed, test kmerness
+            (bin2_kM, bin2_kS, bin2_kR) = bin2.getInnerVariance(self.PM.kmerSigs)
+            if(bin1_kM==0):
+                (bin1_kM, bin1_kS, bin1_kR) = bin1.getInnerVariance(self.PM.kmerSigs) 
+            k_cut = kDistWobble * np.max([bin1_kM, bin2_kM])
+            (tmp_kM, tmp_kS, tmp_kR) = tmp_bin.getInnerVariance(self.PM.kmerSigs)
+            if(tmp_kM < k_cut):
+                self.deleteBins([tmp_bin.id], force=True)
+                if(medianVariance != -1):        # check whether the variance of the new bin is less than the median 
+                    if(tmp_kM < medianVariance): # varience observed across all bins
+                        return (True,True)
+                    else:
+                        return (True, False)
+                else:
+                    #print bin1.id, bin2.id, bin1_cM, bin2_cM, c_cut, tmp_cM, bin1_kM, bin2_kM, k_cut, tmp_kM, True
+                    #print "------------------"
+                    return True
+        self.deleteBins([tmp_bin.id], force=True)
+        #print bin1.id, bin2.id, bin1_cM, bin2_cM, c_cut, tmp_cM, False
+        #print "------------------"
+        return False
+
+    def merge(self, bids, auto=False, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=True):
+        """Merge two or more bins
+        
+        It's a bit strange to have both manual and auto params
+        NOTE: manual ALWAYS overrides auto. In the condensing code, auto is
+        set programmaticaly, manual is always set by the user. So we listen
+        to manual first
+        """
         parent_bin = None
 
         bin_stats = {}
-        if(printInstructions):
+        if(printInstructions and not auto):
             self.printMergeInstructions()
 
         if(newBid):
@@ -714,7 +680,7 @@ class BinManager:
         for i in range(1,len(bids)):
             continue_merge = False
             dead_bin = self.getBin(bids[i])
-            if(auto):
+            if(auto and not manual):
                 ret_val = 2
                 continue_merge = True
             else:
@@ -746,6 +712,12 @@ class BinManager:
             self.saveBins(doCores=False, saveBinStats=False)
             
         return ret_val
+
+    def makeBidKey(self, bid1, bid2):
+        """Make a unique key from two bids"""
+        if(bid1 < bid2):
+            return bid1 * 1000000 + bid2
+        return bid2 * 1000000 + bid1
 
     def getBin(self, bid):
         """get a bin or raise an error"""
@@ -910,7 +882,7 @@ class BinManager:
         
         # find the mean and stdev 
         if(not makeKillList):
-            return (np.mean(np.array(Ms.values)), np.std(np.array(Ms.values)))
+            return (np.mean(np.array(Ms.values())), np.std(np.array(Ms.values())), np.median(np.array(Ss.values())), np.std(np.array(Ss.values())))
         
         else:
             cutoff = np.mean(np.array(Ms.values())) + tolerance * np.std(np.array(Ms.values()))  

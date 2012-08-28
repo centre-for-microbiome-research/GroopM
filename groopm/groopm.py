@@ -130,16 +130,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             BM = binUtils.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
-            BM.condenseWrapper(save=True,auto=options.auto)
-
-        elif(options.subparser_name == 'separate'):
-            # make bin cores
-            print "****************************************************************"
-            print " [[GroopM]] Running in core separating mode..."
-            print "****************************************************************"
-            BM = binUtils.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True, silent=False)
-            BM.chimeraWrapper(save=True,auto=options.auto)
+            BM.condenseWrapper(save=True,manual=options.manual)
 
         elif(options.subparser_name == 'merge'):
             # make bin cores
