@@ -1163,6 +1163,19 @@ class BinManager:
             raise
         del fig
 
+    def plotBinPoints(self):
+        """Render the image for validating cores"""
+        (bin_centroid_points, bin_centroid_colours) = self.findCoreCentres()
+        fig = plt.figure()
+        ax2 = fig.add_subplot(111, projection='3d')
+        ax2.scatter(bin_centroid_points[:,0], bin_centroid_points[:,1], bin_centroid_points[:,2], edgecolors=bin_centroid_colours, c=bin_centroid_colours)
+        try:
+            plt.show()
+            plt.close(fig)
+        except:
+            print "Error showing image", sys.exc_info()[0]
+            raise
+        del fig
 
 ###############################################################################
 ###############################################################################
@@ -1234,6 +1247,11 @@ class BinExplorer:
         print "Plotting bin profiles"
         self.BM.plotProfileDistributions()
     
+    def plotPoints(self):
+        """plot points"""
+        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.BM.plotBinPoints()
+    
     def plotSideBySide(self, coreCut):
         """Plot cores side by side with their contigs"""
         self.PM.loadData(condition="length >= "+str(coreCut))
@@ -1251,7 +1269,22 @@ class BinExplorer:
         """
         self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
         self.BM.plotBinIds()
-        
+
+    def plotUnbinned(self, coreCut):
+        """Plot all contigs over a certain length which are unbinned"""
+        self.PM.loadData(condition="((length >= "+str(coreCut)+") & (bid == 0))")
+        self.PM.transformCP()
+        fig = plt.figure()
+        ax1 = fig.add_subplot(111, projection='3d')
+        ax1.scatter(self.PM.transformedCP[:,0], self.PM.transformedCP[:,1], self.PM.transformedCP[:,2], edgecolors=self.PM.contigColours, c=self.PM.contigColours, marker='.')
+        try:
+            plt.show()
+            plt.close(fig)
+        except:
+            print "Error showing image", sys.exc_info()[0]
+            raise
+        del fig
+            
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
 

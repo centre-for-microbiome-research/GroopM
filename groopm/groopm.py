@@ -168,6 +168,8 @@ class GroopMOptionsParser():
             if options.bids is not None:
                 bids = options.bids
             BE = binUtils.BinExplorer(options.dbname, bids=bids)
+            if(options.mode == 'points'):
+                BE.plotPoints()
             if(options.mode == 'ids'):
                 BE.plotIds()
             elif(options.mode == 'flyover'):
@@ -176,6 +178,8 @@ class GroopMOptionsParser():
                 BE.plotBinProfiles()
             elif(options.mode == 'compare'):
                 BE.plotSideBySide(coreCut=options.cutoff)
+            elif(options.mode == 'unbinned'):
+                BE.plotUnbinned(coreCut=options.cutoff)
             else:
                 print "**Error: unknown mode:",options.mode
             

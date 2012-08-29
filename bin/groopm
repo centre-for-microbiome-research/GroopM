@@ -118,7 +118,7 @@ if __name__ == '__main__':
     bin_explorer = subparsers.add_parser('explore', help='explore and validate bins')
     bin_explorer.add_argument('dbname', help="name of the database to open")
     bin_explorer.add_argument('-c', '--cutoff', default=10000, help="cutoff size. Default 10000")
-    bin_explorer.add_argument('-m', '--mode', default="ids", help="Exploration mode [ids, profile, compare, flyover] default: 'condense'")
+    bin_explorer.add_argument('-m', '--mode', default="points", help="Exploration mode [ids, points, profile, compare, flyover, unbinned] default: 'points'")
     bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot. Default: all bins")
 
     # print bin information       
