@@ -37,7 +37,6 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
-
 __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
@@ -46,7 +45,6 @@ __version__ = "0.0.1"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Development"
-
 ###############################################################################
 import sys
 import time
@@ -64,6 +62,8 @@ import scipy.ndimage as ndi
 import PCA
 import mstore
 import binUtils
+import som
+import torusMesh
 
 np.seterr(all='raise')      
 ###############################################################################
@@ -113,6 +113,40 @@ class ClusterEngine:
             self.PM.dataManager.nukeBins(self.PM.dbFileName)
         return True
 
+
+#------------------------------------------------------------------------------
+# BIN EXPANSION USING SOMS
+
+    def expandBins(self):
+        self.BM.loadBins(makeBins=True,silent=False)
+        # we need to z-norm the columns
+        print "Building SOM"
+        som_side = 150
+        som_iterations = 5
+        
+        cov_dim = len(self.PM.transformedCP[0])
+        mer_dim = len(self.PM.kmerSigs[0])
+        num_bins = len(self.BM.bins)
+        
+        c_vecs = self.whiten(self.BM.getCentroidProfiles(mode="cov"))
+        
+        map = som.SOM(som_side,cov_dim)        
+        map.train(c_vecs, iterations=som_iterations, weightImgFileName="jim")
+
+        self.PM.dataManager.createSOMTables(self.PM.dbFileName, som_side, cov_dim, mer_dim, 1, 0)
+        
+        return
+    def whiten(self, profile):
+        """Z normalize and scale profile columns"""
+        v_mean = np.mean(profile, axis=0)
+        v_std = np.std(profile, axis=0)
+        profile = (profile-v_mean)/v_std
+        v_mins = np.min(profile, axis=0)
+        profile -= v_mins
+        v_maxs = np.max(profile, axis=0)
+        profile /= v_maxs
+        return profile
+            
 #------------------------------------------------------------------------------
 # CORE CONSTRUCTION MANAGEMENT
         
