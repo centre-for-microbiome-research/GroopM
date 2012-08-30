@@ -45,7 +45,6 @@ __version__ = "0.0.1"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Development"
-
 ###############################################################################
 import sys
 import os
@@ -125,6 +124,45 @@ class GMDataManager:
     table = 'bin'
     'bid'        : tables.Int32Col(pos=0)
     'numMembers' : tables.Int32Col(pos=1)
+
+    ------------------------
+     SOM
+    group = '/som'
+    ------------------------
+    ** Metadata **
+    table = 'meta'
+    'side'         : tables.Int32Col(pos=1)  # number of rows in the som
+    'covDimension' : tables.Int32Col(pos=2)  # number of stoits
+    'merDimension' : tables.Int32Col(pos=3)  # number of mers being used
+    'numCovSoms'   : tables.Int32Col(pos=4)  # number of coverage soms
+    'numMerSoms'   : tables.Int32Col(pos=5)  # number of kmer soms
+    
+    ** Weights **                            # raw weights formed from training
+    table = 'cov[1,2,3]'                     # 3 SOMS for coverage
+    'col1' : tables.FloatCol(pos=1)
+    'col2' : tables.FloatCol(pos=2)
+    'col3' : tables.FloatCol(pos=3)
+    ...
+    
+    table = 'mer[1,2,3]'                     # 3 SOMS for mers too
+    'col1' : tables.FloatCol(pos=1)
+    'col2' : tables.FloatCol(pos=2)
+    'col3' : tables.FloatCol(pos=3)
+    ...
+    
+    ** Regions **                            # maps points in the map to bin ids
+    table = 'cov[1,2,3]'
+    'col1' : tables.Int32Col(pos=1)
+    'col2' : tables.Int32Col(pos=2)
+    'col3' : tables.Int32Col(pos=3)
+    ...
+    
+    table = 'mer[1,2,3]'
+    'col1' : tables.Int32Col(pos=1)
+    'col2' : tables.Int32Col(pos=2)
+    'col3' : tables.Int32Col(pos=3)
+    ...
+
     """
     def __init__(self): pass
 
@@ -292,6 +330,87 @@ class GMDataManager:
         META_row['merSize'] = merSize
         META_row['numMers'] = numMers
         META_row['numCons'] = numCons
+        META_row.append()
+        table.flush()
+
+    def createSOMTables(self, dbFileName, side, covDim, merDim, numCovSoms, numMerSoms):
+        try:
+            with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+                # first, make sure we've got a som group
+                try:
+                    som_group = h5file.createGroup("/", 'som', 'SOM data')
+                except:
+                    pass
+                
+            with tables.openFile(dbFileName, mode='a', rootUEP="/som") as som_group:
+                # now add the tables we need
+                # first do metadata
+                db_desc = {'side' : tables.Int32Col(pos=1),
+                           'covDimension' : tables.Int32Col(pos=2),
+                           'merDimension' : tables.Int32Col(pos=3),
+                           'numCovSoms' : tables.Int32Col(pos=4),
+                           'numMerSoms' : tables.Int32Col(pos=5)
+                           }
+
+                # clear previous metadata
+                # try remove any older failed attempts
+                try:
+                    som_group.removeNode('/', 'tmp_meta')
+                except:
+                    pass
+                
+                # make a new tmp table
+                try:
+                    META_table = som_group.createTable('/', 'tmp_meta', db_desc, "SOM metadata")
+                    self.initSOMMeta(META_table, side, covDim, merDim, numCovSoms, numMerSoms)
+                except:
+                    print "Error creating META table:", sys.exc_info()[0]
+                    raise
+                # rename as the meta table
+                som_group.renameNode('/', 'meta', 'tmp_meta', overwrite=True)
+                
+                
+                # cov weights       
+                
+        except:
+            print "Error creating SOM database:", dbFileName, sys.exc_info()[0]
+            raise
+    
+#    ** Weights **                            # raw weights formed from training
+#    table = 'cov[1,2,3]'                     # 3 SOMS for coverage
+#    'col1' : tables.FloatCol(pos=1)
+#    'col2' : tables.FloatCol(pos=2)
+#    'col3' : tables.FloatCol(pos=3)
+#    ...
+    
+#    table = 'mer[1,2,3]'                     # 3 SOMS for mers too
+#    'col1' : tables.FloatCol(pos=1)
+#    'col2' : tables.FloatCol(pos=2)
+#    'col3' : tables.FloatCol(pos=3)
+#    ...
+    
+#    ** Regions **                            # maps points in the map to bin ids
+#    table = 'cov[1,2,3]'
+#    'col1' : tables.Int32Col(pos=1)
+#    'col2' : tables.Int32Col(pos=2)
+#    'col3' : tables.Int32Col(pos=3)
+#    ...
+    
+#    table = 'mer[1,2,3]'
+#    'col1' : tables.Int32Col(pos=1)
+#    'col2' : tables.Int32Col(pos=2)
+#    'col3' : tables.Int32Col(pos=3)
+                
+
+        
+    def initSOMMeta(self, table, side, covDim, merDim, numCovSoms, numMerSoms):
+        """Initialise the meta-data table"""
+        META_row = table.row
+        META_row['side'] = side
+        META_row['covDimension'] = covDim
+        META_row['merDimension'] = merDim
+        META_row['numCovSoms'] = numCovSoms
+        META_row['numMerSoms'] = numMerSoms
         META_row.append()
         table.flush()
         
@@ -910,6 +1029,11 @@ def getBamDescriptor(fullPath):
 ###############################################################################
 ###############################################################################
 ###############################################################################
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
 class ProfileManager:
     """Interacts with the groopm DataManager and local data fields
     
@@ -957,6 +1081,9 @@ class ProfileManager:
                  loadBins=False,
                  loadCores=False):
         """Load pre-parsed data"""
+        if(verbose):
+            print "Loading data from:", self.dbFileName
+        
         # check to see if we need to override the condition
         if(len(bids) != 0):
             condition = "((bid == "+str(bids[0])+")"
