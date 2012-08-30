@@ -49,12 +49,244 @@ __status__ = "Development"
 
 ###############################################################################
 import sys
+import numpy as np
+from random import random
+from PIL import Image, ImageDraw
+
+np.seterr(all='raise')
 
 ###############################################################################
 ###############################################################################
 ###############################################################################
 ###############################################################################
-                
+
+class UnknownDistanceType(BaseException):
+    pass
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
+class TorusMesh:
+    """A closed mesh, in the shape of a torus"""
+    
+    def __init__(self, rows, columns=0, dimension=1, randomize=False):
+        """ init
+        
+        Set columns if you'd like something other than a square
+        By default the torus is a scalar field. 
+        Increase dimension if you'd like a vector field 
+        """
+        self.rows = rows
+        if(columns == 0): # make it square
+            self.columns = rows
+        else:
+            self.columns = columns
+        self.dimension = dimension
+        
+        # we use these values in dist many many times
+        self.halfRow = float(self.rows)/2
+        self.halfColumn = float(self.columns)/2
+        
+        # the first two dimensions repesent points on the surface
+        # the remainder represent values
+        if(randomize):
+            self.nodes = np.array([[ [random() for i in range(int(self.dimension))] for c in range(self.columns)] for r in range(self.rows)])
+        else:
+            self.nodes = np.array([[ [0.0 for i in range(int(self.dimension))] for c in range(self.columns)] for r in range(self.rows)])
+
+        # make the colour lookup map
+        (self.colorLookup, self.cVec, self.maxAngle) = self.makeColorScheme()
+
+#------------------------------------------------------------------------------
+# WORKING ON THE DATA
+
+    def reNorm(self):
+        """set all vectors to values between 0 and 1
+        
+        some of the values will want to creep above 1 or below 0
+        this function renormalises the grid
+        """
+        for r in range(self.rows):
+            for c in range(self.columns):
+                for v in range(self.dimension):
+                    if(self.nodes[r,c,v] < 0):
+                        self.nodes[r,c,v] = 0
+                    elif(self.nodes[r,c,v] > 1):
+                        self.nodes[r,c,v] = 1
+
+    def reNorm(self):
+        """set all vectors to values between 0 and 1
+        
+        some of the values will want to creep above 1 or below 0
+        this function renormalises the grid
+        """
+        for r in range(self.rows):
+            for c in range(self.columns):
+                for v in range(self.dimension):
+                    if(self.nodes[r,c,v] < 0):
+                        self.nodes[r,c,v] = 0
+                    elif(self.nodes[r,c,v] > 1):
+                        self.nodes[r,c,v] = 1
+
+    def reNormAndUpdateBMFilter(self):
+        """set all vectors to values between 0 and 1
+        
+        some of the values will want to creep above 1 or below 0
+        this function renormalises the grid
+        ALSO: update the bestmatch filter
+        """
+        for r in range(self.rows):
+            for c in range(self.columns):
+                # renorm!
+                for v in range(self.dimension):
+                    if(self.nodes[r,c,v] < 0):
+                        self.nodes[r,c,v] = 0
+                    elif(self.nodes[r,c,v] > 1):
+                        self.nodes[r,c,v] = 1
+                # BMFilter
+                self.BMFilter[r,c] = self.getAngBetweenNormed(self.nodes[r,c]/np.linalg.norm(self.nodes[r,c]),
+                                                              cVec)
+                        
+#------------------------------------------------------------------------------
+# WORKING WITH THE DATA
+
+    def findNeighborhood(self, pt, dist):
+        """Returns a list of points which live within 'dist' of 'pt'
+        
+        pt = (row,col)
+        """  
+        # first we bound ourselves to the oriented square surrounding 
+        # the point of interest 
+        neighbors = []
+        for row in range(int(pt[0] - dist), int(pt[0] + dist + 1)):
+            for col in range(int(pt[1] - dist), int(pt[1] + dist + 1)):
+                # now we check to see that the euclidean distance is less than
+                # the specified distance.
+                this_dist = np.around(np.sqrt( (pt[0] - row)**2 + (pt[1] - col)**2 ),0)
+                if(this_dist <= dist):
+                    rrow= row
+                    rcol = col
+                    while(rrow >= self.rows):
+                        rrow -= self.rows
+                    while(rrow < 0):
+                        rrow += self.rows
+                    while(rcol >= self.columns):
+                        rcol -= self.columns
+                    while(rcol < 0):
+                        rcol += self.columns
+                    neighbors.append((rrow,rcol,this_dist))
+        return neighbors
+    
+    def dist(self,A,B,type="euc"):
+        """Work out the distance between points A and B
+        
+        Each point is a tuple of the form (R,C)
+        """
+        # we need to work out the deltas, not so straight forward on
+        # the surface of a torus
+        dr = np.abs(A[0] - B[0])
+        dc = np.abs(A[1] - B[1])
+        if(dr > self.halfRow):
+            dr = self.rows - dr
+        if(dc > self.halfColumn):
+            dc = self.columns - dc
+        if(type == "euc"):
+            return np.sqrt(dr**2+dc**2)
+        elif(type == "man"):
+            return (dr + dc)
+        else:
+            raise UnknownDistanceType(type)
+
+    def bestMatch(self, targetVector):
+        """Returns location of the best match to an existing vector
+        
+        uses Euclidean distance
+        """
+        loc = np.argmin((((self.nodes - targetVector)**2).sum(axis=2))**0.5)
+        col = np.mod(loc,self.columns)
+        row = (loc - col)/self.columns
+        col -= 1 
+        return (row, col)
+
+#------------------------------------------------------------------------------
+# COLORING
+    
+    def makeColorScheme(self, dimension=0.0):
+        """Work out how we are going to change a vector into a colour
+        
+        Returns a list of starts and lengths
+        """
+        if(dimension == 0.0):
+            dimension = self.dimension
+         
+        step = np.ceil(dimension/3)
+        start3 = dimension - step
+        start2 = int(start3/2)
+
+        # work out the central vector and corresponding max angle        
+        c_vec = np.ones((step))
+        c_vec = c_vec / np.linalg.norm(c_vec)
+        top_vec = np.zeros_like(c_vec)
+        top_vec[0] = 1
+        max_angle = self.getAngBetweenNormed(top_vec, c_vec)
+
+        return ([0,start2,start3,step], c_vec, max_angle)
+
+    def getColor(self, vector):
+        """return a colour for a given weight vector"""
+        col = [0,0,0]
+        if(self.dimension == 3):
+            return [int(x * 255) for x in vector]
+        for l in range(3):
+            # grab the subset of the vector
+            sub_vec = vector[self.colorLookup[l]:(self.colorLookup[l]+self.colorLookup[3]):1]
+            # average and the turn into an rgb value
+            col[l] = int(self.getAngBetweenNormed(sub_vec/np.linalg.norm(sub_vec), self.cVec)/self.maxAngle*255)
+        return col
+
+    def getAngBetweenNormed(self, P1, P2):
+        """Return the angle between two points (in radians)"""
+        # find the existing angle between them theta
+        c = np.dot(P1,P2) 
+        # rounding errors hurt everyone...
+        if(c > 1.0):
+            c = 1.0
+        elif(c < -1.0):
+            c = -1.0
+        return np.arccos(c) # in radians
+
+#------------------------------------------------------------------------------
+# IO and IMAGE RENDERING 
+
+    def __str__(self):
+        """string method"""
+        ret_array = []
+        for r in range(self.rows):
+            for c in range(self.columns):
+                ret_array.append("[ ")
+                for v in range(self.dimension):
+                    ret_array.append(str(self.nodes[r,c,v])+" ")
+                ret_array.append("],")
+            ret_array.append("\n")
+        return "".join(ret_array)
+
+    def renderSurface(self, fileName):
+        """make an image of the weights in the som"""
+        try:
+            img = Image.new("RGB", (self.columns, self.rows))
+            for r in range(self.rows):
+                # build a color value for a vector value
+                for c in range(self.columns):
+                    col = self.getColor(self.nodes[r,c])
+                    img.putpixel((c,r), (col[0], col[1], col[2]))
+            img = img.resize((self.columns*10, self.rows*10),Image.NEAREST)
+            img.save(fileName)
+        except:
+            print sys.exc_info()[0]
+            raise
+        
 ###############################################################################
 ###############################################################################
 ###############################################################################
