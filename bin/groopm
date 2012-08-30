@@ -52,12 +52,14 @@ __status__ = "Development"
 import argparse
 import sys
 from groopm import groopm
+from groopm import torusMesh
 
 ###############################################################################
 ###############################################################################
 ###############################################################################
 ###############################################################################
 if __name__ == '__main__':
+
     # intialise the options parser
     parser = argparse.ArgumentParser(description='[[GroopM]] - Metagenomic binning tools')
     subparsers = parser.add_subparsers(help="--", dest='subparser_name')
