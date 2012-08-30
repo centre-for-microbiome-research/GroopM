@@ -294,6 +294,25 @@ class BinManager:
 #------------------------------------------------------------------------------
 # BIN UTILITIES 
 
+    def getCentroidProfiles(self, mode="mer"):
+        """Return an array containing the centroid stats for each bin"""
+        if(mode == "mer"):
+            ret_vecs = np.zeros((len(self.bins), len(self.PM.kmerSigs[0])))
+            outer_index = 0
+            for bid in self.bins:
+                ret_vecs[outer_index] = self.bins[bid].merMeans
+                outer_index += 1
+            return ret_vecs
+        elif(mode == "cov"):
+            ret_vecs = np.zeros((len(self.bins), len(self.PM.transformedCP[0])))
+            outer_index = 0
+            for bid in self.bins:
+                ret_vecs[outer_index] = self.bins[bid].covMeans
+                outer_index += 1
+            return ret_vecs
+        else:
+            raise ModeNotAppropriateException("Mode",mode,"unknown")            
+
     def removeChimeras(self):
         """identify and remove chimeric bins"""
         (kill_list, M_cut) = self.measureBinVariance(makeKillList=True, verbose=True)
@@ -1194,8 +1213,8 @@ class BinExplorer:
 
     def plotFlyOver(self, fps=10.0, totalTime=120.0):
         """Plot a flyover of the data with bins being removed"""
-        self.BM.loadBins(makeBins=True,silent=True,bids=self.bids)
-        all_bids = self.BM.bins.keys()
+        self.loadBins(makeBins=True,silent=True,bids=self.bids)
+        all_bids = self.bins.keys()
 
         # control image form and output
         current_azim = 45.0
@@ -1218,7 +1237,7 @@ class BinExplorer:
         while(current_frame < total_frames):
             print "Frame",int(current_frame)
             file_name = "%04d" % current_frame +".jpg"
-            self.BM.PM.renderTransCPData(fileName=file_name,
+            self.PM.renderTransCPData(fileName=file_name,
                                          elev=current_elev,
                                          azim=current_azim,
                                          primaryWidth=6,
@@ -1233,7 +1252,7 @@ class BinExplorer:
             bid_remove_counter += 1.0
             if(bid_remove_counter >= (bid_remove_rate*bid_remove_indexer)):
                 # time to remove a bin!
-                self.BM.removeBinAndIndicies(current_bid)
+                self.removeBinAndIndicies(current_bid)
                 bid_remove_indexer+=1
                 current_bid_index += 1
                 if(current_bid_index < len(all_bids)):
@@ -1243,23 +1262,23 @@ class BinExplorer:
 
     def plotBinProfiles(self):
         """Plot the distributions of kmer and coverage signatures"""
-        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.loadBins(makeBins=True,silent=False,bids=self.bids)
         print "Plotting bin profiles"
-        self.BM.plotProfileDistributions()
+        self.plotProfileDistributions()
     
     def plotPoints(self):
         """plot points"""
-        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
-        self.BM.plotBinPoints()
+        self.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.plotBinPoints()
     
     def plotSideBySide(self, coreCut):
         """Plot cores side by side with their contigs"""
         self.PM.loadData(condition="length >= "+str(coreCut))
         self.PM.transformCP()
-        self.BM.loadBins(makeBins=True,bids=self.bids)
+        self.loadBins(makeBins=True,bids=self.bids)
         print "Creating side by side plots"
-        (bin_centroid_points, bin_centroid_colours) = self.BM.findCoreCentres()
-        self.BM.analyseBinKVariance()
+        (bin_centroid_points, bin_centroid_colours) = self.findCoreCentres()
+        self.analyseBinKVariance()
         self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colours)
 
     def plotIds(self):
@@ -1267,8 +1286,8 @@ class BinExplorer:
         
         This function will help users know which bins to merge
         """
-        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
-        self.BM.plotBinIds()
+        self.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.plotBinIds()
 
     def plotUnbinned(self, coreCut):
         """Plot all contigs over a certain length which are unbinned"""
