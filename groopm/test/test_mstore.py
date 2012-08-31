@@ -44,11 +44,13 @@ class MyTests(TestCase):
     def test_writing(self):
         """Test methods for writing to a DB"""
         this_dir = getcwd()
-        bam_files = path.join(this_dir,'data','test1.bam')+","+path.join(this_dir,'data','test2.bam')+","+path.join(this_dir,'data','test3.bam')
+        bam_files = [path.join(this_dir,'data','test1.bam'),
+                     path.join(this_dir,'data','test2.bam'),
+                     path.join(this_dir,'data','test3.bam')
+                     ]
         reference = path.join(this_dir,'data','test.fa')
-        secprofile = path.join(this_dir,'data','test.values')
         db_file_name = path.join(this_dir,'data','test.h5')
-        self.assertEqual(self.dataManager.createDB(bam_files,reference,secprofile,db_file_name,dumpAll=False,force=True), True, "Test failed loading data")
+        self.assertEqual(self.dataManager.createDB(bam_files,reference,db_file_name,dumpAll=False,force=True), True, "Test failed loading data")
     
     def test_reading(self):
         """Test methods for reading from a stored DB"""
@@ -57,7 +59,6 @@ class MyTests(TestCase):
         
         # this is what the data should look like
         true_cov = np.array([[ 0.10017046,  0.0722952,   0.00030081],[ 0.03642941,  0.03653902,  0.0366121 ],[ 0.01494815,  0.01494815,  0.00845416]])
-        true_aux = np.array([ 0.0, 1.0, 0.68699317])
         true_bins = np.array([0,0,0])
         true_contig_names = np.array(['Contig_1_Cov_98.26','Contig_2_Cov_38.45','Contig_3_Cov_1195.29'])
         true_contig_lengths = np.array([9973,27368,66831])
@@ -134,7 +135,6 @@ class MyTests(TestCase):
         
         # get the data
         cov_profiles = self.dataManager.getCoverageProfiles(db_file_name)
-        aux_profiles = self.dataManager.getAuxProfiles(db_file_name)
         bins = self.dataManager.getBins(db_file_name)
         contig_names = self.dataManager.getContigNames(db_file_name)
         contig_lengths = self.dataManager.getContigLengths(db_file_name)
@@ -144,7 +144,6 @@ class MyTests(TestCase):
         print np.around(true_cov.ravel(), decimals=3)
         print cov_profiles.ravel()
         self.assertTrue(np.array_equal(np.around(true_cov.ravel(), decimals=3), np.around(cov_profiles.ravel(), decimals=3)))
-        self.assertTrue(np.array_equal(np.around(true_aux, decimals=3), np.around(aux_profiles, decimals=3)))
         self.assertTrue(np.equal(true_bins.all(), bins.all()))
         self.assertTrue(np.equal(true_contig_names, contig_names))
         self.assertTrue(np.equal(true_contig_lengths.all(), contig_lengths.all()))
@@ -154,7 +153,6 @@ class MyTests(TestCase):
         indicies = self.dataManager.getConditionalIndicies(db_file_name)
         
         self.assertTrue(np.array_equal(np.around(cov_profiles.ravel(), decimals=3), np.around(self.dataManager.getCoverageProfiles(db_file_name, indicies=indicies).ravel(), decimals=3)), "Discrepancy comparing cov profile retrieval method")
-        self.assertTrue(np.array_equal(np.around(aux_profiles, decimals=3), np.around(self.dataManager.getAuxProfiles(db_file_name, indicies=indicies), decimals=3)), "Discrepancy comparing aux profile retrieval method")
         self.assertTrue(np.equal(bins.all(), self.dataManager.getBins(db_file_name, indicies=indicies).all()), "Discrepancy comparing bins retrieval method")
         self.assertTrue(np.equal(contig_names, self.dataManager.getContigNames(db_file_name, indicies=indicies)), "Discrepancy comparing contig names retrieval method")
         self.assertTrue(np.equal(contig_lengths.all(), self.dataManager.getContigLengths(db_file_name, indicies=indicies).all()), "Discrepancy comparing contig lengths retrieval method")

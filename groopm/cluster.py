@@ -37,6 +37,7 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
+
 __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
@@ -45,7 +46,9 @@ __version__ = "0.0.1"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Development"
+
 ###############################################################################
+
 import sys
 import time
 
@@ -60,22 +63,24 @@ import scipy.ndimage as ndi
 
 # GroopM imports
 import PCA
-import mstore
-import binUtils
+import dataManagers
+import bin
 import som
 import torusMesh
 
 np.seterr(all='raise')      
+
 ###############################################################################
 ###############################################################################
 ###############################################################################
 ###############################################################################
+
 class ClusterEngine:
     """Top level interface for clustering contigs"""
     def __init__(self, dbFileName, plot=False, force=False):
         # worker classes
-        self.PM = mstore.ProfileManager(dbFileName) # store our data
-        self.BM = binUtils.BinManager(pm=self.PM)   # store our bins
+        self.PM = dataManagers.ProfileManager(dbFileName) # store our data
+        self.BM = dataManagers.BinManager(pm=self.PM)   # store our bins
     
         # heat maps
         self.imageMaps = np.zeros((3,self.PM.scaleFactor,self.PM.scaleFactor))
@@ -94,64 +99,42 @@ class ClusterEngine:
         self.imageCounter = 1           # when we print many images
         self.roundNumber = 0            # how many times have we tried to make a bin?
 
-    def promptForOverwrite(self):
+    def promptOnOverwrite(self, minimal=False):
         """Check that the user is ok with possibly overwriting the DB"""
-        if(not self.forceWriting):
-            if(self.PM.isClustered()):
-                option = raw_input(" ****WARNING**** Database: '"+self.PM.dbFileName+"' has already been clustered.\n" \
-                                   " If you continue you *MAY* overwrite existing bins!\n" \
-                                   " Overwrite? (y,n) : ")
-                print "****************************************************************"
-                if(option.upper() != "Y"):
-                    print "Operation cancelled"
-                    return False
-                else:
-                    print "Overwriting database",self.PM.dbFileName
-                    self.PM.dataManager.nukeBins(self.PM.dbFileName)
-        elif(self.PM.isClustered()):
+        if(self.PM.isClustered()):
+            if(not self.forceWriting):
+                input_not_ok = True
+                valid_responses = ['Y','N']
+                vrs = ",".join([str.lower(str(x)) for x in valid_responses])
+                while(input_not_ok):
+                    if(minimal):
+                        option = raw_input(" Overwrite? ("+vrs+") : ")
+                    else: 
+                        option = raw_input(" ****WARNING**** Database: '"+self.PM.dbFileName+"' has already been clustered.\n" \
+                                           " If you continue you *MAY* overwrite existing bins!\n" \
+                                           " Overwrite? ("+vrs+") : ")
+                    if(option.upper() in valid_responses):
+                        print "****************************************************************"
+                        if(option.upper() == "N"):
+                            print "Operation cancelled"
+                            return False
+                        else:
+                            break
+                    else:
+                        print "Error, unrecognised choice '"+option.upper()+"'"
+                        minimal = True
             print "Overwriting database",self.PM.dbFileName
             self.PM.dataManager.nukeBins(self.PM.dbFileName)
         return True
-
 
 #------------------------------------------------------------------------------
 # BIN EXPANSION USING SOMS
 
     def expandBins(self):
-        self.BM.loadBins(makeBins=True,silent=False)
-        # we need to z-norm the columns
-
-        print "Building SOM"
-        som_side = 150
-        som_iterations = 5
-        
-        cov_dim = len(self.PM.transformedCP[0])
-        mer_dim = len(self.PM.kmerSigs[0])
-        num_bins = len(self.BM.bins)
-        
-        c_vecs = self.whiten(self.BM.getCentroidProfiles(mode="cov"))
-        
-        map = som.SOM(som_side,cov_dim)        
-        map.train(c_vecs, iterations=som_iterations, weightImgFileName="jim")
-
-        data = map.getNodes()
-        self.PM.dataManager.updateSOMTables(self.PM.dbFileName, som_side, cov_dim, mer_dim, covWeights={1:data})
-        redata = self.PM.dataManager.getSOMData(self.PM.dbFileName, 1, type="weights", flavour="cov")
-        for i in range(som_side):
-            for j in range(som_side):
-                print data[i,j], redata[i,j] 
+        """Expand bins using SOMs"""
+        SM = dataManagers.SOMManager(self.PM, self.BM)
+        SM.buildSomWeights()
         return
-    
-    def whiten(self, profile):
-        """Z normalize and scale profile columns"""
-        v_mean = np.mean(profile, axis=0)
-        v_std = np.std(profile, axis=0)
-        profile = (profile-v_mean)/v_std
-        v_mins = np.min(profile, axis=0)
-        profile -= v_mins
-        v_maxs = np.max(profile, axis=0)
-        profile /= v_maxs
-        return profile
             
 #------------------------------------------------------------------------------
 # CORE CONSTRUCTION AND MANAGEMENT
@@ -159,12 +142,11 @@ class ClusterEngine:
     def makeCores(self, coreCut, minSize, minVol):
         """Cluster the contigs to make bin cores"""
         # check that the user is OK with nuking stuff...
-        if(not self.promptForOverwrite()):
+        if(not self.promptOnOverwrite()):
             return False
 
         # get some data
         t0 = time.time()
-        print "Load data"
         self.PM.loadData(condition="length >= "+str(coreCut))
         t1 = time.time()
         print "    THIS: [",self.secondsToStr(t1-t0),"]\tTOTAL: [",self.secondsToStr(t1-t0),"]"
@@ -841,6 +823,7 @@ class ClusterEngine:
 ###############################################################################
 ###############################################################################
 ###############################################################################
+
 class CenterFinder:
     """When a plain old mean won't cut it
 

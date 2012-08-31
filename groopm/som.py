@@ -72,6 +72,7 @@ __status__ = "Development"
 ###############################################################################
 
 import sys
+import time
 from random import *
 from math import *
 import sys
@@ -88,11 +89,6 @@ import rainbow
 ###############################################################################
 ###############################################################################
 ###############################################################################
-
-class SOMManager:
-    """Manage multiple SOMs"""
-    def __init__(self):
-        pass
 
 class SOM:
     """A single instance of a self organising map"""
@@ -138,6 +134,7 @@ class SOM:
         """
         
         print "    Start training -->", iterations, "iterations"
+        t0 = time.time()
         
         # over time we'll shrink the radius of nodes which
         # are influenced by the current training node
@@ -171,7 +168,7 @@ class SOM:
             elif(cut_off < vectorSubSet): # else, try to make sure there are at least 1000
                 cut_off = vectorSubSet
             counter = 0
-
+            t1 = time.time()
             for j in index_array:
 
                 counter += 1
@@ -202,8 +199,8 @@ class SOM:
                             inf_lrd = influence*learning_rate_decaying
                             inv_inf_lrd = 1-inf_lrd
                             delta_nodes[rrow,rcol] += inf_lrd*(train_vector[j]-self.TM.nodes[rrow,rcol])
-
-            print "- (done)"
+            t2 = time.time()
+            print "- (done - "+self.secondsToStr(t2-t1)+" secs)"
             # add the deltas to the grid nodes
             self.TM.nodes += delta_nodes
             
@@ -224,6 +221,13 @@ class SOM:
                 filename = weightImgFileName+"_%04d" % i+".png"
                 print "   writing:",filename
                 self.TM.renderSurface(filename)
+
+        tf = time.time()
+        print "    Training complete - Total: "+self.secondsToStr(tf-t0)+" secs"
+
+    def secondsToStr(self, t):
+        rediv = lambda ll,b : list(divmod(ll[0],b)) + ll[1:]
+        return "%d:%02d:%02d.%03d" % tuple(reduce(rediv,[[t*1000,],1000,60,60]))
 
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 

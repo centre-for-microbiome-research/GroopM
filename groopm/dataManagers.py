@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 ###############################################################################
 #                                                                             #
-#    binUtils.py                                                              #
+#    dataManagers.py                                                          #
 #                                                                             #
-#    Bins Bins Bins                                                           #
+#    GroopM - High level data management                                      #
 #                                                                             #
 #    Copyright (C) Michael Imelfort                                           #
 #                                                                             #
@@ -51,9 +51,11 @@ __status__ = "Development"
 
 import sys
 import math
-import colorsys
 import random
+import os
+import string
 
+import colorsys
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d, Axes3D
@@ -64,39 +66,17 @@ import scipy.ndimage as ndi
 import scipy.spatial.distance as ssdist
 from scipy.stats import kstest
 
+import tables
 import networkx as nx
 
-import time
-
 # GroopM imports
+import PCA
 import mstore
+import bin
+import groopmExceptions as ge
+import som
 
-np.seterr(all='raise')
-
-###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
-
-class BinNotFoundException(BaseException):
-    pass
-
-class ModeNotAppropriateException(BaseException):
-    pass
-
-import traceback
-class Tracer:
-    def __init__(self, oldstream):
-        self.oldstream = oldstream
-        self.count = 0
-        self.lastStack = None
-   
-    def write(self, s):
-        newStack = traceback.format_stack()
-        if newStack != self.lastStack:
-            self.oldstream.write("".join(newStack))
-            self.lastStack = newStack
-        self.oldstream.write(s)
+np.seterr(all='raise')     
 
 ###############################################################################
 ###############################################################################
@@ -108,7 +88,7 @@ class BinManager:
     def __init__(self, dbFileName="", pm=None):
         # data storage
         if(dbFileName != ""):
-            self.PM = mstore.ProfileManager(dbFileName)
+            self.PM = ProfileManager(dbFileName)
         elif(pm is not None):
             self.PM = pm
         
@@ -177,7 +157,7 @@ class BinManager:
     def makeBins(self, binMembers):
         """Make bin objects from loaded data"""
         for bid in self.PM.validBinIds.keys():
-            self.bins[bid] = Bin(np.array(binMembers[bid]), self.PM.kmerSigs, bid, self.PM.scaleFactor-1)
+            self.bins[bid] = bin.Bin(np.array(binMembers[bid]), self.PM.kmerSigs, bid, self.PM.scaleFactor-1)
             self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)      
             self.bins[bid].calcTotalSize(self.PM.contigLengths)
 
@@ -314,7 +294,7 @@ class BinManager:
                 outer_index += 1
             return ret_vecs
         else:
-            raise ModeNotAppropriateException("Mode",mode,"unknown")            
+            raise ge.ModeNotAppropriateException("Mode",mode,"unknown")            
 
     def removeChimeras(self):
         """identify and remove chimeric bins"""
@@ -767,7 +747,7 @@ class BinManager:
         if bid in self.bins:
             return self.bins[bid]
         else:
-            raise BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
+            raise ge.BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
             
     def deleteBins(self, bids, force=False, freeBinnedRowIndicies=False, saveBins=False):
         """Purge a bin from our lists"""
@@ -789,7 +769,7 @@ class BinManager:
                 bin_stats[bid] = 0
                 del self.bins[bid]
             else:
-                raise BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
+                raise ge.BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
             
         if(saveBins):
             self.updateBinStats(bin_stats)
@@ -801,7 +781,7 @@ class BinManager:
         if bid is None:
             self.nextFreeBinId +=1
             bid = self.nextFreeBinId
-        self.bins[bid] = Bin(rowIndicies, self.PM.kmerSigs, bid, self.PM.scaleFactor-1)        
+        self.bins[bid] = bin.Bin(rowIndicies, self.PM.kmerSigs, bid, self.PM.scaleFactor-1)        
         return self.bins[bid]
 
 #------------------------------------------------------------------------------
@@ -1203,120 +1183,521 @@ class BinManager:
 ###############################################################################
 ###############################################################################
 ###############################################################################
+class SOMManager:
+    """Manage multiple SOMs"""
+    def __init__(self,
+                 profileManager,
+                 binManager,
+                 numSoms=3,
+                 somSide=150,
+                 somIterations=500
+                 ):
+        self.PM = profileManager
+        self.BM = binManager
+        self.DM = self.PM.dataManager
+        self.numSoms = 3
+        self.somSide = somSide
+        self.somIterations = somIterations
+        self.covSoms = {}
+        self.merSoms = {}
 
-class BinExplorer:
-    """Inspect bins, used for validation"""
-    def __init__(self, dbFileName, bids=[]):
-        self.PM = mstore.ProfileManager(dbFileName)   # based on user specified length
-        self.BM = BinManager(dbFileName=dbFileName)   # bins
-        if bids is None:
-            self.bids = []
-        else:
-            self.bids = bids
-
-    def plotFlyOver(self, fps=10.0, totalTime=120.0):
-        """Plot a flyover of the data with bins being removed"""
-        self.loadBins(makeBins=True,silent=True,bids=self.bids)
-        all_bids = self.bins.keys()
-
-        # control image form and output
-        current_azim = 45.0
-        current_elev = 0.0
-        current_frame = 0.0
-        total_frames = fps * totalTime
-        total_azim_shift = 720.0
-        total_elev_shift = 360.0
-        azim_increment = total_azim_shift / total_frames
-        elev_increment = total_elev_shift / total_frames
-        
-        print "Need",total_frames,"frames:"
-        # we need to know when to remove each bin
-        bid_remove_rate = total_frames / float(len(all_bids))
-        bid_remove_indexer = 1.0
-        bid_remove_counter = 0.0
-        current_bid_index = 0
-        current_bid = all_bids[current_bid_index]
-        
-        while(current_frame < total_frames):
-            print "Frame",int(current_frame)
-            file_name = "%04d" % current_frame +".jpg"
-            self.PM.renderTransCPData(fileName=file_name,
-                                         elev=current_elev,
-                                         azim=current_azim,
-                                         primaryWidth=6,
-                                         dpi=200,
-                                         showAxis=True,
-                                         format='jpeg'
-                                         )
-            current_frame += 1
-            current_azim += azim_increment
-            current_elev += elev_increment
-
-            bid_remove_counter += 1.0
-            if(bid_remove_counter >= (bid_remove_rate*bid_remove_indexer)):
-                # time to remove a bin!
-                self.removeBinAndIndicies(current_bid)
-                bid_remove_indexer+=1
-                current_bid_index += 1
-                if(current_bid_index < len(all_bids)):
-                    current_bid = all_bids[current_bid_index]
+    def buildSomWeights(self, force=False, save=True):
+        """Construct and save the weights matrix""" 
+        if(not force):
+            # first check to see that the
+            ids_in_use = self.DM.getSOMDataInfo(self.PM.dbFileName)
+            soms_done = []
+            for b in ["mer","cov"]:
+                for a in ["weights","regions"]:
+                    soms_done.append(len(ids_in_use[a][b]))
+            if (sum(soms_done) > 0):
+                # something's been done!
+                if(self.promptOnOverwrite() != 'Y'):
+                    print "Operation cancelled"
+                    return False
                 else:
-                    return
-
-    def plotBinProfiles(self):
-        """Plot the distributions of kmer and coverage signatures"""
-        self.loadBins(makeBins=True,silent=False,bids=self.bids)
-        print "Plotting bin profiles"
-        self.plotProfileDistributions()
-    
-    def plotPoints(self):
-        """plot points"""
-        self.loadBins(makeBins=True,silent=False,bids=self.bids)
-        self.plotBinPoints()
-    
-    def plotSideBySide(self, coreCut):
-        """Plot cores side by side with their contigs"""
-        self.PM.loadData(condition="length >= "+str(coreCut))
-        self.PM.transformCP()
-        self.loadBins(makeBins=True,bids=self.bids)
-        print "Creating side by side plots"
-        (bin_centroid_points, bin_centroid_colours) = self.findCoreCentres()
-        self.analyseBinKVariance()
-        self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colours)
-
-    def plotIds(self):
-        """Make a 3d plot of the bins but use IDs instead of points
+                    print "Overwriting SOMS in db:", self.PM.dbFileName
         
-        This function will help users know which bins to merge
+        # now we can start
+        self.BM.loadBins(makeBins=True,silent=False)
+        print "Building SOM(s)"
+        cov_dim = len(self.PM.transformedCP[0])
+        mer_dim = len(self.PM.kmerSigs[0])
+        
+        # build coverage SOMS
+        c_vecs = self.whiten(self.BM.getCentroidProfiles(mode="cov"))
+        for i in range(self.numSoms):
+            map = som.SOM(self.somSide,cov_dim)
+            self.covSoms[i] = map
+            if(i == 0):
+                map.train(c_vecs, iterations=self.somIterations, weightImgFileName="cov")
+            else:
+                map.train(c_vecs, iterations=self.somIterations)
+            self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
+                                                self.somSide,
+                                                cov_dim,
+                                                mer_dim,
+                                                covWeights={i:map.getNodes()})
+
+        # build kmer SOMS
+        k_vecs = self.whiten(self.BM.getCentroidProfiles(mode="mer"))
+        for i in range(self.numSoms):
+            map = som.SOM(self.somSide,mer_dim)
+            self.merSoms[i] = map
+            if(i == 0):
+                map.train(k_vecs, iterations=self.somIterations, weightImgFileName="mer")
+            else:
+                map.train(k_vecs, iterations=self.somIterations)
+            self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
+                                                self.somSide,
+                                                cov_dim,
+                                                mer_dim,
+                                                merWeights={i:map.getNodes()})
+    
+    def promptOnOverwrite(self, minimal=False):
+        """Check that the user is ok with overwriting the db"""
+        input_not_ok = True
+        valid_responses = ['Y','N']
+        vrs = ",".join([str.lower(str(x)) for x in valid_responses])
+        while(input_not_ok):
+            if(minimal):
+                option = raw_input(" Overwrite? ("+vrs+") : ")
+            else: 
+                
+                option = raw_input(" ****WARNING**** SOMS for database: '"+self.PM.dbFileName+"' exist.\n" \
+                                   " If you continue you *WILL* delete any previous matricies!\n" \
+                                   " Overwrite? ("+vrs+") : ")
+            if(option.upper() in valid_responses):
+                print "****************************************************************"
+                return option.upper()
+            else:
+                print "Error, unrecognised choice '"+option.upper()+"'"
+                minimal = True
+
+    def whiten(self, profile):
+        """Z normalize and scale profile columns"""
+        v_mean = np.mean(profile, axis=0)
+        v_std = np.std(profile, axis=0)
+        profile = (profile-v_mean)/v_std
+        v_mins = np.min(profile, axis=0)
+        profile -= v_mins
+        v_maxs = np.max(profile, axis=0)
+        profile /= v_maxs
+        return profile
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+class ProfileManager:
+    """Interacts with the groopm DataManager and local data fields
+    
+    Mostly a wrapper around a group of numpy arrays and a pytables quagmire
+    """
+    def __init__(self, dbFileName, force=False, scaleFactor=1000):
+        # data
+        self.dataManager = mstore.GMDataManager()  # most data is saved to hdf
+        self.dbFileName = dbFileName        # db containing all the data we'd like to use
+        self.condition = ""                 # condition will be supplied at loading time
+        # --> NOTE: ALL of the arrays in this section are in sync
+        # --> each one holds information for an individual contig 
+        self.indicies = np.array([])        # indicies into the data structure based on condition
+        self.covProfiles = np.array([])     # coverage based coordinates
+        self.transformedCP = np.array([])   # the munged data points
+        self.contigNames = np.array([])
+        self.contigLengths = np.array([])
+        self.contigColours = np.array([])
+        self.kmerSigs = np.array([])        # raw kmer signatures
+        self.binIds = np.array([])          # list of bin IDs
+        self.isCore = np.array([])          # True False values
+        # --> end section
+
+        # meta                
+        self.validBinIds = {}               # valid bin ids -> numMembers
+        self.binnedRowIndicies = {}         # dictionary of those indicies which belong to some bin
+        self.restrictedRowIndicies = {}     # dictionary of those indicies which can not be binned yet
+        self.numContigs = 0                 # this depends on the condition given
+        self.numStoits = 0                  # this depends on the data which was parsed
+
+        # misc
+        self.forceWriting = force           # overwrite existng values silently?
+        self.scaleFactor = scaleFactor      # scale every thing in the transformed data to this dimension
+
+    def loadData(self,
+                 condition="",              # condition as set by another function
+                 bids=[],                   # if this is set then only load those contigs with these bin ids
+                 verbose=True,              # many to some output messages
+                 silent=False,              # some to no output messages
+                 loadCovProfiles=True,
+                 loadKmerSigs=True,
+                 makeColours=True,
+                 loadContigNames=True,
+                 loadContigLengths=True,
+                 loadBins=False,
+                 loadCores=False):
+        """Load pre-parsed data"""
+        if(verbose):
+            print "Loading data from:", self.dbFileName
+        
+        # check to see if we need to override the condition
+        if(len(bids) != 0):
+            condition = "((bid == "+str(bids[0])+")"
+            for index in range (1,len(bids)):
+                condition += " | (bid == "+str(bids[index])+")"
+            condition += ")"
+        if(silent):
+            verbose=False
+        try:
+            self.numStoits = self.getNumStoits()
+            self.condition = condition
+            if(verbose):
+                print "    Loading indicies (", condition,")"
+            self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName, condition=condition)
+            self.numContigs = len(self.indicies)
+            
+            if(not silent):
+                print "    Working with:",self.numContigs,"contigs"
+
+            if(loadCovProfiles):
+                if(verbose):
+                    print "    Loading coverage profiles"
+                self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indicies=self.indicies)
+
+            if(loadKmerSigs):
+                if(verbose):
+                    print "    Loading kmer sigs"
+                self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indicies=self.indicies)
+
+                if(makeColours):
+                    if(verbose):
+                        print "    Creating colour profiles"
+                    colourProfile = self.makeColourProfile()
+                    # use HSV to RGB to generate colours
+                    S = 1       # SAT and VAL remain fixed at 1. Reduce to make
+                    V = 1       # Pastels if that's your preference...
+                    for val in colourProfile:
+                        self.contigColours = np.append(self.contigColours, [colorsys.hsv_to_rgb(val, S, V)])
+                    self.contigColours = np.reshape(self.contigColours, (self.numContigs, 3))            
+
+            if(loadContigNames):
+                if(verbose):
+                    print "    Loading contig names"
+                self.contigNames = self.dataManager.getContigNames(self.dbFileName, indicies=self.indicies)
+            
+            if(loadContigLengths):
+                if(verbose):
+                    print "    Loading contig lengths"
+                self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indicies=self.indicies)
+            
+            if(loadBins):
+                if(verbose):
+                    print "    Loading bins"
+                self.binIds = self.dataManager.getBins(self.dbFileName, indicies=self.indicies)
+                if(len(bids) != 0): # need to make sure we're not restricted in terms of bins
+                    tmp_bids = self.getBinStats()
+                    for bid in bids:
+                        self.validBinIds[bid] = tmp_bids[bid]
+                else:
+                    self.validBinIds = self.getBinStats()
+
+                # fix the binned indicies
+                self.binnedRowIndicies = {}
+                for i in range(len(self.indicies)):
+                    if(self.binIds[i] != 0):
+                        self.binnedRowIndicies[i] = True 
+
+            if(loadCores):
+                if(verbose):
+                    print "    Loading core info"
+                self.isCore = self.dataManager.getCores(self.dbFileName, indicies=self.indicies)
+            
+        except:
+            print "Error loading DB:", self.dbFileName, sys.exc_info()[0]
+            raise
+
+    def reduceIndicies(self, deadRowIndicies):
+        """purge indicies from the data structures
+        
+        Be sure that deadRowIndicies are sorted ascending
         """
-        self.loadBins(makeBins=True,silent=False,bids=self.bids)
-        self.plotBinIds()
+        # strip out the other values        
+        self.indicies = np.delete(self.indicies, deadRowIndicies, axis=0)
+        self.covProfiles = np.delete(self.covProfiles, deadRowIndicies, axis=0)
+        self.transformedCP = np.delete(self.transformedCP, deadRowIndicies, axis=0)
+        self.contigNames = np.delete(self.contigNames, deadRowIndicies, axis=0)
+        self.contigLengths = np.delete(self.contigLengths, deadRowIndicies, axis=0)
+        self.contigColours = np.delete(self.contigColours, deadRowIndicies, axis=0)
+        self.kmerSigs = np.delete(self.kmerSigs, deadRowIndicies, axis=0)
+        self.binIds = np.delete(self.binIds, deadRowIndicies, axis=0)
+        self.isCore = np.delete(self.isCore, deadRowIndicies, axis=0)
+        
+#------------------------------------------------------------------------------
+# GET / SET 
+
+    def getNumStoits(self):
+        """return the value of numStoits in the metadata tables"""
+        return self.dataManager.getNumStoits(self.dbFileName)
+            
+    def getMerColNames(self):
+        """return the value of merColNames in the metadata tables"""
+        return self.dataManager.getMerColNames(self.dbFileName)
+            
+    def getMerSize(self):
+        """return the value of merSize in the metadata tables"""
+        return self.dataManager.getMerSize(self.dbFileName)
+
+    def getNumMers(self):
+        """return the value of numMers in the metadata tables"""
+        return self.dataManager.getNumMers(self.dbFileName)
+
+### USE the member vars instead!
+#    def getNumCons(self):
+#        """return the value of numCons in the metadata tables"""
+#        return self.dataManager.getNumCons(self.dbFileName)
+
+    def getNumBins(self):
+        """return the value of numBins in the metadata tables"""
+        return self.dataManager.getNumBins(self.dbFileName)
+        
+    def setNumBins(self, numBins):
+        """set the number of bins"""
+        self.dataManager.setNumBins(self.dbFileName, numBins)
+        
+    def getStoitColNames(self):
+        """return the value of stoitColNames in the metadata tables"""
+        return self.dataManager.getStoitColNames(self.dbFileName)
+    
+    def isClustered(self):
+        """Has the data been clustered already"""
+        return self.dataManager.isClustered(self.dbFileName)
+    
+    def setClustered(self):
+        """Save that the db has been clustered"""
+        self.dataManager.setClustered(self.dbFileName, True)
+    
+    def isComplete(self):
+        """Has the data been *completely* clustered already"""
+        return self.dataManager.isComplete(self.dbFileName)
+    
+    def setComplete(self):
+        """Save that the db has been completely clustered"""
+        self.dataManager.setComplete(self.dbFileName, True)
+
+    def getBinStats(self):
+        """Go through all the "bins" array and make a list of unique bin ids vs number of contigs"""
+        return self.dataManager.getBinStats(self.dbFileName)
+    
+    def saveBinIds(self, updates):
+        """Save our bins into the DB"""
+        self.dataManager.setBins(self.dbFileName, updates)
+    
+    def saveCores(self, updates):
+        """Save our core flags into the DB"""
+        self.dataManager.setCores(self.dbFileName, updates)
+
+    def saveValidBinIds(self, updates):
+        """Store the valid bin Ids and number of members
+                
+        updates is a dictionary which looks like:
+        { tableRow : [bid , numMembers] }
+        """
+        self.dataManager.setBinStats(self.dbFileName, updates)
+        self.setNumBins(len(updates.keys()))
+
+    def updateValidBinIds(self, updates):
+        """Store the valid bin Ids and number of members
+        
+        updates is a dictionary which looks like:
+        { bid : numMembers }
+        if numMembers == 0 then the bid is removed from the table
+        if bid is not in the table yet then it is added
+        otherwise it is updated
+        """
+        # get the current guys
+        existing_bin_stats = self.dataManager.getBinStats(self.dbFileName)
+        num_bins = self.getNumBins()
+        # now update this dict
+        for bid in updates.keys():
+            if bid in existing_bin_stats:
+                if updates[bid] == 0:
+                    # remove this guy
+                    del existing_bin_stats[bid]
+                    num_bins -= 1
+                else:
+                    # update the count
+                    existing_bin_stats[bid] = updates[bid]
+            else:
+                # new guy!
+                existing_bin_stats[bid] = updates[bid]
+                num_bins += 1
+        
+        # finally , save
+        self.saveValidBinIds(existing_bin_stats)
+
+#------------------------------------------------------------------------------
+# DATA TRANSFORMATIONS 
+
+    def transformCP(self, silent=False):
+        """Do the main ransformation on the coverage profile data"""
+        # Update this guy now we know how big he has to be
+        # do it this way because we may apply successive transforms to this
+        # guy and this is a neat way of clearing the data 
+        s = (self.numContigs,3)
+        self.transformedCP = np.zeros(s)
+        tmp_data = np.array([])
+
+        if(not silent):
+            print "    Radial mapping"
+        # first we shift the edge values accordingly and then 
+        # map each point onto the surface of a hyper-sphere
+        # the vector we wish to move closer to...
+        radialVals = np.array([])        
+        ax = np.zeros_like(self.covProfiles[0])
+        ax[0] = 1
+        center_vector = np.ones_like(self.covProfiles[0])
+        las = self.getAngBetween(ax, center_vector)
+        center_vector /= np.linalg.norm(center_vector)
+        for point in self.covProfiles:
+            norm = np.linalg.norm(point)
+            radialVals = np.append(radialVals, norm)
+            point /= np.abs(np.log(norm+1)) # make sure we're always taking a log of something greater than 1
+            tmp_data = np.append(tmp_data, self.rotateVectorAndScale(point, las, center_vector, delta_max=0.25))
+
+        # it's nice to think that we can divide through by the min
+        # but we need to make sure that it's not at 0!
+        min_r = np.amin(radialVals)
+        if(0 == min_r):
+            min_r = 1
+        # reshape this guy
+        tmp_data = np.reshape(tmp_data, (self.numContigs,self.numStoits))
+    
+        # now we use PCA to map the surface points back onto a 
+        # 2 dimensional plane, thus making the data usefuller
+        index = 0
+        if(self.numStoits == 2):
+            if(not silent):
+                print "Skip dimensionality reduction (dim < 3)"
+            for point in self.covProfiles:
+                self.transformedCP[index,0] = tmp_data[index,0]
+                self.transformedCP[index,1] = tmp_data[index,1]
+                self.transformedCP[index,2] = np.log10(radialVals[index]/min_r)
+                index += 1
+        else:    
+            # Project the points onto a 2d plane which is orthonormal
+            # to the Z axis
+            if(not silent):
+                print "    Dimensionality reduction"
+            PCA.Center(tmp_data,verbose=0)
+            p = PCA.PCA(tmp_data)
+            components = p.pc()
+            for point in components:
+                self.transformedCP[index,0] = components[index,0]
+                self.transformedCP[index,1] = components[index,1]
+                if(0 > radialVals[index]):
+                    self.transformedCP[index,2] = 0
+                else:
+                    self.transformedCP[index,2] = np.log10(radialVals[index]/min_r)
+                index += 1
+
+        # finally scale the matrix to make it equal in all dimensions                
+        min = np.amin(self.transformedCP, axis=0)
+        max = np.amax(self.transformedCP, axis=0)
+        max = max - min
+        max = max / (self.scaleFactor-1)
+        for i in range(0,3):
+            self.transformedCP[:,i] = (self.transformedCP[:,i] -  min[i])/max[i]
+
+    def makeColourProfile(self):
+        """Make a colour profile based on ksig information"""
+        ret_array = np.array([0.0]*np.size(self.indicies))
+        working_data = np.array(self.kmerSigs, copy=True) 
+        PCA.Center(working_data,verbose=0)
+        p = PCA.PCA(working_data)
+        components = p.pc()
+        
+        # now make the colour profile based on PC1
+        index = 0
+        for point in components:
+            ret_array[index] = float(components[index,0])
+            index += 1
+        
+        # normalise to fit between 0 and 1
+        ret_array -= np.min(ret_array)
+        ret_array /= np.max(ret_array)
+        if(False):
+            print ret_array
+            plt.figure(1)
+            plt.subplot(111)
+            plt.plot(components[:,0], components[:,1], 'r.')
+            plt.show()
+        return ret_array
+    
+    def rotateVectorAndScale(self, point, las, centerVector, delta_max=0.25):
+        """
+        Move a vector closer to the center of the positive quadrant
+        
+        Find the co-ordinates of its projection
+        onto the surface of a hypersphere with radius R
+        
+        What?...  ...First some definitions:
+       
+        For starters, think in 3 dimensions, then take it out to N.
+        Imagine all points (x,y,z) on the surface of a sphere
+        such that all of x,y,z > 0. ie trapped within the positive
+        quadrant.
+       
+        Consider the line x = y = z which passes through the origin
+        and the point on the surface at the "center" of this quadrant.
+        Call this line the "main mapping axis". Let the unit vector 
+        coincident with this line be called A.
+       
+        Now think of any other vector V also located in the positive
+        quadrant. The goal of this function is to move this vector
+        closer to the MMA. Specifically, if we think about the plane
+        which contains both V and A, we'd like to rotate V within this
+        plane about the origin through phi degrees in the direction of
+        A.
+        
+        Once this has been done, we'd like to project the rotated co-ords 
+        onto the surface of a hypersphere with radius R. This is a simple
+        scaling operation.
+       
+        The idea is that vectors closer to the corners should be pertubed
+        more than those closer to the center.
+        
+        Set delta_max as the max percentage of the existing angle to be removed
+        """
+        theta = self.getAngBetween(point, centerVector)
+        A = delta_max/((las)**2)
+        B = delta_max/las
+        delta = 2*B*theta - A *(theta**2) # the amount to shift
+        V_p = point*(1-delta) + centerVector*delta
+        return V_p/np.linalg.norm(V_p)
+    
+    def rad2deg(self, anglein):
+        return 180*anglein/np.pi
+
+    def getAngBetween(self, P1, P2):
+        """Return the angle between two points (in radians)"""
+        # find the existing angle between them theta
+        c = np.dot(P1,P2)/np.linalg.norm(P1)/np.linalg.norm(P2) 
+        # rounding errors hurt everyone...
+        if(c > 1):
+            c = 1
+        elif(c < -1):
+            c = -1
+        return np.arccos(c) # in radians
+
+#------------------------------------------------------------------------------
+# IO and IMAGE RENDERING 
 
     def plotUnbinned(self, coreCut):
         """Plot all contigs over a certain length which are unbinned"""
-        self.PM.loadData(condition="((length >= "+str(coreCut)+") & (bid == 0))")
-        self.PM.transformCP()
+        self.loadData(condition="((length >= "+str(coreCut)+") & (bid == 0))")
+        self.transformCP()
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
-        ax1.scatter(self.PM.transformedCP[:,0], self.PM.transformedCP[:,1], self.PM.transformedCP[:,2], edgecolors=self.PM.contigColours, c=self.PM.contigColours, marker='.')
-        try:
-            plt.show()
-            plt.close(fig)
-        except:
-            print "Error showing image", sys.exc_info()[0]
-            raise
-        del fig
-            
-#------------------------------------------------------------------------------
-# IO and IMAGE RENDERING 
-
-    def plotCoresVsContigs(self, binCentroidPoints, binCentroidColours):
-        """Render the image for validating cores"""
-        fig = plt.figure()
-        ax1 = fig.add_subplot(121, projection='3d')
-        ax1.scatter(self.PM.transformedCP[:,0], self.PM.transformedCP[:,1], self.PM.transformedCP[:,2], edgecolors=self.PM.contigColours, c=self.PM.contigColours, marker='.')
-        ax2 = fig.add_subplot(122, projection='3d')
-        ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColours, c=binCentroidColours)
+        ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
         try:
             plt.show()
             plt.close(fig)
@@ -1325,431 +1706,121 @@ class BinExplorer:
             raise
         del fig
 
-###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
 
-class Bin:
-    """Class for managing collections of contigs
-    
-    To (perhaps) simplify things think of a "bin" as an row_index into the
-    column names array. The ClusterBlob has a list of bins which it can
-    update etc...
-    """
-    def __init__(self, rowIndicies, kmerSigs, id, upperCov, covtol=2, mertol=2):
-        self.id = id
-        self.rowIndicies = rowIndicies             # all the indicies belonging to this bin
-        self.binSize = self.rowIndicies.shape[0]
-        self.upperCov = upperCov
-        self.totalBP = 0
+    def plotTransViews(self, tag="fordens"):
+        """Plot top, side and front views of the transformed data"""
+        self.renderTransData(tag+"_top.png",azim = 0, elev = 90)
+        self.renderTransData(tag+"_front.png",azim = 0, elev = 0)
+        self.renderTransData(tag+"_side.png",azim = 90, elev = 0)
 
-        self.covTolerance = covtol
-        self.kDistTolerance = mertol
-        
-        # we need some objects to manage the distribution of contig proerties
-        self.covMeans = np.zeros((3))
-        self.covStdevs = np.zeros((3))
-        self.covLowerLimits = np.zeros((3)) # lower and upper limits based on tolerance
-        self.covUpperLimits = np.zeros((3))
-        
-        self.merMeans = np.array([])
-        self.merStdevs = np.array([])
-        self.merZeros = np.zeros((np.size(kmerSigs[0])))
-        self.kDistMean = 0.0
-        self.kDistStdev = 0.0
-        self.kValMean = 0.0
-        self.kValStdev = 0.0
-        self.kDistUpperLimit = 0.0
-
-#------------------------------------------------------------------------------
-# Tools used for comparing / condensing 
-    
-    def __cmp__(self, alien):
-        """Sort bins based on PC1 of kmersig values"""
-        if self.kValMean < alien.kValMean:
-            return -1
-        elif self.kValMean == alien.kValMean:
-            return 0
-        else:
-            return 1
-
-#------------------------------------------------------------------------------
-# Grow and shrink 
-    
-    def consume(self, transformedCP, kmerSigs, contigLengths, contigColours, deadBin, verbose=False):
-        """Combine the contigs of another bin with this one"""
-        # consume all the other bins rowIndicies
-        if(verbose):
-            print "    BIN:",deadBin.id,"will be consumed by BIN:",self.id
-        self.rowIndicies = np.concatenate([self.rowIndicies, deadBin.rowIndicies])
-        self.binSize  = self.rowIndicies.shape[0]
-        
-        # fix the stats on our bin
-        self.makeBinDist(transformedCP, kmerSigs)
-        self.calcTotalSize(contigLengths)
-        self.getKmerColourStats(contigColours)
-
-    def purge(self, deadIndicies, transformedCP, kmerSigs, contigLengths, contigColours):
-        """Delete some rowIndicies and remake stats"""
-        old_ri = self.rowIndicies
-        self.rowIndicies = np.array([])
-        for i in old_ri:
-            if i not in deadIndicies:
-                self.rowIndicies = np.append(self.rowIndicies, i)
-            
-        # fix the stats on our bin
-        self.makeBinDist(transformedCP, kmerSigs)
-        self.calcTotalSize(contigLengths)
-        self.getKmerColourStats(contigColours)
-        
-#------------------------------------------------------------------------------
-# Stats and properties 
-
-    def clearBinDist(self, kmerSigs):
-        """Clear any set distribution statistics"""
-        self.totalBP = 0
-        
-        self.covMeans = np.zeros((3))
-        self.covStdevs = np.zeros((3))
-        self.covLowerLimits = np.zeros((3)) # lower and upper limits based on tolerance
-        self.covUpperLimits = np.zeros((3))
-        
-        self.merMeans = np.zeros((np.size(kmerSigs[0])))
-        self.merStdevs = np.zeros((np.size(kmerSigs[0])))
-        self.kDistMean = 0.0
-        self.kDistStdev = 0.0
-        self.kDistUpperLimit = 0.0
-        self.kValMean = 0.0
-        self.kValStdev = 0.0
-        
-    def makeBinDist(self, transformedCP, kmerSigs):
-        """Determine the distribution of the points in this bin
-        
-        The distribution is largely normal, except at the boundaries.
-        """
-        #print "MBD", self.id, self.binSize 
-        self.binSize = self.rowIndicies.shape[0]
-        self.kValMean = 0.0
-        self.kValStdev = 0.0
-        if(0 == np.size(self.rowIndicies)):
-            return
-
-        # get the centroids
-        (self.covMeans, self.covStdevs) = self.getCentroidStats(transformedCP)
-        (self.merMeans, self.merStdevs) = self.getCentroidStats(kmerSigs)
-        
-        # work out the distribution of distances of kmersigs
-        (self.kDistMean, self.kDistStdev, range) = self.getInnerVariance(kmerSigs, mode="kmer")
-        
-        # set the acceptance ranges
-        self.makeLimits()
-        
-    def makeLimits(self, covTol=-1, merTol=-1):
-        """Set inclusion limits based on mean, variance and tolerance settings"""
-        if(-1 == covTol):
-            covTol=self.covTolerance
-        if(-1 == merTol):
-            merTol=self.kDistTolerance
-        for i in range(0,3):
-            self.covLowerLimits[i] = int(self.covMeans[i] - covTol * self.covStdevs[i])
-            if(self.covLowerLimits[i] < 0):
-                self.covLowerLimits[i] = 0.0
-            self.covUpperLimits[i] = int(self.covMeans[i] + covTol * self.covStdevs[i])
-            if(self.covUpperLimits[i] > self.upperCov):
-                self.covUpperLimits[i] = self.upperCov            
-        self.kDistUpperLimit = self.kDistMean + merTol * self.kDistStdev
-
-    def calcTotalSize(self, contigLengths):
-        """Work out the total size of this bin in BP"""
-        totalBP = 0
-        for row_index in self.rowIndicies:
-            totalBP += contigLengths[row_index]
-        self.totalBP = totalBP
-
-    def getCentroidStats(self, profile):
-        """Calculate the centroids of the profile"""
-        working_list = np.zeros((self.binSize, np.size(profile[0])))
-        outer_index = 0
-        for row_index in self.rowIndicies:
-            working_list[outer_index] = profile[row_index]
-            outer_index += 1
-        # return the mean and stdev 
-        return (np.mean(working_list,axis=0), np.std(working_list,axis=0))
-        
-    def getInnerVariance(self, profile, mode="kmer"):
-        """Work out the variance for the coverage/kmer profile"""
-        dists = []
-        if(mode == "kmer"):
-            for row_index in self.rowIndicies:
-                dist = self.getKDist(profile[row_index])
-                dists.append(dist)
-        elif(mode =="cov"):
-            for row_index in self.rowIndicies:
-                dist = self.getCDist(profile[row_index])
-                dists.append(dist)
-        else:
-            raise ModeNotAppropriateException("Mode",mode,"unknown")
-        range = np.max(np.array(dists)) - np.min(np.array(dists))
-        return (np.mean(np.array(dists)), np.std(np.array(dists)), range)
-        
-    def getKDist(self, Ksig, centroid=None):
-        """Get the distance of this kmer sig from the centroid"""
-        # z-norm and then distance!
-        if centroid is None:
-            centroid = self.merMeans
-        return np.linalg.norm(Ksig-centroid)
-
-    def getCDist(self, Csig, centroid=None):
-        """Get the distance of this contig from the coverage centroid"""
-        # z-norm and then distance!
-        if centroid is None:
-            centroid = self.covMeans
-        return np.linalg.norm(Csig-centroid)
-    
-    def getKmerColourStats(self, contigColours):
-        """Determine the mean and stdev of the kmer profile colours"""
-        kmer_vals = np.array([])
-        for row_index in self.rowIndicies:
-            kmer_vals = np.append(kmer_vals, colorsys.rgb_to_hsv(contigColours[row_index][0],
-                                                                 contigColours[row_index][1],
-                                                                 contigColours[row_index][2]
-                                                                 )[0]
-                                  )
-
-        self.kValMean = np.mean(kmer_vals)
-        self.kValStdev = np.std(kmer_vals)
-  
-    def findOutliers(self, transformedCP, kmerSigs, percent=0.1, mode="kmer"):
-        """Return the list of row indicies which least match the profile of the bin"""
-
-        # check we're not trying to do something stupid
-        num_to_purge = int(self.binSize * percent)
-        if(num_to_purge == self.binSize):
-            return []
-
-        # make a list of all the profile distances
-        dists = []
-        if(mode == "kmer"):
-            for row_index in self.rowIndicies:
-                dists.append(self.getKDist(kmerSigs[row_index]))
-        elif(mode =="cov"):
-            for row_index in self.rowIndicies:
-                dists.append(self.getCDist(transformedCP[row_index]))
-        else:
-            raise ModeNotAppropriateException("Mode",mode,"unknown")
-        
-        # find the bottom x
-        sorted_dists = np.argsort(dists)[::-1]
-        ret_list = []
-        for i in range(num_to_purge):
-            ret_list.append(self.rowIndicies[sorted_dists[i]])
-        return ret_list
-        
-#------------------------------------------------------------------------------
-# Grow the bin 
-    
-    def recruit(self, transformedCP, kmerSigs, im2RowIndicies, binnedRowIndicies):
-        """Iteratively grow the bin"""
-        # save these
-        pt = self.covTolerance
-        st = self.kDistTolerance
-
-        self.binSize = self.rowIndicies.shape[0]
-        num_recruited = self.recruitRound(transformedCP, kmerSigs, im2RowIndicies, binnedRowIndicies) 
-        while(num_recruited > 0):
-            # reduce these to force some kind of convergence
-            self.covTolerance *= 0.8
-            self.kDistTolerance *= 0.8
-            # fix these
-            self.binSize = self.rowIndicies.shape[0]
-            self.makeBinDist(transformedCP, kmerSigs)
-            # go again
-            num_recruited = self.recruitRound(transformedCP, kmerSigs, im2RowIndicies, binnedRowIndicies)
-        
-        # put everything back where we found it...
-        self.binSize = self.rowIndicies.shape[0]
-        self.covTolerance = pt
-        self.kDistTolerance = st
-        self.makeBinDist(transformedCP, kmerSigs)
-        
-        # finally, fix this guy
-        return self.binSize
-        
-    def recruitRound(self, transformedCP, kmerSigs, im2RowIndicies, binnedRowIndicies):
-        """Recruit more points in from outside the current blob boundaries"""
-        #print "RRR",self.id,self.binSize,"(",self.covLowerLimits[0],self.covUpperLimits[0],")","(",self.covLowerLimits[1],self.covUpperLimits[1],")","(",self.covLowerLimits[2],self.covUpperLimits[2],")" 
-        num_recruited = 0
-        for x in range(int(self.covLowerLimits[0]), int(self.covUpperLimits[0])):
-            for y in range(int(self.covLowerLimits[1]), int(self.covUpperLimits[1])):
-                for z in range(int(self.covLowerLimits[2]), int(self.covUpperLimits[2])):
-                    if((x,y,z) in im2RowIndicies):
-                        for row_index in im2RowIndicies[(x,y,z)]:
-                            if (row_index not in binnedRowIndicies) and (row_index not in self.rowIndicies):
-                                k_dist = self.getKDist(kmerSigs[row_index])
-                                if(k_dist <= self.kDistUpperLimit):
-                                    self.rowIndicies = np.append(self.rowIndicies,row_index)
-                                    num_recruited += 1
-        return num_recruited
-
-#------------------------------------------------------------------------------
-# IO and IMAGE RENDERING 
-#
-    def plotProfileDistributions(self, transformedCP, kmerSigs, fileName=""):
-        """plot the profile distibutions for this bin"""
-        cov_working_array = np.zeros((self.binSize,3))
-        mer_working_array = np.zeros((self.binSize,np.size(kmerSigs[0])))
-        outer_index = 0
-        for row_index in self.rowIndicies:
-            for i in range(0,3):
-                cov_working_array[outer_index][i] = transformedCP[row_index][i]
-            mer_working_array[outer_index] = kmerSigs[row_index]
-            outer_index += 1
-        
-        # calculate the mean and stdev 
-        covMeans = np.mean(cov_working_array,axis=0)
-        covStdevs = np.std(cov_working_array,axis=0)
-        merMeans = np.mean(mer_working_array, axis=0)
-        merStdevs = np.std(mer_working_array, axis=0)
-
-        # z-normalise each column in each working array
-        for index in range(0,np.size(self.rowIndicies)):
-            mer_working_array[index] = (mer_working_array[index]-merMeans)/merStdevs
-            cov_working_array[index] = (cov_working_array[index]-covMeans)/covStdevs
-        
-        # work out the distribution of distances from z-normed sigs to the centroid
-        k_dists = np.array([])
-        c_dists = np.array([])
-        merZeros = np.zeros((np.size(kmerSigs[0])))
-        covZeros = np.zeros((3))
-        
-        for i in range(0,self.binSize):
-            k_dists = np.append(k_dists, np.linalg.norm(mer_working_array[i]-merZeros))
-            c_dists = np.append(c_dists, np.linalg.norm(cov_working_array[i]-covZeros))
-
-        k_dists = np.sort(k_dists)
-        c_dists = np.sort(c_dists)
-
-        kDistMean = np.mean(k_dists)
-        kDistStdev = np.std(k_dists)
-        cDistMean = np.mean(c_dists)
-        cDistStdev = np.std(c_dists)
-
-        for i in range(0,self.binSize):
-            k_dists[i] = (k_dists[i] - kDistMean)/kDistStdev
-            c_dists[i] = (c_dists[i] - cDistMean)/cDistStdev
-        
-        B = np.arange(0, self.binSize, 1)
-        
+    def renderTransCPData(self, fileName="", show=True, elev=45, azim=45, all=False, showAxis=False, primaryWidth=12, primarySpace=3, dpi=300, format='png'):
+        """Plot transformed data in 3D"""
         fig = plt.figure()
-        plt.subplot(211)
-        plt.plot(B, k_dists, 'r-')
-        plt.xlabel("kmer distribution")
-        plt.subplot(212)
-        plt.plot(B, c_dists, 'b-')
-        plt.xlabel("coverage distribution")
+        if(all):
+            myAXINFO = {
+                'x': {'i': 0, 'tickdir': 1, 'juggled': (1, 0, 2),
+                'color': (0, 0, 0, 0, 0)},
+                'y': {'i': 1, 'tickdir': 0, 'juggled': (0, 1, 2),
+                'color': (0, 0, 0, 0, 0)},
+                'z': {'i': 2, 'tickdir': 0, 'juggled': (0, 2, 1),
+                'color': (0, 0, 0, 0, 0)},
+            }
+
+            ax = fig.add_subplot(131, projection='3d')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
+            ax.azim = 0
+            ax.elev = 0
+            ax.set_xlim3d(0,self.scaleFactor)
+            ax.set_ylim3d(0,self.scaleFactor)
+            ax.set_zlim3d(0,self.scaleFactor)
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_zticklabels([])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
+            for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
+                for elt in axis.get_ticklines() + axis.get_ticklabels():
+                    elt.set_visible(False)
+            ax.w_xaxis._AXINFO = myAXINFO
+            ax.w_yaxis._AXINFO = myAXINFO
+            ax.w_zaxis._AXINFO = myAXINFO
+            
+            ax = fig.add_subplot(132, projection='3d')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
+            ax.azim = 90
+            ax.elev = 0
+            ax.set_xlim3d(0,self.scaleFactor)
+            ax.set_ylim3d(0,self.scaleFactor)
+            ax.set_zlim3d(0,self.scaleFactor)
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_zticklabels([])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
+            for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
+                for elt in axis.get_ticklines() + axis.get_ticklabels():
+                    elt.set_visible(False)
+            ax.w_xaxis._AXINFO = myAXINFO
+            ax.w_yaxis._AXINFO = myAXINFO
+            ax.w_zaxis._AXINFO = myAXINFO
+            
+            ax = fig.add_subplot(133, projection='3d')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
+            ax.azim = 0
+            ax.elev = 90
+            ax.set_xlim3d(0,self.scaleFactor)
+            ax.set_ylim3d(0,self.scaleFactor)
+            ax.set_zlim3d(0,self.scaleFactor)
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_zticklabels([])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
+            for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
+                for elt in axis.get_ticklines() + axis.get_ticklabels():
+                    elt.set_visible(False)
+            ax.w_xaxis._AXINFO = myAXINFO
+            ax.w_yaxis._AXINFO = myAXINFO
+            ax.w_zaxis._AXINFO = myAXINFO
+        else:
+            ax = fig.add_subplot(111, projection='3d')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='none', c=self.contigColours, s=2, marker='.')
+            ax.azim = azim
+            ax.elev = elev
+            ax.set_xlim3d(0,self.scaleFactor)
+            ax.set_ylim3d(0,self.scaleFactor)
+            ax.set_zlim3d(0,self.scaleFactor)
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_zticklabels([])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
+            if(not showAxis):
+                ax.set_axis_off()
+
         if(fileName != ""):
             try:
-                fig.set_size_inches(10,4)
-                plt.savefig(fileName,dpi=300)
+                if(all):
+                    fig.set_size_inches(3*primaryWidth+2*primarySpace,primaryWidth)
+                else:
+                    fig.set_size_inches(primaryWidth,primaryWidth)            
+                plt.savefig(fileName,dpi=dpi,format=format)
+                plt.close(fig)
             except:
-                print "Error saving image:", fileName, sys.exc_info()[0]
-                raise
-        else:
-            try:
-                plt.show()
-            except:
-                print "Error showing image:", sys.exc_info()[0]
-                raise
-        del fig
-            
-        
-    def plotBin(self, transformedCP, contigColours, fileName=""):
-        """Plot a single bin"""
-        fig = plt.figure()
-        title = self.plotOnAx(fig, 1, 1, 1, transformedCP, contigColours, fileName=fileName)
-        plt.title(title)
-        if(fileName != ""):
-            try:
-                fig.set_size_inches(6,6)
-                plt.savefig(fileName,dpi=300)
-            except:
-                print "Error saving image:", fileName, sys.exc_info()[0]
+                print "Error saving image",fileName, sys.exc_info()[0]
                 raise
         elif(show):
             try:
                 plt.show()
+                plt.close(fig)
             except:
-                print "Error showing image:", sys.exc_info()[0]
+                print "Error showing image", sys.exc_info()[0]
                 raise
-        plt.close(fig)
         del fig
-
-    def plotOnAx(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigColours, fileName=""):
-        """Plot a bin in a given subplot"""
-        disp_vals = np.array([])
-        disp_cols = np.array([])
-        num_points = 0
-        for row_index in self.rowIndicies:
-            num_points += 1
-            disp_vals = np.append(disp_vals, transformedCP[row_index])
-            disp_cols = np.append(disp_cols, contigColours[row_index])
-
-        # make a black mark at the max values
-        self.makeLimits()
-        px = int(self.covMeans[0])
-        py = int(self.covMeans[1])
-        pz = int(self.covMeans[2])
-        num_points += 1
-        disp_vals = np.append(disp_vals, [px,py,pz])
-        disp_cols = np.append(disp_cols, colorsys.hsv_to_rgb(0,0,0))
-        
-        # fix these
-        self.makeLimits()
-        self.getKmerColourStats(contigColours)
-
-        # reshape
-        disp_vals = np.reshape(disp_vals, (num_points, 3))
-        disp_cols = np.reshape(disp_cols, (num_points, 3))
-
-        ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
-        ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors=disp_cols, c=disp_cols, marker='.')
-        from locale import format, setlocale, LC_ALL # purdy commas
-        setlocale(LC_ALL, "")
-        title = str.join(" ", ["Bin:",str(self.id),":",str(self.binSize),"contigs : ",format('%d', self.totalBP, True),"BP\n",
-                               "Coverage centroid: (",str(px), str(py), "[",str(self.covLowerLimits[2]),"-",str(self.covUpperLimits[2]),"])\n",
-                               "Kmers: mean: %.4f stdev: %.4f" % (self.kValMean, self.kValStdev),"\n",
-                               
-                               ])
-        return title
-
-    def printBin(self, contigNames, contigLengths, outFormat="summary", separator="\t"):
-        """print this bin info in csvformat"""
-        kvm_str = "%.4f" % self.kValMean
-        kvs_str = "%.4f" % self.kValStdev
-        if(outFormat == 'summary'):
-            #print separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"kMean\"","\"kStdev\""]) 
-            print separator.join([str(self.id), str(self.totalBP), str(self.binSize), kvm_str, kvs_str])
-        elif(outFormat == 'full'):
-            print("#bid_"+str(self.id)+
-                  "_totalBP_"+str(self.totalBP)+
-                  "_numCons_"+str(self.binSize)+
-                  "_kMean_"+kvm_str+
-                  "_kStdev_"+kvs_str
-                  )
-            print separator.join(["#\"bid\"","\"cid\"","\"length\""])
-            for row_index in self.rowIndicies:
-                print separator.join([str(self.id), contigNames[row_index], str(contigLengths[row_index])])
-        elif(outFormat == 'minimal'):
-            #print separator.join(["#\"bid\"","\"cid\"","\"length\""])            
-            for row_index in self.rowIndicies:
-                print separator.join([str(self.id), contigNames[row_index], str(contigLengths[row_index])])
-        else:
-            print "--------------------------------------"
-            print "Bin:", self.id
-            print "Bin size:", self.binSize
-            print "Total BP:", self.totalBP
-            print "--------------------------------------"
 
 ###############################################################################
 ###############################################################################
