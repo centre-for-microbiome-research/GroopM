@@ -37,6 +37,7 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
+
 __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
@@ -45,7 +46,9 @@ __version__ = "0.0.1"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Development"
+
 ###############################################################################
+
 import sys
 import os
 import tables
@@ -65,7 +68,16 @@ import numpy as np
 # GroopM imports
 import PCA
 
-np.seterr(all='raise')      
+np.seterr(all='raise')     
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
+class SOMDataNotFoundException(BaseException):
+    pass
+
 ###############################################################################
 ###############################################################################
 ###############################################################################
@@ -131,33 +143,35 @@ class GMDataManager:
     ------------------------
     ** Metadata **
     table = 'meta'
-    'side'         : tables.Int32Col(pos=1)  # number of rows in the som
-    'covDimension' : tables.Int32Col(pos=2)  # number of stoits
-    'merDimension' : tables.Int32Col(pos=3)  # number of mers being used
-    'numCovSoms'   : tables.Int32Col(pos=4)  # number of coverage soms
-    'numMerSoms'   : tables.Int32Col(pos=5)  # number of kmer soms
+    'side'            : tables.Int32Col(pos=1)      # number of rows in the som
+    'covDimension'    : tables.Int32Col(pos=2)      # number of stoits
+    'merDimension'    : tables.Int32Col(pos=3)      # number of mers being used
+    'covWeightIds'    : tables.StringCol(64,pos=4)
+    'merWeightIds'    : tables.StringCol(64,pos=5)
+    'covRegionIds'    : tables.StringCol(64,pos=6)
+    'merRegionIds'    : tables.StringCol(64,pos=7)
     
-    ** Weights **                            # raw weights formed from training
-    table = 'cov[1,2,3]'                     # 3 SOMS for coverage
+    ** Weights **                                   # raw weights formed from training
+    table = 'covWeights[1,2,3]'                     # 3 SOMS for coverage
     'col1' : tables.FloatCol(pos=1)
     'col2' : tables.FloatCol(pos=2)
     'col3' : tables.FloatCol(pos=3)
     ...
     
-    table = 'mer[1,2,3]'                     # 3 SOMS for mers too
+    table = 'merWeights[1,2,3]'                     # 3 SOMS for mers too
     'col1' : tables.FloatCol(pos=1)
     'col2' : tables.FloatCol(pos=2)
     'col3' : tables.FloatCol(pos=3)
     ...
     
-    ** Regions **                            # maps points in the map to bin ids
-    table = 'cov[1,2,3]'
+    ** Regions **                                   # maps points in the map to bin ids
+    table = 'covRegions[1,2,3]'
     'col1' : tables.Int32Col(pos=1)
     'col2' : tables.Int32Col(pos=2)
     'col3' : tables.Int32Col(pos=3)
     ...
     
-    table = 'mer[1,2,3]'
+    table = 'merRegions[1,2,3]'
     'col1' : tables.Int32Col(pos=1)
     'col2' : tables.Int32Col(pos=2)
     'col3' : tables.Int32Col(pos=3)
@@ -167,7 +181,7 @@ class GMDataManager:
     def __init__(self): pass
 
 #------------------------------------------------------------------------------
-# DB CREATION / INITIALISATION 
+# DB CREATION / INITIALISATION  - PROFILES
 
     def createDB(self, bamFiles, contigs, dbFileName, kmerSize=4, dumpAll=False, force=False):
         """Main wrapper for parsing all input files"""
@@ -333,23 +347,48 @@ class GMDataManager:
         META_row.append()
         table.flush()
 
-    def createSOMTables(self, dbFileName, side, covDim, merDim, numCovSoms, numMerSoms):
+#------------------------------------------------------------------------------
+# DB CREATION / INITIALISATION  - SOMS
+
+    def updateSOMTables(self,
+                        dbFileName,
+                        side,
+                        covDim,
+                        merDim,
+                        covWeights={},          # use these to do updates
+                        merWeights={},
+                        covRegions={},
+                        merRegions={}
+                        ):
         try:
-            with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
-                # first, make sure we've got a som group
-                try:
-                    som_group = h5file.createGroup("/", 'som', 'SOM data')
-                except:
-                    pass
-                
+            # first, make sure we've got a som group`
+            ids_in_use = self.getSOMDataInfo(dbFileName)
+            
+            # now we need to fix the ids_in_use structure to suit our updates
+            for i in covWeights.keys():
+                if i not in ids_in_use["weights"]["cov"]:
+                     ids_in_use["weights"]["cov"].append(i)
+            for i in merWeights.keys():
+                if i not in ids_in_use["weights"]["cov"]:
+                     ids_in_use["weights"]["mer"].append(i)
+            for i in covRegions.keys():
+                if i not in ids_in_use["weights"]["cov"]:
+                     ids_in_use["regions"]["cov"].append(i)
+            for i in merRegions.keys():
+                if i not in ids_in_use["weights"]["cov"]:
+                     ids_in_use["regions"]["mer"].append(i)
+            
             with tables.openFile(dbFileName, mode='a', rootUEP="/som") as som_group:
-                # now add the tables we need
-                # first do metadata
-                db_desc = {'side' : tables.Int32Col(pos=1),
-                           'covDimension' : tables.Int32Col(pos=2),
-                           'merDimension' : tables.Int32Col(pos=3),
-                           'numCovSoms' : tables.Int32Col(pos=4),
-                           'numMerSoms' : tables.Int32Col(pos=5)
+                #------------------------
+                # Metadata
+                #------------------------
+                db_desc = {'side'            : tables.Int32Col(pos=1),
+                           'covDimension'    : tables.Int32Col(pos=2),
+                           'merDimension'    : tables.Int32Col(pos=3),
+                           'covWeightIds'    : tables.StringCol(64,pos=4),
+                           'merWeightIds'    : tables.StringCol(64,pos=5),
+                           'covRegionIds'    : tables.StringCol(64,pos=6),
+                           'merRegionIds'    : tables.StringCol(64,pos=7)
                            }
 
                 # clear previous metadata
@@ -358,64 +397,168 @@ class GMDataManager:
                     som_group.removeNode('/', 'tmp_meta')
                 except:
                     pass
-                
+
                 # make a new tmp table
                 try:
                     META_table = som_group.createTable('/', 'tmp_meta', db_desc, "SOM metadata")
-                    self.initSOMMeta(META_table, side, covDim, merDim, numCovSoms, numMerSoms)
+                    self.initSOMMeta(META_table, side, covDim, merDim, ids_in_use)
                 except:
                     print "Error creating META table:", sys.exc_info()[0]
                     raise
                 # rename as the meta table
                 som_group.renameNode('/', 'meta', 'tmp_meta', overwrite=True)
                 
-                
-                # cov weights       
-                
+                #------------------------
+                # Weights matricies
+                #------------------------
+                for i in covWeights.keys():
+                    self.updateSOMData(som_group, "covWeights"+str(i), covDim, "COVERAGE SOM weights", covWeights[i], type="float")
+                for i in merWeights.keys():
+                    self.updateSOMData(som_group, "merWeights"+str(i), merDim, "KMER SOM weights", merWeights[i], type="float")
+                    
+                #------------------------
+                # Regions
+                #------------------------
+                for i in covRegions.keys():
+                    self.updateSOMData(som_group, "covRegions"+str(i), covDim, "COVERAGE SOM regions", covRegions[i], type="int")
+                for i in merRegions.keys():
+                    self.updateSOMData(som_group, "merRegions"+str(i), merDim, "KMER SOM regions", merRegions[i], type="int")
+                    
         except:
             print "Error creating SOM database:", dbFileName, sys.exc_info()[0]
             raise
-    
-#    ** Weights **                            # raw weights formed from training
-#    table = 'cov[1,2,3]'                     # 3 SOMS for coverage
-#    'col1' : tables.FloatCol(pos=1)
-#    'col2' : tables.FloatCol(pos=2)
-#    'col3' : tables.FloatCol(pos=3)
-#    ...
-    
-#    table = 'mer[1,2,3]'                     # 3 SOMS for mers too
-#    'col1' : tables.FloatCol(pos=1)
-#    'col2' : tables.FloatCol(pos=2)
-#    'col3' : tables.FloatCol(pos=3)
-#    ...
-    
-#    ** Regions **                            # maps points in the map to bin ids
-#    table = 'cov[1,2,3]'
-#    'col1' : tables.Int32Col(pos=1)
-#    'col2' : tables.Int32Col(pos=2)
-#    'col3' : tables.Int32Col(pos=3)
-#    ...
-    
-#    table = 'mer[1,2,3]'
-#    'col1' : tables.Int32Col(pos=1)
-#    'col2' : tables.Int32Col(pos=2)
-#    'col3' : tables.Int32Col(pos=3)
-                
-
         
-    def initSOMMeta(self, table, side, covDim, merDim, numCovSoms, numMerSoms):
+    def initSOMMeta(self, table, side, covDim, merDim, idsInUse):
         """Initialise the meta-data table"""
         META_row = table.row
         META_row['side'] = side
         META_row['covDimension'] = covDim
         META_row['merDimension'] = merDim
-        META_row['numCovSoms'] = numCovSoms
-        META_row['numMerSoms'] = numMerSoms
+        
+        if(len(idsInUse["weights"]["cov"]) != 0):
+            META_row['covWeightIds'] = ",".join([str(x) for x in idsInUse["weights"]["cov"]])
+        else:
+            META_row['covWeightIds'] = ""
+        
+        if(len(idsInUse["weights"]["mer"]) != 0):
+            META_row['merWeightIds'] = ",".join([str(x) for x in idsInUse["weights"]["mer"]])
+        else:
+            META_row['merWeightIds'] = ""
+        
+        if(len(idsInUse["regions"]["cov"]) != 0):
+            META_row['covRegionIds'] = ",".join([str(x) for x in idsInUse["regions"]["cov"]])
+        else:
+            META_row['covRegionIds'] = ""
+        
+        if(len(idsInUse["regions"]["mer"]) != 0):
+            META_row['merRegionIds'] = ",".join([str(x) for x in idsInUse["regions"]["mer"]])
+        else:
+            META_row['merRegionIds'] = ""
+            
         META_row.append()
         table.flush()
-        
+
+    def updateSOMData(self, group, tableName, dimension, description, data, type):
+        """Make a table and update data"""
+        db_desc = {}                # make the db desc dynamically
+        for j in range(dimension):
+            if(type == "float"):
+                db_desc["dim"+str(j)] = tables.FloatCol(pos=j)
+            else:
+                db_desc["dim"+str(j)] = tables.Int32Col(pos=j)
+        try:
+            group.removeNode('/', 'tmp_'+tableName)
+        except:
+            pass
+        try:
+            NEW_table = group.createTable('/', 'tmp_'+tableName, db_desc, description)
+            self.injectSOMData(NEW_table, data, dimension)
+        except:
+            print "Error creating table:", sys.exc_info()[0]
+            raise
+        group.renameNode('/', tableName, 'tmp_'+tableName, overwrite=True)
+
+    def injectSOMData(self, table, data, dimension):
+        """Load SOM data into the database"""
+        for row in data:
+            for val in row:
+                DATA_row = table.row
+                for i in range(dimension):
+                    DATA_row["dim"+str(i)] = val[i]
+                DATA_row.append()
+        table.flush()
+
 #------------------------------------------------------------------------------
-# GET / SET DATA TABLES 
+# GET / SET DATA TABLES - PROFILES 
+
+    def getSOMDataInfo(self, dbFileName):
+        """Return the numbers and types of soms stored in the database"""
+        ids_in_use = { "weights" : { "mer":[], "cov":[] }, "regions": { "mer" : [], "cov": [] } }
+        # open the database
+        try:
+            with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+                # open the som table                  
+                try:
+                    som_group = h5file.createGroup("/", 'som', 'SOM data')
+                except:
+                    # we already have a group, so we should assume that there is 
+                    # a meta table associated with this group. Read that to get the
+                    # Ids currently in use
+                    meta_row = h5file.root.som.meta.read(start=0, stop=1, step=1)[0]
+                    if(len(meta_row[3]) > 0):
+                        ids_in_use["weights"]["cov"] = [int(x) for x in meta_row[3].split(",")]
+                    if(len(meta_row[4]) > 0):
+                        ids_in_use["weights"]["mer"] = [int(x) for x in meta_row[4].split(",")]
+                    if(len(meta_row[5]) > 0):
+                        ids_in_use["regions"]["cov"] = [int(x) for x in meta_row[5].split(",")]
+                    if(len(meta_row[6]) > 0):
+                        ids_in_use["regions"]["mer"] = [int(x) for x in meta_row[6].split(",")]
+        except:
+            print "Error creating SOM database:", dbFileName, sys.exc_info()[0]
+            raise
+        return ids_in_use
+
+    def getSOMMetaFields(self, dbFileName):
+        """return the value of fieldName in the SOM metadata tables"""
+        ret_hash = {'side': -1,
+                    'covDimension' : -1,
+                    'merDimension' : -1
+                    }
+        try:
+            with tables.openFile(dbFileName, mode='r') as h5file:
+                # theres only one value
+                meta_row = h5file.root.som.meta.read(start=0, stop=1, step=1)[0]
+                ret_hash['side'] = meta_row[0]
+                ret_hash['covDimension'] = meta_row[1]
+                ret_hash['merDimension'] = meta_row[2]
+        except:
+            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            raise
+        return ret_hash
+        
+    def getSOMData(self, dbFileName, index, type="weights", flavour="mer"):
+        """Load SOM data from the database"""
+        # make sure that this table exists
+        ids_in_use = self.getSOMDataInfo(dbFileName)
+        if index not in ids_in_use[type][flavour]:
+            raise SOMDataNotFoundException("No such fish:",flavour,type,index)
+
+        # work out the dimensions of the data
+        meta_fields = self.getSOMMetaFields(dbFileName)
+        dimension = meta_fields['merDimension']
+        if(flavour == "cov"):
+             dimension = meta_fields['covDimension']
+        
+        # now get the data
+        table_name = flavour+type.title()+str(index) 
+        with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+            table = h5file.root.som._f_getChild(table_name)
+            data = np.reshape(np.array([list(x) for x in table.read()]), (meta_fields['side'],meta_fields['side'],dimension))
+            return data
+        return np.array([])
+    
+#------------------------------------------------------------------------------
+# GET / SET DATA TABLES - PROFILES 
 
     def getConditionalIndicies(self, dbFileName, condition=''):
         """return the indicies into the db which meet the condition"""

@@ -120,6 +120,7 @@ class ClusterEngine:
     def expandBins(self):
         self.BM.loadBins(makeBins=True,silent=False)
         # we need to z-norm the columns
+
         print "Building SOM"
         som_side = 150
         som_iterations = 5
@@ -133,9 +134,14 @@ class ClusterEngine:
         map = som.SOM(som_side,cov_dim)        
         map.train(c_vecs, iterations=som_iterations, weightImgFileName="jim")
 
-        self.PM.dataManager.createSOMTables(self.PM.dbFileName, som_side, cov_dim, mer_dim, 1, 0)
-        
+        data = map.getNodes()
+        self.PM.dataManager.updateSOMTables(self.PM.dbFileName, som_side, cov_dim, mer_dim, covWeights={1:data})
+        redata = self.PM.dataManager.getSOMData(self.PM.dbFileName, 1, type="weights", flavour="cov")
+        for i in range(som_side):
+            for j in range(som_side):
+                print data[i,j], redata[i,j] 
         return
+    
     def whiten(self, profile):
         """Z normalize and scale profile columns"""
         v_mean = np.mean(profile, axis=0)
@@ -148,7 +154,7 @@ class ClusterEngine:
         return profile
             
 #------------------------------------------------------------------------------
-# CORE CONSTRUCTION MANAGEMENT
+# CORE CONSTRUCTION AND MANAGEMENT
         
     def makeCores(self, coreCut, minSize, minVol):
         """Cluster the contigs to make bin cores"""

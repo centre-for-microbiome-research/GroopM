@@ -107,6 +107,11 @@ class SOM:
         # initialise the nodes to random values between 0 -> 1
         print "    Making data structure"
         self.TM = tm(self.side, dimension=self.dimension, randomize=True)
+        
+    def getNodes(self):
+        """Get the weighting nodes"""
+        return self.TM.nodes
+    
 #------------------------------------------------------------------------------
 # CLASSIFICATION 
 
