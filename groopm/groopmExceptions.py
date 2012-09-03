@@ -67,6 +67,7 @@ class GMSOMException(BaseException): pass
 class SOMDataNotFoundException(GMSOMException): pass
 class SOMFlavourException(GMSOMException): pass
 class SOMTypeException(GMSOMException): pass
+class RegionsDontExistException(GMSOMException): pass
 
 ###############################################################################
 ###############################################################################

@@ -370,13 +370,13 @@ class GMDataManager:
                 if i not in ids_in_use["weights"]["cov"]:
                      ids_in_use["weights"]["cov"].append(i)
             for i in merWeights.keys():
-                if i not in ids_in_use["weights"]["cov"]:
+                if i not in ids_in_use["weights"]["mer"]:
                      ids_in_use["weights"]["mer"].append(i)
             for i in covRegions.keys():
-                if i not in ids_in_use["weights"]["cov"]:
+                if i not in ids_in_use["regions"]["cov"]:
                      ids_in_use["regions"]["cov"].append(i)
             for i in merRegions.keys():
-                if i not in ids_in_use["weights"]["cov"]:
+                if i not in ids_in_use["regions"]["mer"]:
                      ids_in_use["regions"]["mer"].append(i)
             
             with tables.openFile(dbFileName, mode='a', rootUEP="/som") as som_group:
@@ -421,9 +421,9 @@ class GMDataManager:
                 # Regions
                 #------------------------
                 for i in covRegions.keys():
-                    self.updateSOMData(som_group, "covRegions"+str(i), covDim, "COVERAGE SOM regions", covRegions[i], type="int")
+                    self.updateSOMData(som_group, "covRegions"+str(i), 1, "COVERAGE SOM regions", covRegions[i], type="int")
                 for i in merRegions.keys():
-                    self.updateSOMData(som_group, "merRegions"+str(i), merDim, "KMER SOM regions", merRegions[i], type="int")
+                    self.updateSOMData(som_group, "merRegions"+str(i), 1, "KMER SOM regions", merRegions[i], type="int")
                     
         except:
             print "Error creating SOM database:", dbFileName, sys.exc_info()[0]
@@ -557,7 +557,12 @@ class GMDataManager:
         table_name = flavour+type.title()+str(index) 
         with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
             table = h5file.root.som._f_getChild(table_name)
-            data = np.reshape(np.array([list(x) for x in table.read()]), (meta_fields['side'],meta_fields['side'],dimension))
+            if(type=="weights"):
+                data = np.reshape(np.array([list(x) for x in table.read()]), (meta_fields['side'],meta_fields['side'],dimension))
+            elif(type == "regions"):
+                data = np.reshape(np.array([list(x) for x in table.read()]), (meta_fields['side'],meta_fields['side'],1))
+            else:
+                raise ge.SOMTypeException("Unknown SOM type: "+type)
             return data
         return np.array([])
     

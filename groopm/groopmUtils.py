@@ -154,7 +154,7 @@ class BinExplorer:
         self.PM.transformCP()
         self.BM.loadBins(makeBins=True,bids=self.bids)
         print "Creating side by side plots"
-        (bin_centroid_points, bin_centroid_colours) = self.BM.findCoreCentres()
+        (bin_centroid_points, bin_centroid_colours, bin_ids) = self.BM.findCoreCentres()
         self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colours)
 
     def plotIds(self):

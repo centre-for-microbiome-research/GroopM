@@ -97,7 +97,8 @@ class TorusMesh:
             self.nodes = np.array([[ [0.0 for i in range(int(self.dimension))] for c in range(self.columns)] for r in range(self.rows)])
 
         # make the colour lookup map
-        (self.colorLookup, self.cVec, self.maxAngle) = self.makeColorScheme()
+        if(self.dimension > 2):
+            (self.colorLookup, self.cVec, self.maxAngle) = self.makeColorScheme()
 
 #------------------------------------------------------------------------------
 # WORKING WITH THE DATA

@@ -160,6 +160,7 @@ class BinManager:
             self.bins[bid] = bin.Bin(np.array(binMembers[bid]), self.PM.kmerSigs, bid, self.PM.scaleFactor-1)
             self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)      
             self.bins[bid].calcTotalSize(self.PM.contigLengths)
+            self.bins[bid].getKmerColourStats(self.PM.contigColours)
 
     def saveBins(self, doCores=True, saveBinStats=True, updateBinStats=True):
         """Save binning results"""
@@ -177,7 +178,7 @@ class BinManager:
         elif updateBinStats:
             # we need to make a list of updates
             updates = {}
-            for bid in self.bins.keys():
+            for bid in sorted(self.bins):
                 updates[bid] = self.bins[bid].binSize
             self.updateBinStats(updates)
     
@@ -188,7 +189,7 @@ class BinManager:
         and should only be used during initial coring. BID must be somewhere!
         """
         bin_updates = {}
-        for bid in self.bins:
+        for bid in sorted(self.bins):
             bin_updates[bid] = np.size(self.bins[bid].rowIndicies)
         self.PM.saveValidBinIds(bin_updates)
 
@@ -219,7 +220,7 @@ class BinManager:
         # we need a mapping from cid (or local index) to binID
         bin_update = {}
         c2b = {}
-        for bid in self.bins:
+        for bid in sorted(self.bins):
             for row_index in self.bins[bid].rowIndicies:
                 c2b[row_index] = bid
 
@@ -248,7 +249,7 @@ class BinManager:
         del self.bins[bid]
         
         # now fix all the rowIndicies in all the other bins
-        for bid in self.bins:
+        for bid in sorted(self.bins):
             self.bins[bid].rowIndicies = self.fixRowIndexLists(original_length, np.sort(self.bins[bid].rowIndicies), rem_list)
 
 
@@ -277,19 +278,23 @@ class BinManager:
 #------------------------------------------------------------------------------
 # BIN UTILITIES 
 
+    def getBids(self):
+        """Return a sorted list of bin ids"""
+        return sorted(self.bins.keys())
+
     def getCentroidProfiles(self, mode="mer"):
         """Return an array containing the centroid stats for each bin"""
         if(mode == "mer"):
             ret_vecs = np.zeros((len(self.bins), len(self.PM.kmerSigs[0])))
             outer_index = 0
-            for bid in self.bins:
+            for bid in sorted(self.bins):
                 ret_vecs[outer_index] = self.bins[bid].merMeans
                 outer_index += 1
             return ret_vecs
         elif(mode == "cov"):
             ret_vecs = np.zeros((len(self.bins), len(self.PM.transformedCP[0])))
             outer_index = 0
-            for bid in self.bins:
+            for bid in sorted(self.bins):
                 ret_vecs[outer_index] = self.bins[bid].covMeans
                 outer_index += 1
             return ret_vecs
@@ -305,7 +310,7 @@ class BinManager:
             if(not self.split(bid, 2, M_cut, auto=True, printInstructions=False)):
                 # the bin could not be split, delete the parent
                 self.deleteBins([bid], force=True, freeBinnedRowIndicies=True, saveBins=False)
-        for bid in self.bins:
+        for bid in sorted(self.bins):
             # make these guys here
             self.bins[bid].getKmerColourStats(self.PM.contigColours)
 
@@ -954,7 +959,7 @@ class BinManager:
         Ms = {}
         Ss = {}
         Rs = {}
-        for bid in self.bins:
+        for bid in sorted(self.bins):
             if(mode == 'kmer'):
                 (Ms[bid], Ss[bid], Rs[bid]) = self.bins[bid].getInnerVariance(self.PM.kmerSigs)
             elif(mode == 'cov'):
@@ -977,11 +982,12 @@ class BinManager:
         print "    Finding bin centers"
         bin_centroid_points = np.zeros((len(self.bins),3))
         bin_centroid_colours = np.zeros((len(self.bins),3))
+        bids = np.zeros((len(self.bins)))    # we need to know which order the info is coming in
         # remake the cores and populate the centres
         S = 1       # SAT and VAL remain fixed at 1. Reduce to make
         V = 1       # Pastels if that's your preference...
         outer_index = 0
-        for bid in self.bins.keys():
+        for bid in sorted(self.bins):
             cum_colour = np.array([])
             for row_index in self.bins[bid].rowIndicies:
                 cum_colour = np.append(cum_colour, self.PM.contigColours[row_index])
@@ -990,9 +996,11 @@ class BinManager:
 
             bin_centroid_points[outer_index] = self.bins[bid].covMeans
             bin_centroid_colours[outer_index] = ave_colour
+            bids[outer_index] = bid
+            
             outer_index += 1
             
-        return (bin_centroid_points, bin_centroid_colours)
+        return (bin_centroid_points, bin_centroid_colours, bids)
 
     def analyseBinKVariance(self, outlierTrim=0.1, plot=False):
         """Measure within and between bin variance of kmer sigs
@@ -1005,7 +1013,7 @@ class BinManager:
         bids = np.array([])
         
         # work out the mean and stdev for the kmer sigs for each bin
-        for bid in self.bins:
+        for bid in sorted(self.bins):
             bkworking = np.array([])
             for row_index in self.bins[bid].rowIndicies:
                 bkworking = np.append(bkworking, self.PM.kmerSigs[row_index])
@@ -1063,6 +1071,17 @@ class BinManager:
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
 
+    def makeCentroidPalette(self):
+        """Return a hash of bin ids to colours"""
+        (bin_centroid_points, bin_centroid_colours, bids) = self.findCoreCentres()
+        pal = {}
+        for i in range(len(bids)):
+            pal[bids[i]] = (int(bin_centroid_colours[i][0]*255),
+                            int(bin_centroid_colours[i][1]*255),
+                            int(bin_centroid_colours[i][2]*255)
+                           )
+        return pal
+
     def printBins(self, outFormat, fileName=""):
         """Wrapper for print handles piping to file or stdout"""
         if("" != fileName):
@@ -1090,7 +1109,7 @@ class BinManager:
             print "Error: Unrecognised format:", outFormat
             return
 
-        for bid in self.bins:
+        for bid in sorted(self.bins):
             self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
             self.bins[bid].getKmerColourStats(self.PM.contigColours)
             self.bins[bid].calcTotalSize(self.PM.contigLengths)
@@ -1098,17 +1117,17 @@ class BinManager:
 
     def plotProfileDistributions(self):
         """Plot the coverage and kmer distributions for each bin"""
-        for bid in self.bins:
+        for bid in sorted(self.bins):
             self.bins[bid].plotProfileDistributions(self.PM.transformedCP, self.PM.kmerSigs, fileName="PROFILE_"+str(bid))
 
     def plotBins(self, FNPrefix="BIN", sideBySide=False):
         """Make plots of all the bins"""
-        for bid in self.bins:
+        for bid in sorted(self.bins):
             self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
         if(sideBySide):
             self.plotSideBySide(self.bins.keys(), tag=FNPrefix)
         else:
-            for bid in self.bins:
+            for bid in sorted(self.bins):
                 self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, fileName=FNPrefix+"_"+str(bid))
 
     def plotSideBySide(self, bids, fileName="", tag=""):
@@ -1141,11 +1160,11 @@ class BinManager:
 
     def plotBinIds(self):
         """Render 3d image of core ids"""
-        (bin_centroid_points, bin_centroid_colours) = self.findCoreCentres()
+        (bin_centroid_points, bin_centroid_colours, bids) = self.findCoreCentres()
         fig = plt.figure()
         ax = fig.gca(projection='3d')
         outer_index = 0
-        for bid in self.bins.keys():
+        for bid in bids:
             ax.text(bin_centroid_points[outer_index,0], 
                     bin_centroid_points[outer_index,1], 
                     bin_centroid_points[outer_index,2], 
@@ -1167,7 +1186,7 @@ class BinManager:
 
     def plotBinPoints(self):
         """Render the image for validating cores"""
-        (bin_centroid_points, bin_centroid_colours) = self.findCoreCentres()
+        (bin_centroid_points, bin_centroid_colours, bids) = self.findCoreCentres()
         fig = plt.figure()
         ax2 = fig.add_subplot(111, projection='3d')
         ax2.scatter(bin_centroid_points[:,0], bin_centroid_points[:,1], bin_centroid_points[:,2], edgecolors=bin_centroid_colours, c=bin_centroid_colours)
@@ -1191,109 +1210,86 @@ class SOMManager:
                  numSoms=3,
                  somSide=150,
                  somIterations=1000,
+                 makeBins=True,
                  load=False
                  ):
-        self.PM = profileManager
+        # raw data storage
+        self.PM = profileManager        # be sure that this data structure is ready to go!
         self.BM = binManager
+        self.BM.loadBins(makeBins=makeBins,silent=False)
         self.DM = self.PM.dataManager
-        self.numSoms = 3
-        self.somIterations = somIterations
+
+        # pointers to various torus maps
         self.covSoms = {}
         self.merSoms = {}
 
+        # misc
+        self.numSoms = 3
+        self.somIterations = somIterations
+        self.covDim = 0
+        self.merDim = 0
+        
         if(load):
-            # load a som from file
+            # load metadata
             meta = self.DM.getSOMMetaFields(self.PM.dbFileName)
             self.somSide = meta['side']
+            self.covDim = meta['covDimension']
+            self.merDim = meta['merDimension']            
+            
             # load the actual data
             self.loadSoms(self.DM.getSOMDataInfo(self.PM.dbFileName), meta=meta)
             
         else:
             self.somSide = somSide
+            self.covDim = len(self.PM.transformedCP[0])
+            self.merDim = len(self.PM.kmerSigs[0])
+            
+#------------------------------------------------------------------------------
+# SAVING LOADING
 
     def loadSoms(self, idsInUse, meta=None):
         """load a bunch of SOM data in one go"""
+        print "Loading saved SOM data"
         if(meta is None):
             meta = getSOMMetaFields(self.PM.dbFileName)
+            self.covDim = meta['covDimension']
+            self.merDim = meta['merDimension']
         for flavour in ["mer","cov"]:
             for type in ["weights","regions"]:
                 for index in idsInUse[type][flavour]:
-                    self.loadSom(index, type=type, flavour=flavour, meta=meta)
+                    self.loadSomData(index, type=type, flavour=flavour, meta=meta)
 
-    def loadSom(self, index, type="weights", flavour="mer", meta=None):
+    def loadSomData(self, index, type="weights", flavour="mer", meta=None):
         """Load a saved SOM"""
         if(meta is None):
             meta = self.DM.getSOMMetaFields(self.PM.dbFileName)
+            self.covDim = meta['covDimension']
+            self.merDim = meta['merDimension']
+
+        print "    Loading",flavour,type,index
         data = self.DM.getSOMData(self.PM.dbFileName, index, type, flavour)
-        if(type=="weights"):
-            if(flavour == "mer"):
-                map = som.SOM(self.somSide,meta["merDimension"])
-                map.loadData(data)
+        map = None
+        if(flavour == "mer"):
+            if(index not in self.merSoms):  # make the map if it's not already in the hash
+                map = som.SOM(self.somSide,self.merDim)
                 self.merSoms[index] = map
-            elif(flavour == "cov"):
-                map = som.SOM(self.somSide,meta["covDimension"])
-                map.loadData(data)
+            map = self.merSoms[index] 
+        elif(flavour == "cov"):
+            if(index not in self.covSoms):
+                map = som.SOM(self.somSide,self.covDim)
                 self.covSoms[index] = map
-            else:
-                raise SOMFlavourException("Unknown SOM flavour: "+flavour)
-        elif(type=="regions"):
-            pass
+            map = self.covSoms[index]
+            
         else:
-            raise SOMTypeException("Unknown SOM type: "+type)      
-
-    def buildSomWeights(self, force=False, save=True):
-        """Construct and save the weights matrix""" 
-        if(not force):
-            # first check to see that the
-            ids_in_use = self.DM.getSOMDataInfo(self.PM.dbFileName)
-            soms_done = []
-            for b in ["mer","cov"]:
-                for a in ["weights","regions"]:
-                    soms_done.append(len(ids_in_use[a][b]))
-            if (sum(soms_done) > 0):
-                # something's been done!
-                if(self.promptOnOverwrite() != 'Y'):
-                    print "Operation cancelled"
-                    return False
-                else:
-                    print "Overwriting SOMS in db:", self.PM.dbFileName
+            raise ge.SOMFlavourException("Unknown SOM flavour: "+flavour)
         
-        # now we can start
-        self.BM.loadBins(makeBins=True,silent=False)
-        print "Building SOM(s)"
-        cov_dim = len(self.PM.transformedCP[0])
-        mer_dim = len(self.PM.kmerSigs[0])
-        
-        # build kmer SOMS
-        k_vecs = self.whiten(self.BM.getCentroidProfiles(mode="mer"))
-        for i in range(self.numSoms):
-            map = som.SOM(self.somSide,mer_dim)
-            self.merSoms[i] = map
-            if(i == 0):
-                map.train(k_vecs, iterations=self.somIterations, weightImgFileName="mer")
-            else:
-                map.train(k_vecs, iterations=self.somIterations)
-            self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
-                                                self.somSide,
-                                                cov_dim,
-                                                mer_dim,
-                                                merWeights={i:map.getNodes()})
+        if(type=="weights"):    # make sure we store the data in the right place
+            map.loadWeights(data)
+        elif(type=="regions"):
+            map.loadRegions(data)
+        else:
+            raise ge.SOMTypeException("Unknown SOM type: "+type)      
 
-        # build coverage SOMS
-        c_vecs = self.whiten(self.BM.getCentroidProfiles(mode="cov"))
-        for i in range(self.numSoms):
-            map = som.SOM(self.somSide,cov_dim)
-            self.covSoms[i] = map
-            if(i == 0):
-                map.train(c_vecs, iterations=self.somIterations, weightImgFileName="cov")
-            else:
-                map.train(c_vecs, iterations=self.somIterations)
-            self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
-                                                self.somSide,
-                                                cov_dim,
-                                                mer_dim,
-                                                covWeights={i:map.getNodes()})
-    
     def promptOnOverwrite(self, minimal=False):
         """Check that the user is ok with overwriting the db"""
         input_not_ok = True
@@ -1314,6 +1310,161 @@ class SOMManager:
                 print "Error, unrecognised choice '"+option.upper()+"'"
                 minimal = True
 
+    def saveCovWeights(self, index):
+        """Save some coverage weights"""
+        self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
+                                            self.somSide,
+                                            self.covDim,
+                                            self.merDim,
+                                            covWeights={index:self.covSoms[index].getWeights()})
+        
+    def saveMerWeights(self, index):
+        """Save some kmer weights"""
+        self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
+                                            self.somSide,
+                                            self.covDim,
+                                            self.merDim,
+                                            merWeights={index:self.merSoms[index].getWeights()})
+        
+    def saveCovRegions(self, index):
+        """Save some coverage regions"""
+        self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
+                                            self.somSide,
+                                            self.covDim,
+                                            self.merDim,
+                                            covRegions={index:self.covSoms[index].getRegions()})
+        
+    def saveMerRegions(self, index):
+        """Save some coverage regions"""
+        self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
+                                            self.somSide,
+                                            self.covDim,
+                                            self.merDim,
+                                            merRegions={index:self.merSoms[index].getRegions()})
+           
+#------------------------------------------------------------------------------
+# REGIONS
+
+    def regionalise(self, force=False, save=True):
+        """Create regions within the SOMs"""
+        if(not force):
+            # first check to see that the
+            ids_in_use = self.DM.getSOMDataInfo(self.PM.dbFileName)
+            soms_done = []
+            for b in ["mer","cov"]:
+                for a in ["weights","regions"]:
+                    soms_done.append(len(ids_in_use[a][b]))
+            if (sum(soms_done) > 0):
+                # something's been done!
+                if(self.promptOnOverwrite() != 'Y'):
+                    print "Operation cancelled"
+                    return False
+                else:
+                    print "Overwriting SOM regions in db:", self.PM.dbFileName
+
+        bids = self.BM.getBids()
+        
+        # build mer regions
+        k_vecs = self.whiten(self.BM.getCentroidProfiles(mode="mer"))
+        for i in self.merSoms:
+            self.merSoms[i].regionalise(bids, k_vecs)
+            if(save):
+                self.saveMerRegions(i)
+            
+        # build coverage regions
+        c_vecs = self.whiten(self.BM.getCentroidProfiles(mode="cov"))        
+        for i in self.covSoms:
+            self.covSoms[i].regionalise(bids, c_vecs)
+            if(save):
+                self.saveCovRegions(i)
+
+    def findRegionNeighbours(self):
+        """Find out which regions neighbour which other regions"""
+        mer_Ns = {}
+        cov_Ns = {}
+        for i in self.merSoms:
+            for N in self.merSoms[i].findRegionNeighbours():
+                if(N in mer_Ns):
+                    mer_Ns[N] += 1
+                else:
+                    mer_Ns[N] = 1
+        for i in self.covSoms:
+            for N in self.covSoms[i].findRegionNeighbours():
+                if(N in cov_Ns):
+                    cov_Ns[N] += 1
+                else:
+                    cov_Ns[N] = 1
+        
+        combined_Ns = {}
+        for N in mer_Ns:
+            if(mer_Ns[N] >= 2):
+                combined_Ns[N] = mer_Ns[N]
+        for N in cov_Ns:
+            if(cov_Ns[N] >= 2):
+                if(N in combined_Ns):
+                    combined_Ns[N] += cov_Ns[N]
+                
+        filtered_Ns = {}
+        for N in combined_Ns:
+            if(combined_Ns[N] >= 4):
+                filtered_Ns[N] = combined_Ns[N]
+        
+        for N in filtered_Ns:
+            bin1 = self.BM.getBin(N[0])
+            bin2 = self.BM.getBin(N[1])
+            print N[0], bin1.covMeans, bin1.covStdevs, bin1.kValMean, bin1.kValStdev
+            print N[1], bin2.covMeans, bin2.covStdevs, bin2.kValMean, bin2.kValStdev
+            if(bin1.isSimilar(bin2)):
+                print "MERGE(",N[0],",",N[1],")"
+            print "========="
+        
+#------------------------------------------------------------------------------
+# WEIGHTS 
+
+    def buildSomWeights(self, force=False, save=True, plot=False):
+        """Construct and save the weights matrix""" 
+        if(not force):
+            # first check to see that the
+            ids_in_use = self.DM.getSOMDataInfo(self.PM.dbFileName)
+            soms_done = []
+            for b in ["mer","cov"]:
+                for a in ["weights","regions"]:
+                    soms_done.append(len(ids_in_use[a][b]))
+            if (sum(soms_done) > 0):
+                # something's been done!
+                if(self.promptOnOverwrite() != 'Y'):
+                    print "Operation cancelled"
+                    return False
+                else:
+                    print "Overwriting SOM weights in db:", self.PM.dbFileName
+        
+        # now we can start
+        print "Building SOM(s)"
+        
+        # build kmer SOMS
+        k_vecs = self.whiten(self.BM.getCentroidProfiles(mode="mer"))
+        for i in range(self.numSoms):
+            map = som.SOM(self.somSide,self.merDim)
+            self.merSoms[i] = map
+            if(i == 0 and plot):
+                map.train(k_vecs, iterations=self.somIterations, weightImgFileName="mer")
+            else:
+                map.train(k_vecs, iterations=self.somIterations)
+            if(save):
+                self.saveMerWeights(i)
+
+        # build coverage SOMS
+        c_vecs = self.whiten(self.BM.getCentroidProfiles(mode="cov"))
+        for i in range(self.numSoms):
+            map = som.SOM(self.somSide,self.covDim)
+            self.covSoms[i] = map
+            if(i == 0 and plot):
+                map.train(c_vecs, iterations=self.somIterations, weightImgFileName="cov")
+            else:
+                map.train(c_vecs, iterations=self.somIterations)
+            if(save):
+                self.saveCovWeights(i)
+    
     def whiten(self, profile):
         """Z normalize and scale profile columns"""
         v_mean = np.mean(profile, axis=0)
@@ -1334,6 +1485,15 @@ class SOMManager:
             self.covSoms[key].renderWeights(tag+"_covWeights_"+str(key))
         for key in self.merSoms.keys():
             self.merSoms[key].renderWeights(tag+"_merWeights_"+str(key))
+
+    def renderRegions(self, tag):
+        """Render all the weights for all the SOMS"""
+        # make the palette
+        palette = self.BM.makeCentroidPalette()
+        for key in self.covSoms.keys():
+            self.covSoms[key].renderRegions(tag+"_covRegions_"+str(key), palette)
+        for key in self.merSoms.keys():
+            self.merSoms[key].renderRegions(tag+"_merRegions_"+str(key), palette)
         
 ###############################################################################
 ###############################################################################

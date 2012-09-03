@@ -100,16 +100,25 @@ class SOM:
         self.radius = float(side)/2.0               # the radius of neighbour nodes which will be influenced by each new training vector
         
         # initialise the nodes to random values between 0 -> 1
-        print "    Making data structure"
-        self.TM = tm(self.side, dimension=self.dimension, randomize=True)
+        self.weights = tm(self.side, dimension=self.dimension, randomize=True)
+        self.regions = None
         
-    def getNodes(self):
-        """Get the weighting nodes"""
-        return self.TM.nodes
+    def getWeights(self):
+        """Get the weights nodes"""
+        return self.weights.nodes
+
+    def getRegions(self):
+        """Get the regions nodes"""
+        return self.regions.nodes
     
-    def loadData(self, nodes):
+    def loadWeights(self, nodes):
         """Use externally supplied data"""
-        self.TM.nodes = nodes
+        self.weights.nodes = nodes
+        
+    def loadRegions(self, nodes):
+        """Use externally supplied regions"""
+        self.regions = tm(self.side, dimension=1)
+        self.regions.nodes = nodes
     
 #------------------------------------------------------------------------------
 # CLASSIFICATION 
@@ -123,14 +132,51 @@ class SOM:
         for j in index_array:
             # find the best match between then data vector and the
             # current grid
-            best = self.TM.bestMatch(data_vector[j])
+            best = self.weights.bestMatch(data_vector[j])
             self.bestMatchCoords.append(best)
         print "Done"
 
+    def regionalise(self, bids, trainVector):
+        """Create regions on the torus based on matches with the training vector
+        
+         Train vector is a list of numpy arrays
+        """
+        # build a regions structure
+        self.regions = tm(self.side, dimension=1)
+        for row in range(self.side):
+            for col in range(self.side):
+                self.regions.nodes[row,col] = self.classifyPoint(self.weights.nodes[row,col],
+                                                                 trainVector,
+                                                                 bids)
+             
+    def classifyPoint(self, point, trainVector, bids):
+        """Returns the bid if of the best match to the trainVector
+        
+        trainVector and bids must be in sync
+        """
+        return bids[np.argmin((((trainVector - point)**2).sum(axis=1))**0.5)]
+        
+    def findRegionNeighbours(self):
+        """Find out which regions neighbour which other regions"""
+        neighbours = {}
+        for row in range(self.side-1):
+            for col in range(self.side-1):
+                if(self.regions.nodes[row,col][0] != self.regions.nodes[row+1,col+1][0]):
+                    nt = self.makeNTuple(self.regions.nodes[row,col][0],
+                                         self.regions.nodes[row+1,col+1][0]
+                                         )
+                    neighbours[nt] = True
+        return neighbours.keys()
+        
+    def makeNTuple(self, bid1, bid2):
+        """A way for making standard tuples from bids"""
+        if(bid1 < bid2): return (bid1, bid2)
+        return (bid2, bid1)
+     
 #------------------------------------------------------------------------------
 # TRAINING 
         
-    def train(self, train_vector, iterations=1000, vectorSubSet = 1000, weightImgFileName="", epsilom=0.001):
+    def train(self, trainVector, iterations=1000, vectorSubSet = 1000, weightImgFileName="", epsilom=0.001):
         """Train the SOM
         
         Train vector is a list of numpy arrays
@@ -147,7 +193,7 @@ class SOM:
         # these contain the changes to the set of grid nodes
         # and we will add their values to the grid nodes
         # once we have input all the training nodes
-        delta_nodes = np.zeros_like(self.TM.nodes)
+        delta_nodes = np.zeros_like(self.weights.nodes)
         
         for i in range(1, iterations+1):
             # reset the deltas
@@ -169,11 +215,11 @@ class SOM:
 
             # we would ideally like to select guys from the training set at random
             
-            index_array = np.arange(len(train_vector))
+            index_array = np.arange(len(trainVector))
             np.random.shuffle(index_array)
             cut_off = int(len(index_array)/vectorSubSet)
-            if(len(train_vector) < vectorSubSet):
-                cut_off = len(train_vector) # if less than 1000 training vectors, set this to suit 
+            if(len(trainVector) < vectorSubSet):
+                cut_off = len(trainVector) # if less than 1000 training vectors, set this to suit 
             elif(cut_off < vectorSubSet): # else, try to make sure there are at least 1000
                 cut_off = vectorSubSet
             counter = 0
@@ -189,12 +235,12 @@ class SOM:
 
                 # find the best match between then training vector and the
                 # current grid
-                best = self.TM.bestMatch(train_vector[j])
+                best = self.weights.bestMatch(trainVector[j])
 
                 # apply the learning to the neighbours on the grid
                 # the origin of the best match is alwys within the distance
                 if(front_multiplier > epsilom):
-                    delta_nodes[best[0],best[1]] += front_multiplier*(train_vector[j]-self.TM.nodes[best[0],best[1]])
+                    delta_nodes[best[0],best[1]] += front_multiplier*(trainVector[j]-self.weights.nodes[best[0],best[1]])
                 else:
                     tf = time.time()
                     print "    Training complete - Total: "+self.secondsToStr(tf-t0)+" secs"
@@ -207,25 +253,25 @@ class SOM:
                     if(influence > epsilom):
                         max_radius = dist 
                         # Up                            
-                        Urow = np.mod((best[0]+dist),self.TM.rows) 
+                        Urow = np.mod((best[0]+dist),self.weights.rows) 
                         Ucol = best[1]
                         
                         # Down
-                        Drow = np.mod((best[0]-dist),self.TM.rows) 
+                        Drow = np.mod((best[0]-dist),self.weights.rows) 
                         Dcol = best[1]
                         
                         # Left
                         Lrow = best[0]
-                        Lcol = np.mod((best[1]-dist),self.TM.columns)
+                        Lcol = np.mod((best[1]-dist),self.weights.columns)
                         
                         # Right
                         Rrow = best[0]
-                        Rcol = np.mod((best[1]+dist),self.TM.columns)
+                        Rcol = np.mod((best[1]+dist),self.weights.columns)
                                             
-                        delta_nodes[Urow,Ucol] += influence*(train_vector[j]-self.TM.nodes[Urow,Ucol])
-                        delta_nodes[Drow,Dcol] += influence*(train_vector[j]-self.TM.nodes[Drow,Dcol])
-                        delta_nodes[Lrow,Lcol] += influence*(train_vector[j]-self.TM.nodes[Lrow,Lcol])
-                        delta_nodes[Rrow,Rcol] += influence*(train_vector[j]-self.TM.nodes[Rrow,Rcol])
+                        delta_nodes[Urow,Ucol] += influence*(trainVector[j]-self.weights.nodes[Urow,Ucol])
+                        delta_nodes[Drow,Dcol] += influence*(trainVector[j]-self.weights.nodes[Drow,Dcol])
+                        delta_nodes[Lrow,Lcol] += influence*(trainVector[j]-self.weights.nodes[Lrow,Lcol])
+                        delta_nodes[Rrow,Rcol] += influence*(trainVector[j]-self.weights.nodes[Rrow,Rcol])
                     else:
                         break
                                 
@@ -242,28 +288,28 @@ class SOM:
                             influence = front_multiplier * exp(-1*(true_dist**2)/rad_div_val)
                             if(influence > epsilom):
                                 #True                            
-                                Trow = np.mod((best[0]+row),self.TM.rows) 
-                                Tcol = np.mod((best[1]+col),self.TM.columns)
+                                Trow = np.mod((best[0]+row),self.weights.rows) 
+                                Tcol = np.mod((best[1]+col),self.weights.columns)
                                 
                                 # Mirrored down
-                                Drow = np.mod((best[0]-row),self.TM.rows) 
+                                Drow = np.mod((best[0]-row),self.weights.rows) 
                                 Dcol = Tcol
                                 
                                 # Mirrored Left
                                 Lrow = Trow
-                                Lcol = np.mod((best[1]-col),self.TM.columns)
+                                Lcol = np.mod((best[1]-col),self.weights.columns)
                                 
                                 # Mirrored diagonal
                                 Grow = Drow
                                 Gcol = Lcol
     
-                                delta_nodes[Trow,Tcol] += influence*(train_vector[j]-self.TM.nodes[Trow,Tcol])
-                                delta_nodes[Drow,Dcol] += influence*(train_vector[j]-self.TM.nodes[Drow,Dcol])
-                                delta_nodes[Lrow,Lcol] += influence*(train_vector[j]-self.TM.nodes[Lrow,Lcol])
-                                delta_nodes[Grow,Gcol] += influence*(train_vector[j]-self.TM.nodes[Grow,Gcol])
+                                delta_nodes[Trow,Tcol] += influence*(trainVector[j]-self.weights.nodes[Trow,Tcol])
+                                delta_nodes[Drow,Dcol] += influence*(trainVector[j]-self.weights.nodes[Drow,Dcol])
+                                delta_nodes[Lrow,Lcol] += influence*(trainVector[j]-self.weights.nodes[Lrow,Lcol])
+                                delta_nodes[Grow,Gcol] += influence*(trainVector[j]-self.weights.nodes[Grow,Gcol])
                             
             # add the deltas to the grid nodes and clip to keep between 0 and 1
-            self.TM.nodes = np.clip(self.TM.nodes + delta_nodes, 0, 1)
+            self.weights.nodes = np.clip(self.weights.nodes + delta_nodes, 0, 1)
 
             t2 = time.time()
             print "- ("+self.secondsToStr(t2-t1)+","+self.secondsToStr(t2-t0)+")"
@@ -272,7 +318,7 @@ class SOM:
             if(weightImgFileName != ""):
                 filename = weightImgFileName+"_%04d" % i+".png"
                 print "   writing:",filename
-                self.TM.renderSurface(filename)
+                self.weights.renderSurface(filename)
 
         tf = time.time()
         print "    Training complete - Total: "+self.secondsToStr(tf-t0)+" secs"
@@ -287,7 +333,26 @@ class SOM:
     def renderWeights(self, tag):
         """Render the surface weights"""
         filename = tag+".png"
-        self.TM.renderSurface(filename)
+        self.weights.renderSurface(filename)
+
+    def renderRegions(self, tag, palette):
+        """Render the regions
+        
+        palette is a hash of bid -> color
+        """
+        filename = tag+".png"
+        if(self.regions is None):
+            raise ge.RegionsDontExistException
+        try:
+            img = Image.new("RGB", (self.weights.rows,self.regions.columns))
+            for row in range(self.side):
+                for col in range(self.side):
+                    img.putpixel((col,row), palette[self.regions.nodes[row,col][0]])
+            img = img.resize((self.weights.columns*10, self.weights.rows*10),Image.NEAREST)
+            img.save(filename)
+        except:
+            print sys.exc_info()[0]
+            raise
         
     def transColour(self, val):
         """Transform color value"""
@@ -298,9 +363,9 @@ class SOM:
         
         set weighted to use a heatmap view of where they map        
         """
-        img_points = np.zeros((self.TM.rows,self.TM.columns))
+        img_points = np.zeros((self.weights.rows,self.weights.columns))
         try:
-            img = Image.new("RGB", (self.TM.columns, self.TM.rows))
+            img = Image.new("RGB", (self.weights.columns, self.weights.rows))
             if(weighted):   # color points by bestmatch density 
                 max = 0
                 for point in self.bestMatchCoords:
@@ -318,7 +383,7 @@ class SOM:
             else:       # make all best match points white
                 for point in self.bestMatchCoords:
                     img.putpixel((point[1],point[0]), (255,255,255))
-            img = img.resize((self.TM.columns*10, self.TM.rows*10),Image.NEAREST)
+            img = img.resize((self.weights.columns*10, self.weights.rows*10),Image.NEAREST)
             img.save(fileName)
         except:
             print sys.exc_info()[0]

@@ -138,6 +138,31 @@ class Bin:
         self.calcTotalSize(contigLengths)
         self.getKmerColourStats(contigColours)
 
+    def isSimilar(self, alien, merValTol=5, covTol=5):
+        """See if two bins are similar
+        
+        Uses huge tolerances, so USE with caution!
+        """
+        this_upper = self.kValMean + merValTol * self.kValStdev
+        this_lower = self.kValMean - merValTol * self.kValStdev
+        that_upper = alien.kValMean + merValTol * alien.kValStdev
+        that_lower = alien.kValMean - merValTol * alien.kValStdev
+        if(alien.kValMean < this_lower or alien.kValMean > this_upper):
+            return False
+        if(self.kValMean < that_lower or self.kValMean > that_upper):
+            return False
+        
+        this_upper = self.covMeans + covTol*self.covStdevs
+        this_lower = self.covMeans - covTol*self.covStdevs
+        that_upper = alien.covMeans + covTol*alien.covStdevs
+        that_lower = alien.covMeans - covTol*alien.covStdevs
+        for i in range(3):
+            if(alien.covMeans[i] < this_lower[i] or alien.covMeans[i] > this_upper[i]):
+                return False
+            if(self.covMeans[i] < that_lower[i] or self.covMeans[i] > that_upper[i]):
+                return False
+        return True
+
     def purge(self, deadIndicies, transformedCP, kmerSigs, contigLengths, contigColours):
         """Delete some rowIndicies and remake stats"""
         old_ri = self.rowIndicies
