@@ -1190,16 +1190,56 @@ class SOMManager:
                  binManager,
                  numSoms=3,
                  somSide=150,
-                 somIterations=500
+                 somIterations=1000,
+                 load=False
                  ):
         self.PM = profileManager
         self.BM = binManager
         self.DM = self.PM.dataManager
         self.numSoms = 3
-        self.somSide = somSide
         self.somIterations = somIterations
         self.covSoms = {}
         self.merSoms = {}
+
+        if(load):
+            # load a som from file
+            meta = self.DM.getSOMMetaFields(self.PM.dbFileName)
+            self.somSide = meta['side']
+            # load the actual data
+            self.loadSoms(self.DM.getSOMDataInfo(self.PM.dbFileName), meta=meta)
+            
+        else:
+            self.somSide = somSide
+
+    def loadSoms(self, idsInUse, meta=None):
+        """load a bunch of SOM data in one go"""
+        if(meta is None):
+            meta = getSOMMetaFields(self.PM.dbFileName)
+        for flavour in ["mer","cov"]:
+            for type in ["weights","regions"]:
+                for index in idsInUse[type][flavour]:
+                    self.loadSom(index, type=type, flavour=flavour, meta=meta)
+
+    def loadSom(self, index, type="weights", flavour="mer", meta=None):
+        """Load a saved SOM"""
+        if(meta is None):
+            meta = self.DM.getSOMMetaFields(self.PM.dbFileName)
+        data = self.DM.getSOMData(self.PM.dbFileName, index, type, flavour)
+        if(type=="weights"):
+            if(flavour == "mer"):
+                map = som.SOM(self.somSide,meta["merDimension"])
+                map.loadData(data)
+                self.merSoms[index] = map
+            elif(flavour == "cov"):
+                map = som.SOM(self.somSide,meta["covDimension"])
+                map.loadData(data)
+                self.covSoms[index] = map
+            else:
+                raise SOMFlavourException("Unknown SOM flavour: "+flavour)
+        elif(type=="regions"):
+            pass
+        else:
+            raise SOMTypeException("Unknown SOM type: "+type)      
 
     def buildSomWeights(self, force=False, save=True):
         """Construct and save the weights matrix""" 
@@ -1224,21 +1264,6 @@ class SOMManager:
         cov_dim = len(self.PM.transformedCP[0])
         mer_dim = len(self.PM.kmerSigs[0])
         
-        # build coverage SOMS
-        c_vecs = self.whiten(self.BM.getCentroidProfiles(mode="cov"))
-        for i in range(self.numSoms):
-            map = som.SOM(self.somSide,cov_dim)
-            self.covSoms[i] = map
-            if(i == 0):
-                map.train(c_vecs, iterations=self.somIterations, weightImgFileName="cov")
-            else:
-                map.train(c_vecs, iterations=self.somIterations)
-            self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
-                                                self.somSide,
-                                                cov_dim,
-                                                mer_dim,
-                                                covWeights={i:map.getNodes()})
-
         # build kmer SOMS
         k_vecs = self.whiten(self.BM.getCentroidProfiles(mode="mer"))
         for i in range(self.numSoms):
@@ -1253,6 +1278,21 @@ class SOMManager:
                                                 cov_dim,
                                                 mer_dim,
                                                 merWeights={i:map.getNodes()})
+
+        # build coverage SOMS
+        c_vecs = self.whiten(self.BM.getCentroidProfiles(mode="cov"))
+        for i in range(self.numSoms):
+            map = som.SOM(self.somSide,cov_dim)
+            self.covSoms[i] = map
+            if(i == 0):
+                map.train(c_vecs, iterations=self.somIterations, weightImgFileName="cov")
+            else:
+                map.train(c_vecs, iterations=self.somIterations)
+            self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
+                                                self.somSide,
+                                                cov_dim,
+                                                mer_dim,
+                                                covWeights={i:map.getNodes()})
     
     def promptOnOverwrite(self, minimal=False):
         """Check that the user is ok with overwriting the db"""
@@ -1285,6 +1325,16 @@ class SOMManager:
         profile /= v_maxs
         return profile
 
+#------------------------------------------------------------------------------
+# IO and IMAGE RENDERING 
+
+    def renderWeights(self, tag):
+        """Render all the weights for all the SOMS"""
+        for key in self.covSoms.keys():
+            self.covSoms[key].renderWeights(tag+"_covWeights_"+str(key))
+        for key in self.merSoms.keys():
+            self.merSoms[key].renderWeights(tag+"_merWeights_"+str(key))
+        
 ###############################################################################
 ###############################################################################
 ###############################################################################

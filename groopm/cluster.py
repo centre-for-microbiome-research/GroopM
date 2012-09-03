@@ -130,10 +130,13 @@ class ClusterEngine:
 #------------------------------------------------------------------------------
 # BIN EXPANSION USING SOMS
 
-    def expandBins(self):
+    def expandBins(self, force=False):
         """Expand bins using SOMs"""
+        SM = dataManagers.SOMManager(self.PM, self.BM, load=True)
+        SM.renderWeights("test")
+        return
         SM = dataManagers.SOMManager(self.PM, self.BM)
-        SM.buildSomWeights()
+        SM.buildSomWeights(force)
         return
             
 #------------------------------------------------------------------------------

@@ -505,15 +505,18 @@ class GMDataManager:
                     # we already have a group, so we should assume that there is 
                     # a meta table associated with this group. Read that to get the
                     # Ids currently in use
-                    meta_row = h5file.root.som.meta.read(start=0, stop=1, step=1)[0]
-                    if(len(meta_row[3]) > 0):
-                        ids_in_use["weights"]["cov"] = [int(x) for x in meta_row[3].split(",")]
-                    if(len(meta_row[4]) > 0):
-                        ids_in_use["weights"]["mer"] = [int(x) for x in meta_row[4].split(",")]
-                    if(len(meta_row[5]) > 0):
-                        ids_in_use["regions"]["cov"] = [int(x) for x in meta_row[5].split(",")]
-                    if(len(meta_row[6]) > 0):
-                        ids_in_use["regions"]["mer"] = [int(x) for x in meta_row[6].split(",")]
+                    try:
+                        tmp_table = h5file.root.som._f_getChild('meta')
+                        meta_row = h5file.root.som.meta.read(start=0, stop=1, step=1)[0]
+                        if(len(meta_row[3]) > 0):
+                            ids_in_use["weights"]["cov"] = [int(x) for x in meta_row[3].split(",")]
+                        if(len(meta_row[4]) > 0):
+                            ids_in_use["weights"]["mer"] = [int(x) for x in meta_row[4].split(",")]
+                        if(len(meta_row[5]) > 0):
+                            ids_in_use["regions"]["cov"] = [int(x) for x in meta_row[5].split(",")]
+                        if(len(meta_row[6]) > 0):
+                            ids_in_use["regions"]["mer"] = [int(x) for x in meta_row[6].split(",")]
+                    except: pass
         except:
             print "Error creating SOM database:", dbFileName, sys.exc_info()[0]
             raise

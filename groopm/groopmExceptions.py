@@ -57,12 +57,16 @@ import sys
 
 #------------------------------------------------------------------------------
 # BIN MANAGER
-class BinNotFoundException(BaseException): pass
-class ModeNotAppropriateException(BaseException): pass
+class GMBinException(BaseException): pass
+class BinNotFoundException(GMBinException): pass
+class ModeNotAppropriateException(GMBinException): pass
 
 #------------------------------------------------------------------------------
 # SOM MANAGER
-class SOMDataNotFoundException(BaseException): pass
+class GMSOMException(BaseException): pass
+class SOMDataNotFoundException(GMSOMException): pass
+class SOMFlavourException(GMSOMException): pass
+class SOMTypeException(GMSOMException): pass
 
 ###############################################################################
 ###############################################################################

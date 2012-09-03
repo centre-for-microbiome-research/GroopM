@@ -119,11 +119,8 @@ class GroopMOptionsParser():
             print "****************************************************************"
             print " [[GroopM]] Running in bin expansion mode..."
             print "****************************************************************"
-            CE = cluster.ClusterEngine(options.dbname,
-                                       force=options.force,
-                                       plot=options.plot
-                                       )
-            CE.expandBins()
+            CE = cluster.ClusterEngine(options.dbname)
+            CE.expandBins(force=options.force)
         
         elif(options.subparser_name == 'refine'):
             # make bin cores

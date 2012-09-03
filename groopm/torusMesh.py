@@ -100,85 +100,8 @@ class TorusMesh:
         (self.colorLookup, self.cVec, self.maxAngle) = self.makeColorScheme()
 
 #------------------------------------------------------------------------------
-# WORKING ON THE DATA
-
-    def reNorm(self):
-        """set all vectors to values between 0 and 1
-        
-        some of the values will want to creep above 1 or below 0
-        this function renormalises the grid
-        """
-        for r in range(self.rows):
-            for c in range(self.columns):
-                for v in range(self.dimension):
-                    if(self.nodes[r,c,v] < 0):
-                        self.nodes[r,c,v] = 0
-                    elif(self.nodes[r,c,v] > 1):
-                        self.nodes[r,c,v] = 1
-
-    def reNorm(self):
-        """set all vectors to values between 0 and 1
-        
-        some of the values will want to creep above 1 or below 0
-        this function renormalises the grid
-        """
-        for r in range(self.rows):
-            for c in range(self.columns):
-                for v in range(self.dimension):
-                    if(self.nodes[r,c,v] < 0):
-                        self.nodes[r,c,v] = 0
-                    elif(self.nodes[r,c,v] > 1):
-                        self.nodes[r,c,v] = 1
-
-    def reNormAndUpdateBMFilter(self):
-        """set all vectors to values between 0 and 1
-        
-        some of the values will want to creep above 1 or below 0
-        this function renormalises the grid
-        ALSO: update the bestmatch filter
-        """
-        for r in range(self.rows):
-            for c in range(self.columns):
-                # renorm!
-                for v in range(self.dimension):
-                    if(self.nodes[r,c,v] < 0):
-                        self.nodes[r,c,v] = 0
-                    elif(self.nodes[r,c,v] > 1):
-                        self.nodes[r,c,v] = 1
-                # BMFilter
-                self.BMFilter[r,c] = self.getAngBetweenNormed(self.nodes[r,c]/np.linalg.norm(self.nodes[r,c]),
-                                                              cVec)
-                        
-#------------------------------------------------------------------------------
 # WORKING WITH THE DATA
 
-    def findNeighborhood(self, pt, dist):
-        """Returns a list of points which live within 'dist' of 'pt'
-        
-        pt = (row,col)
-        """  
-        # first we bound ourselves to the oriented square surrounding 
-        # the point of interest 
-        neighbors = []
-        for row in range(int(pt[0] - dist), int(pt[0] + dist + 1)):
-            for col in range(int(pt[1] - dist), int(pt[1] + dist + 1)):
-                # now we check to see that the euclidean distance is less than
-                # the specified distance.
-                this_dist = np.around(np.sqrt( (pt[0] - row)**2 + (pt[1] - col)**2 ),0)
-                if(this_dist <= dist):
-                    rrow= row
-                    rcol = col
-                    while(rrow >= self.rows):
-                        rrow -= self.rows
-                    while(rrow < 0):
-                        rrow += self.rows
-                    while(rcol >= self.columns):
-                        rcol -= self.columns
-                    while(rcol < 0):
-                        rcol += self.columns
-                    neighbors.append((rrow,rcol,this_dist))
-        return neighbors
-    
     def dist(self,A,B,type="euc"):
         """Work out the distance between points A and B
         
@@ -243,7 +166,8 @@ class TorusMesh:
             # grab the subset of the vector
             sub_vec = vector[self.colorLookup[l]:(self.colorLookup[l]+self.colorLookup[3]):1]
             # average and the turn into an rgb value
-            col[l] = int(self.getAngBetweenNormed(sub_vec/np.linalg.norm(sub_vec), self.cVec)/self.maxAngle*255)
+            sub_vec_size = np.linalg.norm(sub_vec) + 0.001
+            col[l] = int(self.getAngBetweenNormed(sub_vec/sub_vec_size, self.cVec)/self.maxAngle*255)
         return col
 
     def getAngBetweenNormed(self, P1, P2):
