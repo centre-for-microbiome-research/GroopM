@@ -48,11 +48,8 @@ __email__ = "mike@mikeimelfort.com"
 __status__ = "Development"
 
 ###############################################################################
-
+import os
 import sys
-import math
-import colorsys
-import random
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -60,18 +57,47 @@ from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
 
 import numpy as np
-import scipy.ndimage as ndi
-import scipy.spatial.distance as ssdist
-from scipy.stats import kstest
-
-import networkx as nx
-
-import time
 
 # GroopM imports
 import dataManagers
 
 np.seterr(all='raise')
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
+class GMExtractor:
+    """Used for extracting reads and contigs based on bin assignments"""
+    def __init__(self, dbFileName,
+                 data,
+                 bids=[],
+                 folder='',
+                 ):
+        if bids is None:
+            self.bids = []
+        else:
+            self.bids = bids
+        
+        if(folder == ''):
+            # write to current working dir
+            self.outDir = os.path.cwd()
+        else:
+            self.outDir = folder
+            # make the dir if need be
+        
+    def extractContigs(self, fasta=[], cutoff=0):
+        """Extract contigs and write to file"""
+        self.PM = dataManagers.ProfileManager(dbFileName)   # based on user specified length
+        self.BM = dataManagers.BinManager(dbFileName=dbFileName)   # bins
+        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+    
+    def  extractReads(self, bams=[], shuffled=False):
+        """Extract reads from sam files and write to file"""
+        self.PM = dataManagers.ProfileManager(dbFileName)   # based on user specified length
+        self.BM = dataManagers.BinManager(dbFileName=dbFileName)   # bins
+        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
 
 ###############################################################################
 ###############################################################################

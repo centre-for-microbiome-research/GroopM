@@ -126,15 +126,10 @@ class SOM:
     # Classify!
     # run this after training to get an X/Y for each vector 
     # you'd like to classify
-    def classify(self, names_vector=[], data_vector=[[]]):
-        print "Start classification..."
-        index_array = np.arange(len(data_vector))
-        for j in index_array:
-            # find the best match between then data vector and the
-            # current grid
-            best = self.weights.bestMatch(data_vector[j])
-            self.bestMatchCoords.append(best)
-        print "Done"
+    def classify(self, point):
+        """Classify an individual point"""
+        (row,col) = self.weights.bestMatch(point)
+        return self.regions.nodes[row,col][0]
 
     def regionalise(self, bids, trainVector):
         """Create regions on the torus based on matches with the training vector

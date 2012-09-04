@@ -131,6 +131,27 @@ class GroopMOptionsParser():
             BM.loadBins(makeBins=True, silent=False)
             BM.condenseWrapper(save=True,manual=options.manual,plotter=options.plotter)
 
+        elif(options.subparser_name == 'extract'):
+            # Extract data
+            print "****************************************************************"
+            print " [[GroopM]] Running in extraction mode(",options.mode,")..."
+            print "****************************************************************"
+            bids = []
+            if options.bids is not None:
+                bids = options.bids
+            BX = groopmUtils.BinExtractor(options.dbname,
+                                          options.data,
+                                          bids=bids,
+                                          folder=options.outfolder
+                                          )
+            if(options.mode=='contigs'):
+                BX.extractContigs(fasta=data, cutoff=options.cutoff)
+            elif(options.mode=='reads'):
+                BX.extractReads(bams=data, shuffle=options.shuffle)
+            else:
+                raise ge.ExtractModeNotAppropriateException("mode: "+mode+" is unknown")
+            
+
         elif(options.subparser_name == 'merge'):
             # make bin cores
             print "****************************************************************"

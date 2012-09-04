@@ -1223,6 +1223,22 @@ class SOMManager:
         self.covSoms = {}
         self.merSoms = {}
 
+        # normalisation / training vectors
+        self.cVecs = None
+        self.cMeans = None
+        self.cStdevs = None
+        self.cMins = None
+        self.cMaxs = None
+
+        self.kVecs = None
+        self.kMeans = None
+        self.kStdevs = None
+        self.kMins = None
+        self.kMaxs = None
+
+        # used for automerged bins
+        self.collapsedMappings = {}
+
         # misc
         self.numSoms = 3
         self.somIterations = somIterations
@@ -1341,7 +1357,36 @@ class SOMManager:
                                             self.covDim,
                                             self.merDim,
                                             merRegions={index:self.merSoms[index].getRegions()})
-           
+
+    def loadTrainingVectors(self):
+        """Load and whiten training vectors"""
+        (self.cVecs, self.cMeans, self.cStdevs, self.cMins, self.cMaxs) = self.whiten(self.BM.getCentroidProfiles(mode="cov"))
+        (self.kVecs, self.kMeans, self.kStdevs, self.kMins, self.kMaxs) = self.whiten(self.BM.getCentroidProfiles(mode="mer"))
+
+#------------------------------------------------------------------------------
+# CLASSIFICATION
+
+    def classify(self, rowIndex, mode='consensus'):
+        """Classify a contig (rowIndex) against the SOMS"""
+        m_bids = []
+        c_bids = []
+        
+        if(mode == 'mer' or mode == 'consensus'):
+            for i in self.merSoms:
+                tmp_bid = self.merSoms[i].classify(self.whitenKVector(self.PM.kmerSigs[rowIndex]))
+                while(tmp_bid in self.collapsedMappings):
+                    tmp_bid = self.collapsedMappings[tmp_bid]
+                m_bids.append(tmp_bid)
+
+        if(mode == 'cov' or mode == 'consensus'):                
+            for i in self.covSoms:
+                tmp_bid = self.covSoms[i].classify(self.whitenCVector(self.PM.transformedCP[rowIndex]))
+                while(tmp_bid in self.collapsedMappings):
+                    tmp_bid = self.collapsedMappings[tmp_bid]
+                c_bids.append(tmp_bid)
+        
+        print self.PM.contigNames[rowIndex], m_bids, c_bids
+
 #------------------------------------------------------------------------------
 # REGIONS
 
@@ -1363,18 +1408,17 @@ class SOMManager:
                     print "Overwriting SOM regions in db:", self.PM.dbFileName
 
         bids = self.BM.getBids()
+        self.loadTrainingVectors()
         
         # build mer regions
-        k_vecs = self.whiten(self.BM.getCentroidProfiles(mode="mer"))
         for i in self.merSoms:
-            self.merSoms[i].regionalise(bids, k_vecs)
+            self.merSoms[i].regionalise(bids, self.kVecs)
             if(save):
                 self.saveMerRegions(i)
             
         # build coverage regions
-        c_vecs = self.whiten(self.BM.getCentroidProfiles(mode="cov"))        
         for i in self.covSoms:
-            self.covSoms[i].regionalise(bids, c_vecs)
+            self.covSoms[i].regionalise(bids, self.cVecs)
             if(save):
                 self.saveCovRegions(i)
 
@@ -1382,6 +1426,8 @@ class SOMManager:
         """Find out which regions neighbour which other regions"""
         mer_Ns = {}
         cov_Ns = {}
+        
+        # first find out who is next to whom
         for i in self.merSoms:
             for N in self.merSoms[i].findRegionNeighbours():
                 if(N in mer_Ns):
@@ -1395,6 +1441,7 @@ class SOMManager:
                 else:
                     cov_Ns[N] = 1
         
+        # now find out who is consistently next to whom
         combined_Ns = {}
         for N in mer_Ns:
             if(mer_Ns[N] >= 2):
@@ -1404,19 +1451,40 @@ class SOMManager:
                 if(N in combined_Ns):
                     combined_Ns[N] += cov_Ns[N]
                 
+        # now refine tis search further
         filtered_Ns = {}
         for N in combined_Ns:
             if(combined_Ns[N] >= 4):
                 filtered_Ns[N] = combined_Ns[N]
         
+        # now back it up with some stats
         for N in filtered_Ns:
             bin1 = self.BM.getBin(N[0])
             bin2 = self.BM.getBin(N[1])
-            print N[0], bin1.covMeans, bin1.covStdevs, bin1.kValMean, bin1.kValStdev
-            print N[1], bin2.covMeans, bin2.covStdevs, bin2.kValMean, bin2.kValStdev
-            if(bin1.isSimilar(bin2)):
-                print "MERGE(",N[0],",",N[1],")"
-            print "========="
+            #print N[0], bin1.covMeans, bin1.covStdevs, bin1.kValMean, bin1.kValStdev
+            #print N[1], bin2.covMeans, bin2.covStdevs, bin2.kValMean, bin2.kValStdev
+            if(bin1.isSimilar(bin2)): # this test is symmetrical
+                # always map down to the smaller
+                self.collapsedMappings[N[1]] = N[0]
+                #print "MERGE(",N[0],",",N[1],")"
+            #print "========="
+
+    def validateRegions(self):
+        """Basic validation of regions
+        
+        Classify each contig fromeach bin and see if the classification is
+        correct
+        """
+        self.loadTrainingVectors()
+        bids = self.BM.getBids()
+        for bid in bids:
+            bin = self.BM.getBin(bid)
+            tmp_bid = bid
+            while(tmp_bid in self.collapsedMappings):
+                    tmp_bid = self.collapsedMappings[tmp_bid]
+            print "============\n",tmp_bid
+            for row_index in bin.rowIndicies:
+                self.classify(row_index)
         
 #------------------------------------------------------------------------------
 # WEIGHTS 
@@ -1441,27 +1509,28 @@ class SOMManager:
         # now we can start
         print "Building SOM(s)"
         
+        # get training data
+        self.loadTrainingVectors()
+        
         # build kmer SOMS
-        k_vecs = self.whiten(self.BM.getCentroidProfiles(mode="mer"))
         for i in range(self.numSoms):
             map = som.SOM(self.somSide,self.merDim)
             self.merSoms[i] = map
             if(i == 0 and plot):
-                map.train(k_vecs, iterations=self.somIterations, weightImgFileName="mer")
+                map.train(self.kVecs, iterations=self.somIterations, weightImgFileName="mer")
             else:
-                map.train(k_vecs, iterations=self.somIterations)
+                map.train(self.kVecs, iterations=self.somIterations)
             if(save):
                 self.saveMerWeights(i)
 
         # build coverage SOMS
-        c_vecs = self.whiten(self.BM.getCentroidProfiles(mode="cov"))
         for i in range(self.numSoms):
             map = som.SOM(self.somSide,self.covDim)
             self.covSoms[i] = map
             if(i == 0 and plot):
-                map.train(c_vecs, iterations=self.somIterations, weightImgFileName="cov")
+                map.train(self.cVecs, iterations=self.somIterations, weightImgFileName="cov")
             else:
-                map.train(c_vecs, iterations=self.somIterations)
+                map.train(self.cVecs, iterations=self.somIterations)
             if(save):
                 self.saveCovWeights(i)
     
@@ -1474,7 +1543,19 @@ class SOMManager:
         profile -= v_mins
         v_maxs = np.max(profile, axis=0)
         profile /= v_maxs
-        return profile
+        return (profile, v_mean, v_std, v_mins, v_maxs)
+
+    def whitenKVector(self, vector):
+        """Z normalize and scale individual vectors"""
+        vector = (vector-self.kMeans)/self.kStdevs
+        vector = (vector - self.kMins)/self.kMaxs
+        return np.clip(vector,0,1)
+
+    def whitenCVector(self, vector):
+        """Z normalize and scale individual vectors"""
+        vector = (vector-self.cMeans)/self.cStdevs
+        vector = (vector - self.cMins)/self.cMaxs
+        return np.clip(vector,0,1)
 
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 

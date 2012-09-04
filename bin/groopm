@@ -65,7 +65,7 @@ if __name__ == '__main__':
     subparsers = parser.add_subparsers(help="--", dest='subparser_name')
 
     ##################################################
-    # regular modes    
+    # Modes    
     ##################################################
     # parse raw data and save
     file_parser = subparsers.add_parser('parse', help='parse raw data and save to DB')
@@ -78,11 +78,11 @@ if __name__ == '__main__':
     # load saved data and make bin cores
     core_builder = subparsers.add_parser('core', help='load DB and make bin cores')
     core_builder.add_argument('dbname', help="name of the database to open")
-    core_builder.add_argument('-c', '--cutoff', default=10000, help="cutoff size for core creation. Default 10000")
+    core_builder.add_argument('-c', '--cutoff', default=10000, help="cutoff size for core creation. default 10000")
     core_builder.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing DB file without prompting")
-    core_builder.add_argument('-D', '--plot', action="store_true", default=False, help="create plots during core creation. Default: no plots")
-    core_builder.add_argument('-s', '--size', default=5, help="minimum number of contigs which define a core. Default: 5")
-    core_builder.add_argument('-b', '--bp', default=1000000, help="cumulative size of contigs which define a core regardless of number of contigs. Default: 1000000")
+    core_builder.add_argument('-D', '--plot', action="store_true", default=False, help="create plots during core creation. default: no plots")
+    core_builder.add_argument('-s', '--size', default=5, help="minimum number of contigs which define a core. default: 5")
+    core_builder.add_argument('-b', '--bp', default=1000000, help="cumulative size of contigs which define a core regardless of number of contigs. default: 1000000")
 
     # refine bins
     bin_refiner = subparsers.add_parser('refine', help='merge similar bins / split chimeric ones')
@@ -94,7 +94,17 @@ if __name__ == '__main__':
     bin_expander = subparsers.add_parser('expand', help='load DB and enlarge bins')
     bin_expander.add_argument('dbname', help="name of the database to open")
     bin_expander.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing db file without prompting")
-    bin_expander.add_argument('-D', '--plot', action="store_true", default=False, help="create plots during bin expansion. Default: no plots")
+    bin_expander.add_argument('-D', '--plot', action="store_true", default=False, help="create plots during bin expansion. default: no plots")
+
+    # extract reads and contigs from saved
+    bin_extractor = subparsers.add_parser('extract', help='extract contigs and reads based on bins')
+    bin_extractor.add_argument('dbname', help="name of the database to open")
+    bin_extractor.add_argument('data', nargs='+', help="data file(s) to extract from, bam or fasta")
+    bin_extractor.add_argument('-m', '--mode', default="contigs", help="what to extract [reads, contigs]. default: 'contigs'")
+    bin_extractor.add_argument('-f', '--outfolder', default="", help="write to this folder. default: current dir")
+    bin_extractor.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to use. default: all bins")
+    bin_extractor.add_argument('-c', '--cutoff', default=0, help="cutoff size, ignored for reads. default: no cutoff")
+    bin_extractor.add_argument('-s', '--shuffle', action="store_true", default=False, help="shuffle reads file, ignored for contigs or unpaired reads. default: no shuffle")
 
     # combine two or more bins into one
     bin_merger = subparsers.add_parser('merge', help='merge 2 or more bins')
@@ -107,7 +117,7 @@ if __name__ == '__main__':
     bin_splitter.add_argument('dbname', help="name of the database to open")
     bin_splitter.add_argument('bid', type=int, help="bin id to split")
     bin_splitter.add_argument('parts', type=int, help="number of parts to split the bin into")
-    bin_splitter.add_argument('-m', '--mode', default="kmer", help="profile to split on 'kmer' or 'cov'. Default: kmer")
+    bin_splitter.add_argument('-m', '--mode', default="kmer", help="profile to split on 'kmer' or 'cov'. default: kmer")
     bin_splitter.add_argument('-a', '--auto', action="store_true", default=False, help="merge without prompting")
     
     # split a bin into two parts
@@ -119,23 +129,23 @@ if __name__ == '__main__':
     # load bins and visualise
     bin_explorer = subparsers.add_parser('explore', help='explore and validate bins')
     bin_explorer.add_argument('dbname', help="name of the database to open")
-    bin_explorer.add_argument('-c', '--cutoff', default=10000, help="cutoff size. Default 10000")
+    bin_explorer.add_argument('-c', '--cutoff', default=10000, help="cutoff size. default 10000")
     bin_explorer.add_argument('-m', '--mode', default="points", help="Exploration mode [ids, points, profile, compare, flyover, unbinned] default: 'points'")
-    bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot. Default: all bins")
+    bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot. default: all bins")
 
     # print bin information       
     bin_printer = subparsers.add_parser('print', help='print bin information')
     bin_printer.add_argument('dbname', help="name of the database to open")
-    bin_printer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to print. Default: all bins")
-    bin_printer.add_argument('-o', '--outfile', default="", help="print to file. Default: stdout")
+    bin_printer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to print. default: all bins")
+    bin_printer.add_argument('-o', '--outfile', default="", help="print to file. default: stdout")
     bin_printer.add_argument('-f', '--format', default='summary', help="output format [full, minimal, summary]. default: 'summary'")
-    bin_printer.add_argument('-u', '--unbinned', action="store_true", default=False, help="print unbinned contig IDs too. Default: only binned")
+    bin_printer.add_argument('-u', '--unbinned', action="store_true", default=False, help="print unbinned contig IDs too. default: only binned")
 
     # plot a bin/bins
     bin_plotter = subparsers.add_parser('plot', help='plot bins')
     bin_plotter.add_argument('dbname', help="name of the database to open")
-    bin_plotter.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot. Default: all bins")
-    bin_plotter.add_argument('-s', '--sidebyside', action="store_true", default=False, help="plot bins in 3d side by side. Default: print to file")
+    bin_plotter.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot. default: all bins")
+    bin_plotter.add_argument('-s', '--sidebyside', action="store_true", default=False, help="plot bins in 3d side by side. default: print to file")
     bin_plotter.add_argument('-t', '--tag', default="BIN", help="tag to add to output filename")
     
     # TODO - implement these modes

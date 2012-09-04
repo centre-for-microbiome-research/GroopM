@@ -69,6 +69,11 @@ class SOMFlavourException(GMSOMException): pass
 class SOMTypeException(GMSOMException): pass
 class RegionsDontExistException(GMSOMException): pass
 
+#------------------------------------------------------------------------------
+# ARG PARSER
+class GMARGException(BaseException): pass
+class ExtractModeNotAppropriateException(GMARGException): pass
+
 ###############################################################################
 ###############################################################################
 ###############################################################################
