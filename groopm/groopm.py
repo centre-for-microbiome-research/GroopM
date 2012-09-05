@@ -73,22 +73,8 @@ class GroopMOptionsParser():
         return
     
     def parseOptions(self, options ):
-        if(options.subparser_name == 'prompt'):
-            # drop to shell prompt
-            vars = globals().copy()
-            vars.update(locals())
-            interactive_shell = GroopMInteractiveConsole(vars)
-            interactive_shell.startConsole()
-        
-        elif(options.subparser_name == 'batch'):
-            # run batch commands            
-            print "****************************************************************"
-            print " [[GroopM]] Running in batch mode..."
-            print "****************************************************************"
-            #batch_shell = cmd.GroopMBatchShell()
-            #batch_shell.run()
-        
-        elif(options.subparser_name == 'parse'):
+
+        if(options.subparser_name == 'parse'):
             # parse raw input
             print "****************************************************************"
             print " [[GroopM]] Running in data parsing mode..."
@@ -114,6 +100,25 @@ class GroopMOptionsParser():
                                        )
             CE.makeCores(coreCut=options.cutoff, minSize=options.size, minVol=options.bp)
 
+        elif(options.subparser_name == 'refine'):
+            # refine bin cores
+            print "****************************************************************"
+            print " [[GroopM]] Running in core condensing mode..."
+            print "****************************************************************"
+            BM = dataManagers.BinManager(dbFileName=options.dbname)
+            BM.loadBins(makeBins=True, silent=False)
+            BM.condenseWrapper(save=True,manual=options.manual,plotter=options.plotter)
+
+        elif(options.subparser_name == 'makesoms'):
+            # make SOMs
+            print "****************************************************************"
+            print " [[GroopM]] Running in SOM training mode..."
+            print "****************************************************************"
+            BM = dataManagers.BinManager(dbFileName=options.dbname)
+            SM = dataManagers.SOMManager(BM, somSide=options.side, somIterations=options.iterations)
+            do_merge = not options.no_merge
+            SM.DoSOMPipeline(merge=do_merge, force=options.force, tag=options.tag)
+
         elif(options.subparser_name == 'expand'):
             # make bin cores
             print "****************************************************************"
@@ -122,15 +127,6 @@ class GroopMOptionsParser():
             CE = cluster.ClusterEngine(options.dbname)
             CE.expandBins(force=options.force)
         
-        elif(options.subparser_name == 'refine'):
-            # make bin cores
-            print "****************************************************************"
-            print " [[GroopM]] Running in core condensing mode..."
-            print "****************************************************************"
-            BM = dataManagers.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True, silent=False)
-            BM.condenseWrapper(save=True,manual=options.manual,plotter=options.plotter)
-
         elif(options.subparser_name == 'extract'):
             # Extract data
             print "****************************************************************"
@@ -150,7 +146,6 @@ class GroopMOptionsParser():
                 BX.extractReads(bams=data, shuffle=options.shuffle)
             else:
                 raise ge.ExtractModeNotAppropriateException("mode: "+mode+" is unknown")
-            
 
         elif(options.subparser_name == 'merge'):
             # make bin cores
@@ -159,7 +154,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             BM = dataManagers.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
-            BM.merge(options.bids, options.auto, saveBins=True)
+            BM.merge(options.bids, options.force, saveBins=True)
 
         elif(options.subparser_name == 'split'):
             # make bin cores
@@ -168,7 +163,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             BM = dataManagers.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
-            BM.split(options.bid, options.parts, mode=options.mode, saveBins=True, test=options.auto, auto=False)
+            BM.split(options.bid, options.parts, mode=options.mode, saveBins=True, test=options.force, auto=False)
 
         elif(options.subparser_name == 'delete'):
             # make bin cores
@@ -222,10 +217,6 @@ class GroopMOptionsParser():
             BM.loadBins(makeBins=True, silent=False, bids=bids)
             BM.plotBins(FNPrefix=options.tag, sideBySide=options.sidebyside)
             
-        else:
-            print "****************************************************************"
-            print " [[GroopM]] - Use -h for help"
-            print "****************************************************************"
         return 0
     
 

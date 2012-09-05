@@ -130,22 +130,12 @@ class ClusterEngine:
 #------------------------------------------------------------------------------
 # BIN EXPANSION USING SOMS
 
-    def expandBins(self, force=False):
+    def expandBins(self, force=False, plot=False):
         """Expand bins using SOMs"""
-        SM = dataManagers.SOMManager(self.PM, self.BM, load=True)
-        SM.findRegionNeighbours(merge=True)
-        SM.renderRegions("post")
+        SM = dataManagers.SOMManager(self.BM, load=True)
         SM.validateRegions()
         return
-        
-        #SM.regionalise(force=force)
-        #SM.renderWeights("test")
-        #SM.renderRegions("test")
-        return
-        SM = dataManagers.SOMManager(self.PM, self.BM)
-        SM.buildSomWeights(force=force)
-        return
-            
+    
 #------------------------------------------------------------------------------
 # CORE CONSTRUCTION AND MANAGEMENT
         

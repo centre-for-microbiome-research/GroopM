@@ -190,6 +190,9 @@ class SOM:
         # once we have input all the training nodes
         delta_nodes = np.zeros_like(self.weights.nodes)
         
+        current_disp_time = "0" # sed for display
+        current_total_time = "0"
+        
         for i in range(1, iterations+1):
             # reset the deltas
             delta_nodes.fill(0.0)
@@ -225,7 +228,7 @@ class SOM:
                 if(counter > cut_off):
                     break 
 
-                sys.stdout.write("\r    Iteration: %i of %i, Comparison: %i of %i, Radius: %04f / %04f " % (i, iterations, counter, cut_off, radius_decaying, radius_ratio))
+                sys.stdout.write("\r    Iteration: %i of %i, Comparison: %i of %i, Radius: %04f / %04f " % (i, iterations, counter, cut_off, radius_decaying, radius_ratio) + "- (PREV: "+current_disp_time+", TOTAL: "+current_total_time+")   ")
                 sys.stdout.flush()
 
                 # find the best match between then training vector and the
@@ -307,7 +310,8 @@ class SOM:
             self.weights.nodes = np.clip(self.weights.nodes + delta_nodes, 0, 1)
 
             t2 = time.time()
-            print "- ("+self.secondsToStr(t2-t1)+","+self.secondsToStr(t2-t0)+")"
+            current_disp_time = self.secondsToStr(t2-t1)
+            current_total_time = self.secondsToStr(t2-t0)
             
             # make a tmp image, perhaps
             if(weightImgFileName != ""):

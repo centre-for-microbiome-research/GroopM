@@ -1205,7 +1205,6 @@ class BinManager:
 class SOMManager:
     """Manage multiple SOMs"""
     def __init__(self,
-                 profileManager,
                  binManager,
                  numSoms=3,
                  somSide=150,
@@ -1214,9 +1213,9 @@ class SOMManager:
                  load=False
                  ):
         # raw data storage
-        self.PM = profileManager        # be sure that this data structure is ready to go!
         self.BM = binManager
         self.BM.loadBins(makeBins=makeBins,silent=False)
+        self.PM = self.BM.PM
         self.DM = self.PM.dataManager
 
         # pointers to various torus maps
@@ -1364,6 +1363,20 @@ class SOMManager:
         (self.kVecs, self.kMeans, self.kStdevs, self.kMins, self.kMaxs) = self.whiten(self.BM.getCentroidProfiles(mode="mer"))
 
 #------------------------------------------------------------------------------
+# PIPELINING
+    
+    def DoSOMPipeline(self, merge=True, force=False, tag=""):
+        """Wrap the various tasks needed to produce SOMs"""
+        self.buildSomWeights(force=force)
+        self.regionalise(force=True)
+        self.findRegionNeighbours(merge=merge)
+        self.validateRegions()
+        if(tag != ""):
+            self.renderWeights(tag)
+            self.renderRegions(tag)
+
+
+#------------------------------------------------------------------------------
 # CLASSIFICATION
 
     def classify(self, rowIndex, mode='consensus'):
@@ -1404,14 +1417,42 @@ class SOMManager:
                 # we classify based just on this
                 return c_choice
         
-        print self.PM.contigNames[rowIndex], m_choice, c_choice
+        #print self.PM.contigNames[rowIndex], m_choice, c_choice," : ",
         
         # to get here the mode must be consensus
         # in this case we need the m_choice and the c_choice to agree
         if((m_choice == c_choice) or (c_choice == 0)):
+            #print m_choice
             return m_choice
         if(m_choice == 0):
+            #print c_choice
             return c_choice
+        
+        # m_choice and c_choice disagree and are not 0
+        max_count = 0
+        winning_bid = 0
+        combined_bids = {}
+        #print c_bids, m_bids, " : ",
+        for bid in c_bids:
+            combined_bids[bid] = c_bids[bid]
+            if(combined_bids[bid] > max_count):
+                max_count = combined_bids[bid]
+                winning_bid = bid
+        for bid in m_bids:
+            if(bid not in combined_bids):
+                combined_bids[bid] = m_bids[bid]
+            else:
+                combined_bids[bid] += m_bids[bid]
+            if(combined_bids[bid] > max_count):
+                max_count = combined_bids[bid]
+                winning_bid = bid
+        if((combined_bids[winning_bid] > 3) and
+           (m_bids[winning_bid] != 0) and
+           (c_bids[winning_bid] != 0)
+           ):
+            #print winning_bid
+            return winning_bid
+        #print 0
         return 0
 
 #------------------------------------------------------------------------------
@@ -1419,6 +1460,7 @@ class SOMManager:
 
     def regionalise(self, force=False, save=True):
         """Create regions within the SOMs"""
+        print "    Creating classification regions"
         if(not force):
             # first check to see that the
             ids_in_use = self.DM.getSOMDataInfo(self.PM.dbFileName)
@@ -1435,7 +1477,6 @@ class SOMManager:
                     print "Overwriting SOM regions in db:", self.PM.dbFileName
 
         bids = self.BM.getBids()
-        print bids
         self.loadTrainingVectors()
         
         # build mer regions
@@ -1452,6 +1493,7 @@ class SOMManager:
 
     def findRegionNeighbours(self, merge=False):
         """Find out which regions neighbour which other regions"""
+        print "    Finding region neighbours"
         mer_Ns = {}
         cov_Ns = {}
         self.collapsedMappings = {}
@@ -1507,6 +1549,7 @@ class SOMManager:
         Classify each contig fromeach bin and see if the classification is
         correct
         """
+        print "Validating regions"
         self.loadTrainingVectors()
         bids = self.BM.getBids()
         for bid in bids:
@@ -1514,9 +1557,21 @@ class SOMManager:
             tmp_bid = bid
             while(tmp_bid in self.collapsedMappings):
                     tmp_bid = self.collapsedMappings[tmp_bid]
-            print "============\n",tmp_bid
+            print "    BID:",tmp_bid,":",
+            total = 0
+            correct = 0
+            incorrect = 0
+            unassigned = 0
             for row_index in bin.rowIndicies:
-                self.classify(row_index)
+                total += 1
+                class_bid = self.classify(row_index)
+                if(class_bid == 0):
+                    unassigned += 1
+                elif(class_bid != tmp_bid):
+                    incorrect += 1
+                else:
+                    correct += 1
+            print "Total %d, correct: %d, incorrect %d, unassigned %d" % (total,correct,incorrect,unassigned)
         
 #------------------------------------------------------------------------------
 # WEIGHTS 
@@ -1595,6 +1650,7 @@ class SOMManager:
     def merge(self):
         """Merge bins, keeping the soms informed of changes"""
         # self.collapsedMappings is a tree of values where key must be merged with value
+        print "    Merging gloablly adjacent regions"
         working_lists = {}
         for bid in self.collapsedMappings:
             if(self.collapsedMappings[bid] not in working_lists and bid not in working_lists):
@@ -1617,6 +1673,11 @@ class SOMManager:
                 merge_lists.append(working_lists[bid])
                 for inner_id in working_lists[bid]:
                     used_ids[inner_id] = True
+        
+        num_reduced = 0
+        for ml in merge_lists:
+            num_reduced += (len(ml) - 1)
+        print "    Merging %d across %d bins" % (num_reduced,len(merge_lists))
         
         for ml in merge_lists:
             self.BM.merge(ml, auto=True, saveBins=True, printInstructions=False)
