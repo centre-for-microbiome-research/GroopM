@@ -165,21 +165,12 @@ class ClusterEngine:
         cum_contigs_used_good = self.initialiseCores(minVol)
         t3 = time.time()
         print "    THIS: [",self.secondsToStr(t3-t2),"]\tTOTAL: [",self.secondsToStr(t3-t0),"]"
-        
-        # now we assume that some true bins may be separated across two cores
-        # try to condense things a little
-        #self.BM.plotBins(FNPrefix="PRE_")
-        print "Condense cores"
-        #self.condenseCores()
-        t4 = time.time()
-        print "    THIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
-        #self.BM.plotBins()
 
         # Now save all the stuff to disk!
         print "Saving bins"
         self.BM.saveBins(doCores=True, saveBinStats=True)
-        t5 = time.time()
-        print "    THIS: [",self.secondsToStr(t5-t4),"]\tTOTAL: [",self.secondsToStr(t5-t0),"]"
+        t4 = time.time()
+        print "    THIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
 
     def initialiseCores(self, minVol):
         """Process contigs and form CORE bins"""

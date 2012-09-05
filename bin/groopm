@@ -137,7 +137,7 @@ if __name__ == '__main__':
                                         description='Merge similar bins and split chimeric ones')
     bin_refiner.add_argument('dbname', help="name of the database to open")
     bin_refiner.add_argument('-p', '--plotter', action="store_true", default=False, help="use global 3d plots")
-    bin_refiner.add_argument('-m', '--manual', action="store_true", default=False, help="do everything manually")
+    bin_refiner.add_argument('-m', '--manual', action="store_true", default=False, help="handle complex cases manually")
 
     #-------------------------------------------------
     # make SOMs

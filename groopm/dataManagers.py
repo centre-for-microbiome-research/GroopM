@@ -539,20 +539,22 @@ class BinManager:
                                 # work out if this merge can be done on the fly or if we need someone to look it over
                                 auto = True
                                 if(manual):
-                                    auto = False
-                                else:
                                     if(not m_auto):
-                                        if(scores[self.makeBidKey(subject_bid,query_bid)] < 2):
+                                        # check to see if the merge is reciporical
+                                        if(scores[self.makeBidKey(subject_bid,query_bid)] < 2): 
                                             auto = False
+                                        # check to see if the kmer sigs are remotely close to each other
                                         elif(np.abs(subject_bin.kValMean - query_bin.kValMean) > 0.05):
                                             auto = False
-                                
-                                # change the subject now if it's been merged
-                                if(subject_bid in merged):
-                                    subject_bid = merged[subject_bid]   
-                                if(subject_bid != query_bid):          # make sure there are no loops 
-                                    merged[query_bid] = subject_bid    # subject consumes query, enforce the tree structure
-                                    merged_order.append([subject_bid,query_bid,auto])
+                                else: # do nothing complex
+                                    auto = m_auto
+
+                                if(manual or auto):
+                                    if(subject_bid in merged):
+                                        subject_bid = merged[subject_bid]   
+                                    if(subject_bid != query_bid):          # make sure there are no loops 
+                                        merged[query_bid] = subject_bid    # subject consumes query, enforce the tree structure
+                                        merged_order.append([subject_bid,query_bid,auto])
                         j += 1
         
         # Merge them in the order they were seen in
@@ -1993,6 +1995,9 @@ class ProfileManager:
             min_r = 1
         # reshape this guy
         tmp_data = np.reshape(tmp_data, (self.numContigs,self.numStoits))
+
+        if(not silent):
+            print "    Reticulating splines"
     
         # now we use PCA to map the surface points back onto a 
         # 2 dimensional plane, thus making the data usefuller
