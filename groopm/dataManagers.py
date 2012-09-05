@@ -1368,24 +1368,51 @@ class SOMManager:
 
     def classify(self, rowIndex, mode='consensus'):
         """Classify a contig (rowIndex) against the SOMS"""
-        m_bids = []
-        c_bids = []
+        m_bids = {}
+        c_bids = {}
+        m_choice = 0
+        c_choice = 0
         
         if(mode == 'mer' or mode == 'consensus'):
             for i in self.merSoms:
                 tmp_bid = self.merSoms[i].classify(self.whitenKVector(self.PM.kmerSigs[rowIndex]))
                 while(tmp_bid in self.collapsedMappings):
                     tmp_bid = self.collapsedMappings[tmp_bid]
-                m_bids.append(tmp_bid)
-
+                if(tmp_bid not in m_bids):
+                    m_bids[tmp_bid] = 1
+                else:
+                    m_bids[tmp_bid] += 1
+            for bid in m_bids:
+                if(m_bids[bid] > 1):    # choose based on consensus of mer classifications
+                    m_choice = bid
+            if(mode != 'consensus'):
+                # we classify based just on this
+                return m_choice
         if(mode == 'cov' or mode == 'consensus'):                
             for i in self.covSoms:
                 tmp_bid = self.covSoms[i].classify(self.whitenCVector(self.PM.transformedCP[rowIndex]))
                 while(tmp_bid in self.collapsedMappings):
                     tmp_bid = self.collapsedMappings[tmp_bid]
-                c_bids.append(tmp_bid)
+                if(tmp_bid not in c_bids):
+                    c_bids[tmp_bid] = 1
+                else:
+                    c_bids[tmp_bid] += 1
+            for bid in c_bids:
+                if(c_bids[bid] > 1):
+                    c_choice = bid
+            if(mode != 'consensus'):
+                # we classify based just on this
+                return c_choice
         
-        print self.PM.contigNames[rowIndex], m_bids, c_bids
+        print self.PM.contigNames[rowIndex], m_choice, c_choice
+        
+        # to get here the mode must be consensus
+        # in this case we need the m_choice and the c_choice to agree
+        if((m_choice == c_choice) or (c_choice == 0)):
+            return m_choice
+        if(m_choice == 0):
+            return c_choice
+        return 0
 
 #------------------------------------------------------------------------------
 # REGIONS
@@ -1408,6 +1435,7 @@ class SOMManager:
                     print "Overwriting SOM regions in db:", self.PM.dbFileName
 
         bids = self.BM.getBids()
+        print bids
         self.loadTrainingVectors()
         
         # build mer regions
@@ -1422,11 +1450,11 @@ class SOMManager:
             if(save):
                 self.saveCovRegions(i)
 
-    def findRegionNeighbours(self):
+    def findRegionNeighbours(self, merge=False):
         """Find out which regions neighbour which other regions"""
         mer_Ns = {}
         cov_Ns = {}
-        
+        self.collapsedMappings = {}
         # first find out who is next to whom
         for i in self.merSoms:
             for N in self.merSoms[i].findRegionNeighbours():
@@ -1457,6 +1485,7 @@ class SOMManager:
             if(combined_Ns[N] >= 4):
                 filtered_Ns[N] = combined_Ns[N]
         
+        print filtered_Ns
         # now back it up with some stats
         for N in filtered_Ns:
             bin1 = self.BM.getBin(N[0])
@@ -1468,6 +1497,9 @@ class SOMManager:
                 self.collapsedMappings[N[1]] = N[0]
                 #print "MERGE(",N[0],",",N[1],")"
             #print "========="
+            
+        if(merge):
+            self.merge()
 
     def validateRegions(self):
         """Basic validation of regions
@@ -1558,6 +1590,41 @@ class SOMManager:
         return np.clip(vector,0,1)
 
 #------------------------------------------------------------------------------
+# MERGE BINS
+
+    def merge(self):
+        """Merge bins, keeping the soms informed of changes"""
+        # self.collapsedMappings is a tree of values where key must be merged with value
+        working_lists = {}
+        for bid in self.collapsedMappings:
+            if(self.collapsedMappings[bid] not in working_lists and bid not in working_lists):
+                # both new!
+                tmp = [self.collapsedMappings[bid], bid]
+                working_lists[self.collapsedMappings[bid]] = tmp
+                working_lists[bid] = tmp
+            elif(self.collapsedMappings[bid] not in working_lists):
+                working_lists[self.collapsedMappings[bid]] = working_lists[bid]
+                working_lists[self.collapsedMappings[bid]].append(self.collapsedMappings[bid])
+            elif(bid not in working_lists):                 
+                working_lists[bid] = working_lists[self.collapsedMappings[bid]]
+                working_lists[bid].append(bid)
+            # else both in already
+        
+        merge_lists = []
+        used_ids = {}
+        for bid in working_lists:
+            if(bid not in used_ids):
+                merge_lists.append(working_lists[bid])
+                for inner_id in working_lists[bid]:
+                    used_ids[inner_id] = True
+        
+        for ml in merge_lists:
+            self.BM.merge(ml, auto=True, saveBins=True, printInstructions=False)
+        
+        # remake the regions
+        self.regionalise(force=True)
+
+#------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
 
     def renderWeights(self, tag):
@@ -1575,7 +1642,11 @@ class SOMManager:
             self.covSoms[key].renderRegions(tag+"_covRegions_"+str(key), palette)
         for key in self.merSoms.keys():
             self.merSoms[key].renderRegions(tag+"_merRegions_"+str(key), palette)
-        
+    
+    def renderMulti(self, tag):
+        """Render large image including regions bids etc"""
+        pass
+    
 ###############################################################################
 ###############################################################################
 ###############################################################################
