@@ -3,7 +3,7 @@
 #                                                                             #
 #    mstore.py                                                                #
 #                                                                             #
-#    GroopM data management                                                   #
+#    GroopM - Low level data management and file parsing                      #
 #                                                                             #
 #    Copyright (C) Michael Imelfort                                           #
 #                                                                             #
@@ -37,6 +37,7 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
+
 __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
@@ -47,26 +48,20 @@ __email__ = "mike@mikeimelfort.com"
 __status__ = "Development"
 
 ###############################################################################
+
 import sys
 import os
-import tables
-
-import pysam
 import string
-import re
 
-import colorsys
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import axes3d, Axes3D
-from pylab import plot,subplot,axis,stem,show,figure
-
+import tables
 import numpy as np
+import pysam
 
 # GroopM imports
-import PCA
+import groopmExceptions as ge
 
-np.seterr(all='raise')      
+np.seterr(all='raise')     
+
 ###############################################################################
 ###############################################################################
 ###############################################################################
@@ -125,11 +120,52 @@ class GMDataManager:
     table = 'bin'
     'bid'        : tables.Int32Col(pos=0)
     'numMembers' : tables.Int32Col(pos=1)
+
+    ------------------------
+     SOM
+    group = '/som'
+    ------------------------
+    ** Metadata **
+    table = 'meta'
+    'side'            : tables.Int32Col(pos=1)      # number of rows in the som
+    'covDimension'    : tables.Int32Col(pos=2)      # number of stoits
+    'merDimension'    : tables.Int32Col(pos=3)      # number of mers being used
+    'covWeightIds'    : tables.StringCol(64,pos=4)
+    'merWeightIds'    : tables.StringCol(64,pos=5)
+    'covRegionIds'    : tables.StringCol(64,pos=6)
+    'merRegionIds'    : tables.StringCol(64,pos=7)
+    
+    ** Weights **                                   # raw weights formed from training
+    table = 'covWeights[1,2,3]'                     # 3 SOMS for coverage
+    'col1' : tables.FloatCol(pos=1)
+    'col2' : tables.FloatCol(pos=2)
+    'col3' : tables.FloatCol(pos=3)
+    ...
+    
+    table = 'merWeights[1,2,3]'                     # 3 SOMS for mers too
+    'col1' : tables.FloatCol(pos=1)
+    'col2' : tables.FloatCol(pos=2)
+    'col3' : tables.FloatCol(pos=3)
+    ...
+    
+    ** Regions **                                   # maps points in the map to bin ids
+    table = 'covRegions[1,2,3]'
+    'col1' : tables.Int32Col(pos=1)
+    'col2' : tables.Int32Col(pos=2)
+    'col3' : tables.Int32Col(pos=3)
+    ...
+    
+    table = 'merRegions[1,2,3]'
+    'col1' : tables.Int32Col(pos=1)
+    'col2' : tables.Int32Col(pos=2)
+    'col3' : tables.Int32Col(pos=3)
+    ...
+
     """
     def __init__(self): pass
 
 #------------------------------------------------------------------------------
-# DB CREATION / INITIALISATION 
+# DB CREATION / INITIALISATION  - PROFILES
 
     def createDB(self, bamFiles, contigs, dbFileName, kmerSize=4, dumpAll=False, force=False):
         """Main wrapper for parsing all input files"""
@@ -146,11 +182,8 @@ class GMDataManager:
         try:
             with open(dbFileName) as f:
                 if(not force):
-                    option = raw_input(" ****WARNING**** Database: '"+dbFileName+"' exists.\n" \
-                                       " If you continue you *WILL* delete any previous analyses!\n" \
-                                       " Overwrite? (y,n) : ")
-                    print "****************************************************************"
-                    if(option.upper() != "Y"):
+                    user_option = self.promptOnOverwrite(dbFileName)
+                    if(user_option != "Y"):
                         print "Operation cancelled"
                         return False
                     else:
@@ -294,9 +327,247 @@ class GMDataManager:
         META_row['numCons'] = numCons
         META_row.append()
         table.flush()
-        
+
+    def promptOnOverwrite(self, dbFileName, minimal=False):
+        """Check that the user is ok with overwriting the db"""
+        input_not_ok = True
+        valid_responses = ['Y','N']
+        vrs = ",".join([str.lower(str(x)) for x in valid_responses])
+        while(input_not_ok):
+            if(minimal):
+                option = raw_input(" Overwrite? ("+vrs+") : ")
+            else: 
+                
+                option = raw_input(" ****WARNING**** Database: '"+dbFileName+"' exists.\n" \
+                                   " If you continue you *WILL* delete any previous analyses!\n" \
+                                   " Overwrite? ("+vrs+") : ")
+            if(option.upper() in valid_responses):
+                print "****************************************************************"
+                return option.upper()
+            else:
+                print "Error, unrecognised choice '"+option.upper()+"'"
+                minimal = True
+
 #------------------------------------------------------------------------------
-# GET / SET DATA TABLES 
+# DB CREATION / INITIALISATION  - SOMS
+
+    def updateSOMTables(self,
+                        dbFileName,
+                        side,
+                        covDim,
+                        merDim,
+                        covWeights={},          # use these to do updates
+                        merWeights={},
+                        covRegions={},
+                        merRegions={}
+                        ):
+        try:
+            # first, make sure we've got a som group`
+            ids_in_use = self.getSOMDataInfo(dbFileName)
+            
+            # now we need to fix the ids_in_use structure to suit our updates
+            for i in covWeights.keys():
+                if i not in ids_in_use["weights"]["cov"]:
+                     ids_in_use["weights"]["cov"].append(i)
+            for i in merWeights.keys():
+                if i not in ids_in_use["weights"]["mer"]:
+                     ids_in_use["weights"]["mer"].append(i)
+            for i in covRegions.keys():
+                if i not in ids_in_use["regions"]["cov"]:
+                     ids_in_use["regions"]["cov"].append(i)
+            for i in merRegions.keys():
+                if i not in ids_in_use["regions"]["mer"]:
+                     ids_in_use["regions"]["mer"].append(i)
+            
+            with tables.openFile(dbFileName, mode='a', rootUEP="/som") as som_group:
+                #------------------------
+                # Metadata
+                #------------------------
+                db_desc = {'side'            : tables.Int32Col(pos=1),
+                           'covDimension'    : tables.Int32Col(pos=2),
+                           'merDimension'    : tables.Int32Col(pos=3),
+                           'covWeightIds'    : tables.StringCol(64,pos=4),
+                           'merWeightIds'    : tables.StringCol(64,pos=5),
+                           'covRegionIds'    : tables.StringCol(64,pos=6),
+                           'merRegionIds'    : tables.StringCol(64,pos=7)
+                           }
+
+                # clear previous metadata
+                # try remove any older failed attempts
+                try:
+                    som_group.removeNode('/', 'tmp_meta')
+                except:
+                    pass
+
+                # make a new tmp table
+                try:
+                    META_table = som_group.createTable('/', 'tmp_meta', db_desc, "SOM metadata")
+                    self.initSOMMeta(META_table, side, covDim, merDim, ids_in_use)
+                except:
+                    print "Error creating META table:", sys.exc_info()[0]
+                    raise
+                # rename as the meta table
+                som_group.renameNode('/', 'meta', 'tmp_meta', overwrite=True)
+                
+                #------------------------
+                # Weights matricies
+                #------------------------
+                for i in covWeights.keys():
+                    self.updateSOMData(som_group, "covWeights"+str(i), covDim, "COVERAGE SOM weights", covWeights[i], type="float")
+                for i in merWeights.keys():
+                    self.updateSOMData(som_group, "merWeights"+str(i), merDim, "KMER SOM weights", merWeights[i], type="float")
+                    
+                #------------------------
+                # Regions
+                #------------------------
+                for i in covRegions.keys():
+                    self.updateSOMData(som_group, "covRegions"+str(i), 1, "COVERAGE SOM regions", covRegions[i], type="int")
+                for i in merRegions.keys():
+                    self.updateSOMData(som_group, "merRegions"+str(i), 1, "KMER SOM regions", merRegions[i], type="int")
+                    
+        except:
+            print "Error creating SOM database:", dbFileName, sys.exc_info()[0]
+            raise
+        
+    def initSOMMeta(self, table, side, covDim, merDim, idsInUse):
+        """Initialise the meta-data table"""
+        META_row = table.row
+        META_row['side'] = side
+        META_row['covDimension'] = covDim
+        META_row['merDimension'] = merDim
+        
+        if(len(idsInUse["weights"]["cov"]) != 0):
+            META_row['covWeightIds'] = ",".join([str(x) for x in idsInUse["weights"]["cov"]])
+        else:
+            META_row['covWeightIds'] = ""
+        
+        if(len(idsInUse["weights"]["mer"]) != 0):
+            META_row['merWeightIds'] = ",".join([str(x) for x in idsInUse["weights"]["mer"]])
+        else:
+            META_row['merWeightIds'] = ""
+        
+        if(len(idsInUse["regions"]["cov"]) != 0):
+            META_row['covRegionIds'] = ",".join([str(x) for x in idsInUse["regions"]["cov"]])
+        else:
+            META_row['covRegionIds'] = ""
+        
+        if(len(idsInUse["regions"]["mer"]) != 0):
+            META_row['merRegionIds'] = ",".join([str(x) for x in idsInUse["regions"]["mer"]])
+        else:
+            META_row['merRegionIds'] = ""
+            
+        META_row.append()
+        table.flush()
+
+    def updateSOMData(self, group, tableName, dimension, description, data, type):
+        """Make a table and update data"""
+        db_desc = {}                # make the db desc dynamically
+        for j in range(dimension):
+            if(type == "float"):
+                db_desc["dim"+str(j)] = tables.FloatCol(pos=j)
+            else:
+                db_desc["dim"+str(j)] = tables.Int32Col(pos=j)
+        try:
+            group.removeNode('/', 'tmp_'+tableName)
+        except:
+            pass
+        try:
+            NEW_table = group.createTable('/', 'tmp_'+tableName, db_desc, description)
+            self.injectSOMData(NEW_table, data, dimension)
+        except:
+            print "Error creating table:", sys.exc_info()[0]
+            raise
+        group.renameNode('/', tableName, 'tmp_'+tableName, overwrite=True)
+
+    def injectSOMData(self, table, data, dimension):
+        """Load SOM data into the database"""
+        for row in data:
+            for val in row:
+                DATA_row = table.row
+                for i in range(dimension):
+                    DATA_row["dim"+str(i)] = val[i]
+                DATA_row.append()
+        table.flush()
+
+#------------------------------------------------------------------------------
+# GET / SET DATA TABLES - PROFILES 
+
+    def getSOMDataInfo(self, dbFileName):
+        """Return the numbers and types of soms stored in the database"""
+        ids_in_use = { "weights" : { "mer":[], "cov":[] }, "regions": { "mer" : [], "cov": [] } }
+        # open the database
+        try:
+            with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+                # open the som table                  
+                try:
+                    som_group = h5file.createGroup("/", 'som', 'SOM data')
+                except:
+                    # we already have a group, so we should assume that there is 
+                    # a meta table associated with this group. Read that to get the
+                    # Ids currently in use
+                    try:
+                        tmp_table = h5file.root.som._f_getChild('meta')
+                        meta_row = h5file.root.som.meta.read(start=0, stop=1, step=1)[0]
+                        if(len(meta_row[3]) > 0):
+                            ids_in_use["weights"]["cov"] = [int(x) for x in meta_row[3].split(",")]
+                        if(len(meta_row[4]) > 0):
+                            ids_in_use["weights"]["mer"] = [int(x) for x in meta_row[4].split(",")]
+                        if(len(meta_row[5]) > 0):
+                            ids_in_use["regions"]["cov"] = [int(x) for x in meta_row[5].split(",")]
+                        if(len(meta_row[6]) > 0):
+                            ids_in_use["regions"]["mer"] = [int(x) for x in meta_row[6].split(",")]
+                    except: pass
+        except:
+            print "Error creating SOM database:", dbFileName, sys.exc_info()[0]
+            raise
+        return ids_in_use
+
+    def getSOMMetaFields(self, dbFileName):
+        """return the value of fieldName in the SOM metadata tables"""
+        ret_hash = {'side': -1,
+                    'covDimension' : -1,
+                    'merDimension' : -1
+                    }
+        try:
+            with tables.openFile(dbFileName, mode='r') as h5file:
+                # theres only one value
+                meta_row = h5file.root.som.meta.read(start=0, stop=1, step=1)[0]
+                ret_hash['side'] = meta_row[0]
+                ret_hash['covDimension'] = meta_row[1]
+                ret_hash['merDimension'] = meta_row[2]
+        except:
+            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            raise
+        return ret_hash
+        
+    def getSOMData(self, dbFileName, index, type="weights", flavour="mer"):
+        """Load SOM data from the database"""
+        # make sure that this table exists
+        ids_in_use = self.getSOMDataInfo(dbFileName)
+        if index not in ids_in_use[type][flavour]:
+            raise ge.SOMDataNotFoundException("No such fish:",flavour,type,index)
+
+        # work out the dimensions of the data
+        meta_fields = self.getSOMMetaFields(dbFileName)
+        dimension = meta_fields['merDimension']
+        if(flavour == "cov"):
+             dimension = meta_fields['covDimension']
+        
+        # now get the data
+        table_name = flavour+type.title()+str(index) 
+        with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+            table = h5file.root.som._f_getChild(table_name)
+            if(type=="weights"):
+                data = np.reshape(np.array([list(x) for x in table.read()]), (meta_fields['side'],meta_fields['side'],dimension))
+            elif(type == "regions"):
+                data = np.reshape(np.array([list(x) for x in table.read()]), (meta_fields['side'],meta_fields['side'],1))
+            else:
+                raise ge.SOMTypeException("Unknown SOM type: "+type)
+            return data
+        return np.array([])
+    
+#------------------------------------------------------------------------------
+# GET / SET DATA TABLES - PROFILES 
 
     def getConditionalIndicies(self, dbFileName, condition=''):
         """return the indicies into the db which meet the condition"""
@@ -325,7 +596,7 @@ class GMDataManager:
 
     def nukeBins(self, dbFileName):
         """Reset all bin information, completely"""
-        print "\tClearing all old bin information from",dbFileName
+        print "    Clearing all old bin information from",dbFileName
         contig_names = {}
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
@@ -905,470 +1176,6 @@ class Counter:
 def getBamDescriptor(fullPath):
     """AUX: Reduce a full path to just the file name minus extension"""
     return os.path.splitext(os.path.basename(fullPath))[0]
-
-###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
-class ProfileManager:
-    """Interacts with the groopm DataManager and local data fields
-    
-    Mostly a wrapper around a group of numpy arrays and a pytables quagmire
-    """
-    def __init__(self, dbFileName, force=False, scaleFactor=1000):
-        # data
-        self.dataManager = GMDataManager()  # most data is saved to hdf
-        self.dbFileName = dbFileName        # db containing all the data we'd like to use
-        self.condition = ""                 # condition will be supplied at loading time
-        # --> NOTE: ALL of the arrays in this section are in sync
-        # --> each one holds information for an individual contig 
-        self.indicies = np.array([])        # indicies into the data structure based on condition
-        self.covProfiles = np.array([])     # coverage based coordinates
-        self.transformedCP = np.array([])   # the munged data points
-        self.contigNames = np.array([])
-        self.contigLengths = np.array([])
-        self.contigColours = np.array([])
-        self.kmerSigs = np.array([])        # raw kmer signatures
-        self.binIds = np.array([])          # list of bin IDs
-        self.isCore = np.array([])          # True False values
-        # --> end section
-
-        # meta                
-        self.validBinIds = {}               # valid bin ids -> numMembers
-        self.binnedRowIndicies = {}         # dictionary of those indicies which belong to some bin
-        self.numContigs = 0                 # this depends on the condition given
-        self.numStoits = 0                  # this depends on the data which was parsed
-
-        # misc
-        self.forceWriting = force           # overwrite existng values silently?
-        self.scaleFactor = scaleFactor      # scale every thing in the transformed data to this dimension
-
-    def loadData(self,
-                 condition="",              # condition as set by another function
-                 bids=[],                   # if this is set then only load those contigs with these bin ids
-                 verbose=True,              # many to some output messages
-                 silent=False,              # some to no output messages
-                 loadCovProfiles=True,
-                 loadKmerSigs=True,
-                 makeColours=True,
-                 loadContigNames=True,
-                 loadContigLengths=True,
-                 loadBins=False,
-                 loadCores=False):
-        """Load pre-parsed data"""
-        # check to see if we need to override the condition
-        if(len(bids) != 0):
-            condition = "((bid == "+str(bids[0])+")"
-            for index in range (1,len(bids)):
-                condition += " | (bid == "+str(bids[index])+")"
-            condition += ")"
-        if(silent):
-            verbose=False
-        try:
-            self.numStoits = self.getNumStoits()
-            self.condition = condition
-            if(verbose):
-                print "\tLoading indicies (", condition,")"
-            self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName, condition=condition)
-            self.numContigs = len(self.indicies)
-            
-            if(not silent):
-                print "\tWorking with:",self.numContigs,"contigs"
-
-            if(loadCovProfiles):
-                if(verbose):
-                    print "\tLoading coverage profiles"
-                self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indicies=self.indicies)
-
-            if(loadKmerSigs):
-                if(verbose):
-                    print "\tLoading kmer sigs"
-                self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indicies=self.indicies)
-
-                if(makeColours):
-                    if(verbose):
-                        print "\tCreating colour profiles"
-                    colourProfile = self.makeColourProfile()
-                    # use HSV to RGB to generate colours
-                    S = 1       # SAT and VAL remain fixed at 1. Reduce to make
-                    V = 1       # Pastels if that's your preference...
-                    for val in colourProfile:
-                        self.contigColours = np.append(self.contigColours, [colorsys.hsv_to_rgb(val, S, V)])
-                    self.contigColours = np.reshape(self.contigColours, (self.numContigs, 3))            
-
-            if(loadContigNames):
-                if(verbose):
-                    print "\tLoading contig names"
-                self.contigNames = self.dataManager.getContigNames(self.dbFileName, indicies=self.indicies)
-            
-            if(loadContigLengths):
-                if(verbose):
-                    print "\tLoading contig lengths"
-                self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indicies=self.indicies)
-            
-            if(loadBins):
-                if(verbose):
-                    print "\tLoading bins"
-                self.binIds = self.dataManager.getBins(self.dbFileName, indicies=self.indicies)
-                if(len(bids) != 0): # need to make sure we're not restricted in terms of bins
-                    tmp_bids = self.getBinStats()
-                    for bid in bids:
-                        self.validBinIds[bid] = tmp_bids[bid]
-                else:
-                    self.validBinIds = self.getBinStats()
-
-                # fix the binned indicies
-                self.binnedRowIndicies = {}
-                for i in range(len(self.indicies)):
-                    if(self.binIds[i] != 0):
-                        self.binnedRowIndicies[i] = True 
-
-            if(loadCores):
-                if(verbose):
-                    print "\tLoading core info"
-                self.isCore = self.dataManager.getCores(self.dbFileName, indicies=self.indicies)
-            
-        except:
-            print "Error loading DB:", self.dbFileName, sys.exc_info()[0]
-            raise
-
-#------------------------------------------------------------------------------
-# GET / SET 
-
-    def getNumStoits(self):
-        """return the value of numStoits in the metadata tables"""
-        return self.dataManager.getNumStoits(self.dbFileName)
-            
-    def getMerColNames(self):
-        """return the value of merColNames in the metadata tables"""
-        return self.dataManager.getMerColNames(self.dbFileName)
-            
-    def getMerSize(self):
-        """return the value of merSize in the metadata tables"""
-        return self.dataManager.getMerSize(self.dbFileName)
-
-    def getNumMers(self):
-        """return the value of numMers in the metadata tables"""
-        return self.dataManager.getNumMers(self.dbFileName)
-
-### USE the member vars instead!
-#    def getNumCons(self):
-#        """return the value of numCons in the metadata tables"""
-#        return self.dataManager.getNumCons(self.dbFileName)
-
-    def getNumBins(self):
-        """return the value of numBins in the metadata tables"""
-        return self.dataManager.getNumBins(self.dbFileName)
-        
-    def setNumBins(self, numBins):
-        """set the number of bins"""
-        self.dataManager.setNumBins(self.dbFileName, numBins)
-        
-    def getStoitColNames(self):
-        """return the value of stoitColNames in the metadata tables"""
-        return self.dataManager.getStoitColNames(self.dbFileName)
-    
-    def isClustered(self):
-        """Has the data been clustered already"""
-        return self.dataManager.isClustered(self.dbFileName)
-    
-    def setClustered(self):
-        """Save that the db has been clustered"""
-        self.dataManager.setClustered(self.dbFileName, True)
-    
-    def isComplete(self):
-        """Has the data been *completely* clustered already"""
-        return self.dataManager.isComplete(self.dbFileName)
-    
-    def setComplete(self):
-        """Save that the db has been completely clustered"""
-        self.dataManager.setComplete(self.dbFileName, True)
-
-    def getBinStats(self):
-        """Go through all the "bins" array and make a list of unique bin ids vs number of contigs"""
-        return self.dataManager.getBinStats(self.dbFileName)
-    
-    def saveBinIds(self, updates):
-        """Save our bins into the DB"""
-        self.dataManager.setBins(self.dbFileName, updates)
-    
-    def saveCores(self, updates):
-        """Save our core flags into the DB"""
-        self.dataManager.setCores(self.dbFileName, updates)
-
-    def saveValidBinIds(self, updates):
-        """Store the valid bin Ids and number of members
-                
-        updates is a dictionary which looks like:
-        { tableRow : [bid , numMembers] }
-        """
-        self.dataManager.setBinStats(self.dbFileName, updates)
-        self.setNumBins(len(updates.keys()))
-
-    def updateValidBinIds(self, updates):
-        """Store the valid bin Ids and number of members
-        
-        updates is a dictionary which looks like:
-        { bid : numMembers }
-        if numMembers == 0 then the bid is removed from the table
-        if bid is not in the table yet then it is added
-        otherwise it is updated
-        """
-        # get the current guys
-        existing_bin_stats = self.dataManager.getBinStats(self.dbFileName)
-        num_bins = self.getNumBins()
-        # now update this dict
-        for bid in updates.keys():
-            if bid in existing_bin_stats:
-                if updates[bid] == 0:
-                    # remove this guy
-                    del existing_bin_stats[bid]
-                    num_bins -= 1
-                else:
-                    # update the count
-                    existing_bin_stats[bid] = updates[bid]
-            else:
-                # new guy!
-                existing_bin_stats[bid] = updates[bid]
-                num_bins += 1
-        
-        # finally , save
-        self.saveValidBinIds(existing_bin_stats)
-
-#------------------------------------------------------------------------------
-# DATA TRANSFORMATIONS 
-
-    def transformCP(self, silent=False):
-        """Do the main ransformation on the coverage profile data"""
-        # Update this guy now we know how big he has to be
-        # do it this way because we may apply successive transforms to this
-        # guy and this is a neat way of clearing the data 
-        s = (self.numContigs,3)
-        self.transformedCP = np.zeros(s)
-        tmp_data = np.array([])
-
-        if(not silent):
-            print "\tRadial mapping"
-        # first we shift the edge values accordingly and then 
-        # map each point onto the surface of a hyper-sphere
-        # the vector we wish to move closer to...
-        radialVals = np.array([])        
-        ax = np.zeros_like(self.covProfiles[0])
-        ax[0] = 1
-        center_vector = np.ones_like(self.covProfiles[0])
-        las = self.getAngBetween(ax, center_vector)
-        center_vector /= np.linalg.norm(center_vector)
-        for point in self.covProfiles:
-            norm = np.linalg.norm(point)
-            radialVals = np.append(radialVals, norm)
-            point /= np.abs(np.log(norm+1)) # make sure we're always taking a log of something greater than 1
-            tmp_data = np.append(tmp_data, self.rotateVectorAndScale(point, las, center_vector, delta_max=0.25))
-
-        # it's nice to think that we can divide through by the min
-        # but we need to make sure that it's not at 0!
-        min_r = np.amin(radialVals)
-        if(0 == min_r):
-            min_r = 1
-        # reshape this guy
-        tmp_data = np.reshape(tmp_data, (self.numContigs,self.numStoits))
-    
-        # now we use PCA to map the surface points back onto a 
-        # 2 dimensional plane, thus making the data usefuller
-        index = 0
-        if(self.numStoits == 2):
-            if(not silent):
-                print "Skip dimensionality reduction (dim < 3)"
-            for point in self.covProfiles:
-                self.transformedCP[index,0] = tmp_data[index,0]
-                self.transformedCP[index,1] = tmp_data[index,1]
-                self.transformedCP[index,2] = np.log10(radialVals[index]/min_r)
-                index += 1
-        else:    
-            # Project the points onto a 2d plane which is orthonormal
-            # to the Z axis
-            if(not silent):
-                print "\tDimensionality reduction"
-            PCA.Center(tmp_data,verbose=0)
-            p = PCA.PCA(tmp_data)
-            components = p.pc()
-            for point in components:
-                self.transformedCP[index,0] = components[index,0]
-                self.transformedCP[index,1] = components[index,1]
-                if(0 > radialVals[index]):
-                    self.transformedCP[index,2] = 0
-                else:
-                    self.transformedCP[index,2] = np.log10(radialVals[index]/min_r)
-                index += 1
-
-        # finally scale the matrix to make it equal in all dimensions                
-        min = np.amin(self.transformedCP, axis=0)
-        max = np.amax(self.transformedCP, axis=0)
-        max = max - min
-        max = max / (self.scaleFactor-1)
-        for i in range(0,3):
-            self.transformedCP[:,i] = (self.transformedCP[:,i] -  min[i])/max[i]
-
-    def makeColourProfile(self):
-        """Make a colour profile based on ksig information"""
-        ret_array = np.array([0.0]*np.size(self.indicies))
-        working_data = np.array(self.kmerSigs, copy=True) 
-        PCA.Center(working_data,verbose=0)
-        p = PCA.PCA(working_data)
-        components = p.pc()
-        
-        # now make the colour profile based on PC1
-        index = 0
-        for point in components:
-            ret_array[index] = float(components[index,0])
-            index += 1
-        
-        # normalise to fit between 0 and 1
-        ret_array -= np.min(ret_array)
-        ret_array /= np.max(ret_array)
-        if(False):
-            print ret_array
-            plt.figure(1)
-            plt.subplot(111)
-            plt.plot(components[:,0], components[:,1], 'r.')
-            plt.show()
-        return ret_array
-    
-    def rotateVectorAndScale(self, point, las, centerVector, delta_max=0.25):
-        """
-        Move a vector closer to the center of the positive quadrant
-        
-        Find the co-ordinates of its projection
-        onto the surface of a hypersphere with radius R
-        
-        What?...  ...First some definitions:
-       
-        For starters, think in 3 dimensions, then take it out to N.
-        Imagine all points (x,y,z) on the surface of a sphere
-        such that all of x,y,z > 0. ie trapped within the positive
-        quadrant.
-       
-        Consider the line x = y = z which passes through the origin
-        and the point on the surface at the "center" of this quadrant.
-        Call this line the "main mapping axis". Let the unit vector 
-        coincident with this line be called A.
-       
-        Now think of any other vector V also located in the positive
-        quadrant. The goal of this function is to move this vector
-        closer to the MMA. Specifically, if we think about the plane
-        which contains both V and A, we'd like to rotate V within this
-        plane about the origin through phi degrees in the direction of
-        A.
-        
-        Once this has been done, we'd like to project the rotated co-ords 
-        onto the surface of a hypersphere with radius R. This is a simple
-        scaling operation.
-       
-        The idea is that vectors closer to the corners should be pertubed
-        more than those closer to the center.
-        
-        Set delta_max as the max percentage of the existing angle to be removed
-        """
-        theta = self.getAngBetween(point, centerVector)
-        A = delta_max/((las)**2)
-        B = delta_max/las
-        delta = 2*B*theta - A *(theta**2) # the amount to shift
-        V_p = point*(1-delta) + centerVector*delta
-        return V_p/np.linalg.norm(V_p)
-    
-    def rad2deg(self, anglein):
-        return 180*anglein/np.pi
-
-    def getAngBetween(self, P1, P2):
-        """Return the angle between two points (in radians)"""
-        # find the existing angle between them theta
-        c = np.dot(P1,P2)/np.linalg.norm(P1)/np.linalg.norm(P2) 
-        # rounding errors hurt everyone...
-        if(c > 1):
-            c = 1
-        elif(c < -1):
-            c = -1
-        return np.arccos(c) # in radians
-
-#------------------------------------------------------------------------------
-# IO and IMAGE RENDERING 
-
-    def plotTransViews(self, tag="fordens"):
-        """Plot top, side and front views of the transformed data"""
-        self.renderTransData(tag+"_top.png",azim = 0, elev = 90)
-        self.renderTransData(tag+"_front.png",azim = 0, elev = 0)
-        self.renderTransData(tag+"_side.png",azim = 90, elev = 0)
-
-    def renderTransCPData(self, fileName="", show=True, elev=45, azim=45, all=False):
-        """Plot transformed data in 3D"""
-        fig = plt.figure()
-        if(all):
-            myAXINFO = {
-                'x': {'i': 0, 'tickdir': 1, 'juggled': (1, 0, 2),
-                'color': (0, 0, 0, 0, 0)},
-                'y': {'i': 1, 'tickdir': 0, 'juggled': (0, 1, 2),
-                'color': (0, 0, 0, 0, 0)},
-                'z': {'i': 2, 'tickdir': 0, 'juggled': (0, 2, 1),
-                'color': (0, 0, 0, 0, 0)},
-            }
-
-            ax = fig.add_subplot(131, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
-            ax.azim = 0
-            ax.elev = 0
-            for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
-                for elt in axis.get_ticklines() + axis.get_ticklabels():
-                    elt.set_visible(False)
-            ax.w_xaxis._AXINFO = myAXINFO
-            ax.w_yaxis._AXINFO = myAXINFO
-            ax.w_zaxis._AXINFO = myAXINFO
-            
-            ax = fig.add_subplot(132, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
-            ax.azim = 90
-            ax.elev = 0
-            for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
-                for elt in axis.get_ticklines() + axis.get_ticklabels():
-                    elt.set_visible(False)
-            ax.w_xaxis._AXINFO = myAXINFO
-            ax.w_yaxis._AXINFO = myAXINFO
-            ax.w_zaxis._AXINFO = myAXINFO
-            
-            ax = fig.add_subplot(133, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
-            ax.azim = 0
-            ax.elev = 90
-            for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
-                for elt in axis.get_ticklines() + axis.get_ticklabels():
-                    elt.set_visible(False)
-            ax.w_xaxis._AXINFO = myAXINFO
-            ax.w_yaxis._AXINFO = myAXINFO
-            ax.w_zaxis._AXINFO = myAXINFO
-        else:
-            ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
-            ax.azim = azim
-            ax.elev = elev
-            ax.set_axis_off()
-
-        if(fileName != ""):
-            try:
-                if(all):
-                    fig.set_size_inches(42,12)
-                else:
-                    fig.set_size_inches(12,12)            
-                plt.savefig(fileName,dpi=300)
-                plt.close(fig)
-            except:
-                print "Error saving image",fileName, sys.exc_info()[0]
-                raise
-        elif(show):
-            try:
-                plt.show()
-                plt.close(fig)
-            except:
-                print "Error showing image", sys.exc_info()[0]
-                raise
-        del fig
 
 ###############################################################################
 ###############################################################################

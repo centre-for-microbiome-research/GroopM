@@ -48,13 +48,176 @@ __email__ = "mike@mikeimelfort.com"
 __status__ = "Development"
 
 ###############################################################################
+import os
 import sys
+
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import axes3d, Axes3D
+from pylab import plot,subplot,axis,stem,show,figure
+
+import numpy as np
+
+# GroopM imports
+import dataManagers
+
+np.seterr(all='raise')
 
 ###############################################################################
 ###############################################################################
 ###############################################################################
 ###############################################################################
-                
+
+class GMExtractor:
+    """Used for extracting reads and contigs based on bin assignments"""
+    def __init__(self, dbFileName,
+                 data,
+                 bids=[],
+                 folder='',
+                 ):
+        if bids is None:
+            self.bids = []
+        else:
+            self.bids = bids
+        
+        if(folder == ''):
+            # write to current working dir
+            self.outDir = os.path.cwd()
+        else:
+            self.outDir = folder
+            # make the dir if need be
+        
+    def extractContigs(self, fasta=[], cutoff=0):
+        """Extract contigs and write to file"""
+        self.PM = dataManagers.ProfileManager(dbFileName)   # based on user specified length
+        self.BM = dataManagers.BinManager(dbFileName=dbFileName)   # bins
+        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+    
+    def  extractReads(self, bams=[], shuffled=False):
+        """Extract reads from sam files and write to file"""
+        self.PM = dataManagers.ProfileManager(dbFileName)   # based on user specified length
+        self.BM = dataManagers.BinManager(dbFileName=dbFileName)   # bins
+        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
+class BinExplorer:
+    """Inspect bins, used for validation"""
+    def __init__(self, dbFileName, bids=[]):
+        self.PM = dataManagers.ProfileManager(dbFileName)   # based on user specified length
+        self.BM = dataManagers.BinManager(dbFileName=dbFileName)   # bins
+        if bids is None:
+            self.bids = []
+        else:
+            self.bids = bids
+
+    def plotFlyOver(self, fps=10.0, totalTime=120.0):
+        """Plot a flyover of the data with bins being removed"""
+        self.BM.loadBins(makeBins=True,silent=True,bids=self.bids)
+        all_bids = self.bins.keys()
+
+        # control image form and output
+        current_azim = 45.0
+        current_elev = 0.0
+        current_frame = 0.0
+        total_frames = fps * totalTime
+        total_azim_shift = 720.0
+        total_elev_shift = 360.0
+        azim_increment = total_azim_shift / total_frames
+        elev_increment = total_elev_shift / total_frames
+        
+        print "Need",total_frames,"frames:"
+        # we need to know when to remove each bin
+        bid_remove_rate = total_frames / float(len(all_bids))
+        bid_remove_indexer = 1.0
+        bid_remove_counter = 0.0
+        current_bid_index = 0
+        current_bid = all_bids[current_bid_index]
+        
+        while(current_frame < total_frames):
+            print "Frame",int(current_frame)
+            file_name = "%04d" % current_frame +".jpg"
+            self.PM.renderTransCPData(fileName=file_name,
+                                         elev=current_elev,
+                                         azim=current_azim,
+                                         primaryWidth=6,
+                                         dpi=200,
+                                         showAxis=True,
+                                         format='jpeg'
+                                         )
+            current_frame += 1
+            current_azim += azim_increment
+            current_elev += elev_increment
+
+            bid_remove_counter += 1.0
+            if(bid_remove_counter >= (bid_remove_rate*bid_remove_indexer)):
+                # time to remove a bin!
+                self.removeBinAndIndicies(current_bid)
+                bid_remove_indexer+=1
+                current_bid_index += 1
+                if(current_bid_index < len(all_bids)):
+                    current_bid = all_bids[current_bid_index]
+                else:
+                    return
+
+    def plotBinProfiles(self):
+        """Plot the distributions of kmer and coverage signatures"""
+        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        print "Plotting bin profiles"
+        self.BM.plotProfileDistributions()
+    
+    def plotPoints(self):
+        """plot points"""
+        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.BM.plotBinPoints()
+    
+    def plotSideBySide(self, coreCut):
+        """Plot cores side by side with their contigs"""
+        self.PM.loadData(condition="length >= "+str(coreCut))
+        self.PM.transformCP()
+        self.BM.loadBins(makeBins=True,bids=self.bids)
+        print "Creating side by side plots"
+        (bin_centroid_points, bin_centroid_colours, bin_ids) = self.BM.findCoreCentres()
+        self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colours)
+
+    def plotIds(self):
+        """Make a 3d plot of the bins but use IDs instead of points
+        
+        This function will help users know which bins to merge
+        """
+        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.BM.plotBinIds()
+
+    def plotUnbinned(self, coreCut):
+        """Plot all contigs over a certain length which are unbinned"""
+        self.PM.plotUnbinned(coreCut)
+            
+#------------------------------------------------------------------------------
+# IO and IMAGE RENDERING 
+
+    def plotCoresVsContigs(self, binCentroidPoints, binCentroidColours):
+        """Render the image for validating cores"""
+        fig = plt.figure()
+        ax1 = fig.add_subplot(121, projection='3d')
+        ax1.scatter(self.PM.transformedCP[:,0], self.PM.transformedCP[:,1], self.PM.transformedCP[:,2], edgecolors=self.PM.contigColours, c=self.PM.contigColours, marker='.')
+        ax2 = fig.add_subplot(122, projection='3d')
+        ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColours, c=binCentroidColours)
+        try:
+            plt.show()
+            plt.close(fig)
+        except:
+            print "Error showing image", sys.exc_info()[0]
+            raise
+        del fig
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
 ###############################################################################
 ###############################################################################
 ###############################################################################

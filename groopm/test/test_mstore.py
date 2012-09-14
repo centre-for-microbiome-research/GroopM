@@ -1,9 +1,41 @@
 #!/usr/bin/env python
+###############################################################################
+#                                                                             #
+#          .d8888b.                                    888b     d888          #
+#         d88P  Y88b                                   8888b   d8888          #
+#         888    888                                   88888b.d88888          #
+#         888        888d888 .d88b.   .d88b.  88888b.  888Y88888P888          #
+#         888  88888 888P"  d88""88b d88""88b 888 "88b 888 Y888P 888          #
+#         888    888 888    888  888 888  888 888  888 888  Y8P  888          #
+#         Y88b  d88P 888    Y88..88P Y88..88P 888 d88P 888   "   888          #
+#          "Y8888P88 888     "Y88P"   "Y88P"  88888P"  888       888          #
+#                                             888                             #
+#                                             888                             #
+#                                             888                             #
+#                                                                             #
+###############################################################################
+#                                                                             #
+#    This program is free software: you can redistribute it and/or modify     #
+#    it under the terms of the GNU General Public License as published by     #
+#    the Free Software Foundation, either version 3 of the License, or        #
+#    (at your option) any later version.                                      #
+#                                                                             #
+#    This program is distributed in the hope that it will be useful,          #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of           #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            #
+#    GNU General Public License for more details.                             #
+#                                                                             #
+#    You should have received a copy of the GNU General Public License        #
+#    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
+#                                                                             #
+###############################################################################
 
 from unittest import TestCase, main
 import numpy as np
 from os import getcwd, path
 from groopm import mstore
+
+###############################################################################
 
 class MyTests(TestCase):
     def setUp(self):
@@ -12,11 +44,13 @@ class MyTests(TestCase):
     def test_writing(self):
         """Test methods for writing to a DB"""
         this_dir = getcwd()
-        bam_files = path.join(this_dir,'data','test1.bam')+","+path.join(this_dir,'data','test2.bam')+","+path.join(this_dir,'data','test3.bam')
+        bam_files = [path.join(this_dir,'data','test1.bam'),
+                     path.join(this_dir,'data','test2.bam'),
+                     path.join(this_dir,'data','test3.bam')
+                     ]
         reference = path.join(this_dir,'data','test.fa')
-        secprofile = path.join(this_dir,'data','test.values')
         db_file_name = path.join(this_dir,'data','test.h5')
-        self.assertEqual(self.dataManager.createDB(bam_files,reference,secprofile,db_file_name,dumpAll=False,force=True), True, "Test failed loading data")
+        self.assertEqual(self.dataManager.createDB(bam_files,reference,db_file_name,dumpAll=False,force=True), True, "Test failed loading data")
     
     def test_reading(self):
         """Test methods for reading from a stored DB"""
@@ -25,7 +59,6 @@ class MyTests(TestCase):
         
         # this is what the data should look like
         true_cov = np.array([[ 0.10017046,  0.0722952,   0.00030081],[ 0.03642941,  0.03653902,  0.0366121 ],[ 0.01494815,  0.01494815,  0.00845416]])
-        true_aux = np.array([ 0.0, 1.0, 0.68699317])
         true_bins = np.array([0,0,0])
         true_contig_names = np.array(['Contig_1_Cov_98.26','Contig_2_Cov_38.45','Contig_3_Cov_1195.29'])
         true_contig_lengths = np.array([9973,27368,66831])
@@ -102,7 +135,6 @@ class MyTests(TestCase):
         
         # get the data
         cov_profiles = self.dataManager.getCoverageProfiles(db_file_name)
-        aux_profiles = self.dataManager.getAuxProfiles(db_file_name)
         bins = self.dataManager.getBins(db_file_name)
         contig_names = self.dataManager.getContigNames(db_file_name)
         contig_lengths = self.dataManager.getContigLengths(db_file_name)
@@ -112,7 +144,6 @@ class MyTests(TestCase):
         print np.around(true_cov.ravel(), decimals=3)
         print cov_profiles.ravel()
         self.assertTrue(np.array_equal(np.around(true_cov.ravel(), decimals=3), np.around(cov_profiles.ravel(), decimals=3)))
-        self.assertTrue(np.array_equal(np.around(true_aux, decimals=3), np.around(aux_profiles, decimals=3)))
         self.assertTrue(np.equal(true_bins.all(), bins.all()))
         self.assertTrue(np.equal(true_contig_names, contig_names))
         self.assertTrue(np.equal(true_contig_lengths.all(), contig_lengths.all()))
@@ -122,7 +153,6 @@ class MyTests(TestCase):
         indicies = self.dataManager.getConditionalIndicies(db_file_name)
         
         self.assertTrue(np.array_equal(np.around(cov_profiles.ravel(), decimals=3), np.around(self.dataManager.getCoverageProfiles(db_file_name, indicies=indicies).ravel(), decimals=3)), "Discrepancy comparing cov profile retrieval method")
-        self.assertTrue(np.array_equal(np.around(aux_profiles, decimals=3), np.around(self.dataManager.getAuxProfiles(db_file_name, indicies=indicies), decimals=3)), "Discrepancy comparing aux profile retrieval method")
         self.assertTrue(np.equal(bins.all(), self.dataManager.getBins(db_file_name, indicies=indicies).all()), "Discrepancy comparing bins retrieval method")
         self.assertTrue(np.equal(contig_names, self.dataManager.getContigNames(db_file_name, indicies=indicies)), "Discrepancy comparing contig names retrieval method")
         self.assertTrue(np.equal(contig_lengths.all(), self.dataManager.getContigLengths(db_file_name, indicies=indicies).all()), "Discrepancy comparing contig lengths retrieval method")

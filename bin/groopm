@@ -51,109 +51,211 @@ __status__ = "Development"
 
 import argparse
 import sys
+import re
 from groopm import groopm
+from groopm import torusMesh
 
 ###############################################################################
 ###############################################################################
 ###############################################################################
 ###############################################################################
+
+def printHelp():
+    print '''\
+    
+               ...::: groopm :::...
+                   
+    Semi-automagical metagenomic binning FTW!
+
+    Typical workflow:
+
+    groopm parse        -> Load the raw data and save to disk
+    groopm core         -> Create cores used for training SOMs
+    groopm refine       -> Refine these cores a little
+    groopm makesoms     -> Train SOMs and define classification regions
+    groopm expand       -> Use SOMs to expand the cores
+    groopm extract      -> Extract binned contigs
+    
+    Extra features:
+    
+        Utilities:
+      
+    groopm merge        -> Merge two or bins
+    groopm split        -> Split a bin into N parts
+    groopm delete       -> Delete a bin
+    
+        Printing, plotting:
+        
+    groopm explore      -> Methods for viewing bin layouts
+    groopm print        -> Print bin statistics
+    groopm plot         -> Plot bins
+    
+    USE: groopm OPTION -h to see detailed options
+    '''
+
 if __name__ == '__main__':
+
+    #-------------------------------------------------
     # intialise the options parser
-    parser = argparse.ArgumentParser(description='[[GroopM]] - Metagenomic binning tools')
+    parser = argparse.ArgumentParser(add_help=False)#formatter_class=argparse.RawDescriptionHelpFormatter,description='')
     subparsers = parser.add_subparsers(help="--", dest='subparser_name')
 
     ##################################################
-    # regular modes    
+    # Typical workflow
     ##################################################
+    
+    #-------------------------------------------------
     # parse raw data and save
-    file_parser = subparsers.add_parser('parse', help='parse raw data and save to DB')
+    file_parser = subparsers.add_parser('parse',
+                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        help='parse raw data and save to disk',
+                                        description='Parse raw data and save to disk')
     file_parser.add_argument('dbname', help="name of the database being created")
     file_parser.add_argument('reference', help="fasta file containing bam reference sequences")
     file_parser.add_argument('bamfiles', nargs='+', help="bam files to parse")
     file_parser.add_argument('-d', '--dump', action="store_true", default=False, help="dump the contents of all tables to screen")
     file_parser.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing DB file without prompting")
         
+    #-------------------------------------------------
     # load saved data and make bin cores
-    core_builder = subparsers.add_parser('core', help='load DB and make bin cores')
+    core_builder = subparsers.add_parser('core',
+                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        help='load saved data and make bin cores',
+                                        description='Load saved data and make bin cores')
     core_builder.add_argument('dbname', help="name of the database to open")
-    core_builder.add_argument('-c', '--cutoff', default=10000, help="cutoff size for core creation. Default 10000")
+    core_builder.add_argument('-c', '--cutoff', default=3000, help="cutoff contig size for core creation")
+    core_builder.add_argument('-s', '--size', default=5, help="minimum number of contigs which define a core")
+    core_builder.add_argument('-b', '--bp', default=1000000, help="cumulative size of contigs which define a core regardless of number of contigs")
     core_builder.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing DB file without prompting")
-    core_builder.add_argument('-D', '--plot', action="store_true", default=False, help="create plots during core creation. Default: no plots")
-    core_builder.add_argument('-s', '--size', default=5, help="minimum number of contigs which define a core. Default: 5")
-    core_builder.add_argument('-b', '--bp', default=1000000, help="cumulative size of contigs which define a core regardless of number of contigs. Default: 1000000")
+    core_builder.add_argument('-p', '--plot', action="store_true", default=False, help="create plots during core creation - MAKES MANY IMAGES!")
 
+    #-------------------------------------------------
     # refine bins
-    bin_refiner = subparsers.add_parser('refine', help='merge similar bins / split chimeric ones')
+    bin_refiner = subparsers.add_parser('refine',
+                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        help='merge similar bins / split chimeric ones',
+                                        description='Merge similar bins and split chimeric ones')
     bin_refiner.add_argument('dbname', help="name of the database to open")
-    bin_refiner.add_argument('-a', '--auto', action="store_true", default=False, help="do everything automatically")
-    bin_refiner.add_argument('-m', '--manual', action="store_true", default=False, help="do everything manually")
+    bin_refiner.add_argument('-p', '--plotter', action="store_true", default=False, help="use global 3d plots")
+    bin_refiner.add_argument('-m', '--manual', action="store_true", default=False, help="handle complex cases manually")
 
-    # load saved data and enlarge bins
-    bin_expander = subparsers.add_parser('expand', help='load DB and enlarge bins')
+    #-------------------------------------------------
+    # make SOMs
+    som_maker = subparsers.add_parser('makesoms',
+                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                      help='train SOMs and define classification regions',
+                                      description='Train SOMs and define classification regions')
+    som_maker.add_argument('dbname', help="name of the database to open")
+    som_maker.add_argument('-s', '--side', default=150, help="the side of the SOM grid")
+    som_maker.add_argument('-i', '--iterations', default=1000, help="the number of iterations used in training")
+    som_maker.add_argument('-N', '--no_merge', action='store_true', default=False, help="suppress bin merging after making regions")
+    som_maker.add_argument('-t', '--tag', default='', help="make images of weights/regions. (No tag to skip plots)")    
+    som_maker.add_argument('-f', '--force', action='store_true', default=False, help="overwrite any existing SOMs without prompting")
+
+    #-------------------------------------------------
+    # enlarge bins
+    bin_expander = subparsers.add_parser('expand',
+                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        help='load saved data and enlarge bins',
+                                        description='Load data and enlarge bins using SOMs')
     bin_expander.add_argument('dbname', help="name of the database to open")
+    bin_expander.add_argument('-c', '--cutoff', default=500, help="cutoff contig size")
     bin_expander.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing db file without prompting")
-    bin_expander.add_argument('-D', '--plot', action="store_true", default=False, help="create plots during bin expansion. Default: no plots")
-    
-    # refine bins
-    bin_separator = subparsers.add_parser('separate', help='identify and separate chimeric bins')
-    bin_separator.add_argument('dbname', help="name of the database to open")
-    bin_separator.add_argument('-a', '--auto', action="store_true", default=False, help="do everything automatically")
-    bin_separator.add_argument('-m', '--manual', action="store_true", default=False, help="do everything manually")
+    bin_expander.add_argument('-p', '--plot', action="store_true", default=False, help="create plots during bin expansion")
 
+    #-------------------------------------------------
+    # extract reads and contigs from saved
+    bin_extractor = subparsers.add_parser('extract',
+                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        help='extract contigs and reads based on bin affiliations',
+                                        description='Extract contigs and reads based on bin affiliations')
+    bin_extractor.add_argument('dbname', help="name of the database to open")
+    bin_extractor.add_argument('data', nargs='+', help="data file(s) to extract from, bam or fasta")
+    bin_extractor.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to use (None for all)")
+    bin_extractor.add_argument('-c', '--cutoff', default=0, help="cutoff contig size, ignored for reads (0 for no cutoff)")
+    bin_extractor.add_argument('-m', '--mode', default="contigs", help="what to extract [reads, contigs]")
+    bin_extractor.add_argument('-o', '--outfolder', default="", help="write to this folder (None for current dir)")
+    bin_extractor.add_argument('-s', '--shuffle', action="store_true", default=False, help="shuffle reads file, ignored for contigs or unpaired reads")
+
+    ##################################################
+    # Utilities
+    ##################################################
+
+    #-------------------------------------------------
     # combine two or more bins into one
-    bin_merger = subparsers.add_parser('merge', help='merge 2 or more bins')
+    bin_merger = subparsers.add_parser('merge',
+                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        help='merge 2 or more bins')
     bin_merger.add_argument('dbname', help="name of the database to open")
     bin_merger.add_argument('bids', nargs='+', type=int, help="bin ids to merge.")
-    bin_merger.add_argument('-a', '--auto', action="store_true", default=False, help="merge without prompting")
+    bin_merger.add_argument('-f', '--force', action="store_true", default=False, help="merge without prompting")
     
+    #-------------------------------------------------
     # split a bin into two parts
-    bin_splitter = subparsers.add_parser('split', help='split a bin into n pieces') 
+    bin_splitter = subparsers.add_parser('split',
+                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        help='split a bin into n pieces') 
     bin_splitter.add_argument('dbname', help="name of the database to open")
     bin_splitter.add_argument('bid', type=int, help="bin id to split")
     bin_splitter.add_argument('parts', type=int, help="number of parts to split the bin into")
-    bin_splitter.add_argument('-m', '--mode', default="kmer", help="profile to split on 'kmer' or 'cov'. Default: kmer")
+    bin_splitter.add_argument('-m', '--mode', default="kmer", help="profile to split on [kmer, cov]")
+    bin_splitter.add_argument('-f', '--force', action="store_true", default=False, help="split without prompting")
     
+    #-------------------------------------------------
+    # delete bins
+    bin_deleter = subparsers.add_parser('delete',
+                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        help='delete bins') 
+    bin_deleter.add_argument('dbname', help="name of the database to open")
+    bin_deleter.add_argument('bids', nargs='+', type=int, help="bin ids to delete")
+    bin_deleter.add_argument('-f', '--force', action="store_true", default=False, help="delete without prompting")
+    
+    ##################################################
+    # Utilities
+    ##################################################
+
+    #-------------------------------------------------
     # load bins and visualise
-    bin_explorer = subparsers.add_parser('explore', help='explore and validate bins')
+    bin_explorer = subparsers.add_parser('explore',
+                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        help='explore and validate bins')
     bin_explorer.add_argument('dbname', help="name of the database to open")
-    bin_explorer.add_argument('-c', '--cutoff', default=10000, help="cutoff size. Default 10000")
-    bin_explorer.add_argument('-p', '--profiles', action="store_true", default=False, help="plot kmer and cov profile distributions")
-    bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot. Default: all bins")
+    bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot (None for all)")
+    bin_explorer.add_argument('-c', '--cutoff', default=10000, help="cutoff contig size")
+    bin_explorer.add_argument('-m', '--mode', default="points", help="Exploration mode [ids, points, profile, compare, flyover, unbinned]")
 
+    #-------------------------------------------------
     # print bin information       
-    bin_printer = subparsers.add_parser('print', help='print bin information')
+    bin_printer = subparsers.add_parser('print',
+                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        help='print bin information')
     bin_printer.add_argument('dbname', help="name of the database to open")
-    bin_printer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to print. Default: all bins")
-    bin_printer.add_argument('-o', '--outfile', default="", help="print to file. Default: stdout")
-    bin_printer.add_argument('-f', '--format', default='summary', help="output format [full, minimal, summary]. default: 'summary'")
-    bin_printer.add_argument('-u', '--unbinned', action="store_true", default=False, help="print unbinned contig IDs too. Default: only binned")
+    bin_printer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to print (None for all)")
+    bin_printer.add_argument('-o', '--outfile', default="", help="print to file not STDOUT")
+    bin_printer.add_argument('-f', '--format', default='summary', help="output format [full, minimal, summary]")
+    bin_printer.add_argument('-u', '--unbinned', action="store_true", default=False, help="print unbinned contig IDs too")
 
+    #-------------------------------------------------
     # plot a bin/bins
-    bin_plotter = subparsers.add_parser('plot', help='plot bins')
+    bin_plotter = subparsers.add_parser('plot',
+                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        help='plot bins')
     bin_plotter.add_argument('dbname', help="name of the database to open")
-    bin_plotter.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot. Default: all bins")
-    bin_plotter.add_argument('-s', '--sidebyside', action="store_true", default=False, help="plot bins in 3d side by side. Default: print to file")
+    bin_plotter.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot (None for all)")
+    bin_plotter.add_argument('-s', '--sidebyside', action="store_true", default=False, help="plot bins in 3d side by side instead of to file")
     bin_plotter.add_argument('-t', '--tag', default="BIN", help="tag to add to output filename")
     
-    # TODO - implement these modes
-
-    # parse and bin in one step
-    #complete_parser = subparsers.add_parser('complete', help='all stages in one step')
-
-    ##################################################
-    # interactive mode
-    ##################################################
-    #interactive_parser = subparsers.add_parser('prompt', help='jump to interactive shell')
-
-    ##################################################
-    # batch mode
-    ##################################################
-    #batch_parser = subparsers.add_parser('batch', help='run commands in batch mode')
-    #batch_parser.add_argument('batch_script', help="batch commands to be executed sequentially")
         
+    #-------------------------------------------------
     # get and check options
-    args = parser.parse_args()
+    args = None
+    if(len(sys.argv) == 1 or sys.argv[1] == '-h' or sys.argv == '--help'):
+        printHelp()
+        sys.exit(0)
+    else:
+        args = parser.parse_args()
 
+    #-------------------------------------------------
     # do what we came here to do
     try:
         GM_parser = groopm.GroopMOptionsParser()

@@ -69,7 +69,12 @@ class PCA:
         assert np.all( self.d[:-1] >= self.d[1:] )  # sorted
         self.eigen = self.d**2
         self.sumvariance = np.cumsum(self.eigen)
-        self.sumvariance /= self.sumvariance[-1]
+        try:
+            self.sumvariance /= self.sumvariance[-1]
+        except:
+            print len(A), len(self.sumvariance), len(self.eigen)
+            raise
+         
         self.npc = np.searchsorted( self.sumvariance, fraction ) + 1
         while(self.npc == 1):   # prevents less than 2 pcs being found
             fraction *= 1.1
