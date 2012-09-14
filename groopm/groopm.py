@@ -135,15 +135,14 @@ class GroopMOptionsParser():
             bids = []
             if options.bids is not None:
                 bids = options.bids
-            BX = groopmUtils.BinExtractor(options.dbname,
-                                          options.data,
+            BX = groopmUtils.GMExtractor(options.dbname,
                                           bids=bids,
                                           folder=options.outfolder
                                           )
             if(options.mode=='contigs'):
-                BX.extractContigs(fasta=data, cutoff=options.cutoff)
+                BX.extractContigs(fasta=options.data, cutoff=options.cutoff)
             elif(options.mode=='reads'):
-                BX.extractReads(bams=data, shuffle=options.shuffle)
+                BX.extractReads(bams=options.data, shuffle=options.shuffle)
             else:
                 raise ge.ExtractModeNotAppropriateException("mode: "+mode+" is unknown")
 
@@ -185,7 +184,7 @@ class GroopMOptionsParser():
             BE = groopmUtils.BinExplorer(options.dbname, bids=bids)
             if(options.mode == 'points'):
                 BE.plotPoints()
-            if(options.mode == 'ids'):
+            elif(options.mode == 'ids'):
                 BE.plotIds()
             elif(options.mode == 'flyover'):
                 BE.plotFlyOver()

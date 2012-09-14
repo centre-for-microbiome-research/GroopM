@@ -138,6 +138,15 @@ class Bin:
         self.calcTotalSize(contigLengths)
         self.getKmerColourStats(contigColours)
 
+    def scoreProfile(self, kmerSig, transformedCP):
+        """Determine how similar this profile is to the bin distribution
+        
+        This is the norm of the vector containing z distances for both profiles
+        """
+        covZ = np.mean(np.abs((transformedCP - self.covMeans)/self.covStdevs))**2
+        merZ = np.mean(np.abs((kmerSig - self.merMeans)/self.merStdevs))**2
+        return (np.sqrt(covZ + merZ), (covZ,merZ))
+
     def isSimilar(self, alien, merValTol=5, covTol=5):
         """See if two bins are similar
         
@@ -148,8 +157,10 @@ class Bin:
         that_upper = alien.kValMean + merValTol * alien.kValStdev
         that_lower = alien.kValMean - merValTol * alien.kValStdev
         if(alien.kValMean < this_lower or alien.kValMean > this_upper):
+            #print "1", (alien.kValMean < this_lower), (alien.kValMean > this_upper), alien.kValMean, this_lower, this_upper
             return False
         if(self.kValMean < that_lower or self.kValMean > that_upper):
+            #print "2", (self.kValMean < that_lower), (self.kValMean > that_upper), self.kValMean, that_lower, that_upper
             return False
         
         this_upper = self.covMeans + covTol*self.covStdevs
@@ -158,8 +169,10 @@ class Bin:
         that_lower = alien.covMeans - covTol*alien.covStdevs
         for i in range(3):
             if(alien.covMeans[i] < this_lower[i] or alien.covMeans[i] > this_upper[i]):
+                #print "3", i, (alien.covMeans[i] < this_lower[i]),(alien.covMeans[i] > this_upper[i]), alien.covMeans[i], this_lower[i], this_upper[i]
                 return False
             if(self.covMeans[i] < that_lower[i] or self.covMeans[i] > that_upper[i]):
+                #print "4", i, (self.covMeans[i] < that_lower[i]), (self.covMeans[i] > that_upper[i]), self.covMeans[i], that_lower[i], that_upper[i]
                 return False
         return True
 
@@ -248,7 +261,11 @@ class Bin:
             working_list[outer_index] = profile[row_index]
             outer_index += 1
         # return the mean and stdev 
-        return (np.mean(working_list,axis=0), np.std(working_list,axis=0))
+        # we divide by std so we need to make sure it's never 0
+        tmp_stds = np.std(working_list,axis=0)
+        mean_std = np.mean(tmp_stds)
+        std = np.array([x if x != 0 else mean_std for x in tmp_stds])
+        return (np.mean(working_list,axis=0), std)
         
     def getInnerVariance(self, profile, mode="kmer"):
         """Work out the variance for the coverage/kmer profile"""
@@ -365,6 +382,14 @@ class Bin:
                                     num_recruited += 1
         return num_recruited
 
+    def shuffleMembers(self, adds, removes):
+        """add some guys, take some guys away"""
+        for row_index in self.rowIndicies:
+            if(row_index not in removes):
+                adds.append(row_index)
+        self.rowIndicies = np.array(adds)
+        self.binSize = self.rowIndicies.shape[0]
+        
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
 #

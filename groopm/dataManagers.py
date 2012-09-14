@@ -178,7 +178,7 @@ class BinManager:
         elif updateBinStats:
             # we need to make a list of updates
             updates = {}
-            for bid in sorted(self.bins):
+            for bid in self.getBids():
                 updates[bid] = self.bins[bid].binSize
             self.updateBinStats(updates)
     
@@ -189,7 +189,7 @@ class BinManager:
         and should only be used during initial coring. BID must be somewhere!
         """
         bin_updates = {}
-        for bid in sorted(self.bins):
+        for bid in self.getBids():
             bin_updates[bid] = np.size(self.bins[bid].rowIndicies)
         self.PM.saveValidBinIds(bin_updates)
 
@@ -220,7 +220,7 @@ class BinManager:
         # we need a mapping from cid (or local index) to binID
         bin_update = {}
         c2b = {}
-        for bid in sorted(self.bins):
+        for bid in self.getBids():
             for row_index in self.bins[bid].rowIndicies:
                 c2b[row_index] = bid
 
@@ -249,7 +249,7 @@ class BinManager:
         del self.bins[bid]
         
         # now fix all the rowIndicies in all the other bins
-        for bid in sorted(self.bins):
+        for bid in self.getBids():
             self.bins[bid].rowIndicies = self.fixRowIndexLists(original_length, np.sort(self.bins[bid].rowIndicies), rem_list)
 
 
@@ -287,14 +287,14 @@ class BinManager:
         if(mode == "mer"):
             ret_vecs = np.zeros((len(self.bins), len(self.PM.kmerSigs[0])))
             outer_index = 0
-            for bid in sorted(self.bins):
+            for bid in self.getBids():
                 ret_vecs[outer_index] = self.bins[bid].merMeans
                 outer_index += 1
             return ret_vecs
         elif(mode == "cov"):
             ret_vecs = np.zeros((len(self.bins), len(self.PM.transformedCP[0])))
             outer_index = 0
-            for bid in sorted(self.bins):
+            for bid in self.getBids():
                 ret_vecs[outer_index] = self.bins[bid].covMeans
                 outer_index += 1
             return ret_vecs
@@ -310,7 +310,7 @@ class BinManager:
             if(not self.split(bid, 2, M_cut, auto=True, printInstructions=False)):
                 # the bin could not be split, delete the parent
                 self.deleteBins([bid], force=True, freeBinnedRowIndicies=True, saveBins=False)
-        for bid in sorted(self.bins):
+        for bid in self.getBids():
             # make these guys here
             self.bins[bid].getKmerColourStats(self.PM.contigColours)
 
@@ -491,10 +491,53 @@ class BinManager:
             user_option = self.promptOnPlotterCondense()
             if(user_option == 'R'):
                 self.plotBinIds()
+            
+            elif(user_option == 'P'):
+                self.plotBinPoints()
+            
             elif(user_option == 'M'):
+                # merge bins
                 merge_bids = self.getPlotterMergeIds()
                 if(not len(merge_bids) == 0):
                     self.merge(merge_bids, auto=False, manual=True, newBid=False, saveBins=True, verbose=False, printInstructions=False)
+            
+            elif(user_option == 'B'):
+                # print single bin
+                have_bid = False
+                while(not have_bid):
+                    try:
+                        bid = int(raw_input(" Enter bid to plot:"))
+                        if bid not in self.bins:
+                            print "ERROR: Bin %d not found!" % bid
+                        else:
+                            have_bid = True
+                    except ValueError:
+                        print "You need to enter an integer value!"
+                self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours)
+                
+            elif(user_option == 'S'):
+                # split bins
+                have_bid = False
+                have_parts = False
+                while(not have_bid):
+                    try:
+                        bid = int(raw_input(" Enter bid to split:"))
+                        if bid not in self.bins:
+                            print "ERROR: Bin %d not found!" % bid
+                        else:
+                            have_bid = True
+                    except ValueError:
+                        print "You need to enter an integer value!"
+                while(not have_parts):
+                    try:
+                        parts = int(raw_input(" Enter number of parts to split into:"))
+                        if(parts < 2):
+                            print "ERROR: Need to choose 2 or more parts"
+                        else:
+                            have_parts = True
+                    except ValueError:
+                        print "You need to enter an integer value!"
+                self.split(bid, parts, mode='kmer', auto=False, saveBins=True, printInstructions=False)   
             else:
                 return
         return
@@ -668,7 +711,7 @@ class BinManager:
                     if(tmp_kM < medianVariance): # varience observed across all bins
                         return (True,True)
                     else:
-                        return (True, False)
+                        return (True,False)
                 else:
                     #print bin1.id, bin2.id, bin1_cM, bin2_cM, c_cut, tmp_cM, bin1_kM, bin2_kM, k_cut, tmp_kM, True
                     #print "------------------"
@@ -707,6 +750,7 @@ class BinManager:
         
         # let this guy consume all the other guys
         ret_val = 0
+        some_merged = False
         for i in range(1,len(bids)):
             continue_merge = False
             dead_bin = self.getBin(bids[i])
@@ -736,8 +780,9 @@ class BinManager:
                 self.deleteBins([bids[i]], force=True)
                 bin_stats[bids[i]] = 0
                 bin_stats[parent_bin.id] = parent_bin.binSize
+                some_merged = True
 
-        if(saveBins):
+        if(saveBins and some_merged):
             self.updateBinStats(bin_stats)
             self.saveBins(doCores=False, saveBinStats=False)
             
@@ -834,15 +879,15 @@ class BinManager:
     def promptOnPlotterCondense(self, minimal=False):
         """Find out what the user wishes to do next when refining bins"""
         input_not_ok = True
-        valid_responses = ['R','M','Q']
+        valid_responses = ['R','P','B','M','S','Q']
         vrs = ",".join([str.lower(str(x)) for x in valid_responses])
         while(input_not_ok):
             if(minimal):
                 option = raw_input(" What next? ("+vrs+") : ")
             else:
-                option = raw_input(" You have been shown a 3D plot of the bins\n" \
-                                   " How do you want to continue?\n" \
-                                   " r = replot, m = merge, q = quit\n" \
+                option = raw_input(" How do you want to continue?\n" \
+                                   " r = replot ids, p = replot points, b = plot single bin," \
+                                   " m = merge, s = split, q = quit\n" \
                                    " What next? ("+vrs+") : ")
             if(option.upper() in valid_responses):
                 return option.upper()
@@ -952,6 +997,23 @@ class BinManager:
 #------------------------------------------------------------------------------
 # BIN STATS 
 
+    def classify(self, rowIndex, bids):
+        """Classify a contig based on similarity to a set of bins"""
+        min_score = 100000000
+        info = [rowIndex, len(bids)]
+        classification = 0
+        for bid in sorted(bids):
+            (score, scores) = self.scoreContig(rowIndex, bid)
+            info.append((bid, score, scores))
+            if(score < min_score):
+                classification = bid
+                min_score = score
+        return (classification, "".join(str(info)))
+
+    def scoreContig(self, rowIndex, bid):
+        """Determine how well a particular contig fits with a bin"""
+        return self.getBin(bid).scoreProfile(self.PM.kmerSigs[rowIndex], self.PM.transformedCP[rowIndex])
+
     def measureBinVariance(self, mode='kmer', makeKillList=False, tolerance=1.0, verbose=False):
         """Get the stats on M's across all bins
         
@@ -961,7 +1023,7 @@ class BinManager:
         Ms = {}
         Ss = {}
         Rs = {}
-        for bid in sorted(self.bins):
+        for bid in self.getBids():
             if(mode == 'kmer'):
                 (Ms[bid], Ss[bid], Rs[bid]) = self.bins[bid].getInnerVariance(self.PM.kmerSigs)
             elif(mode == 'cov'):
@@ -989,7 +1051,7 @@ class BinManager:
         S = 1       # SAT and VAL remain fixed at 1. Reduce to make
         V = 1       # Pastels if that's your preference...
         outer_index = 0
-        for bid in sorted(self.bins):
+        for bid in self.getBids():
             cum_colour = np.array([])
             for row_index in self.bins[bid].rowIndicies:
                 cum_colour = np.append(cum_colour, self.PM.contigColours[row_index])
@@ -1015,7 +1077,7 @@ class BinManager:
         bids = np.array([])
         
         # work out the mean and stdev for the kmer sigs for each bin
-        for bid in sorted(self.bins):
+        for bid in self.getBids():
             bkworking = np.array([])
             for row_index in self.bins[bid].rowIndicies:
                 bkworking = np.append(bkworking, self.PM.kmerSigs[row_index])
@@ -1111,7 +1173,7 @@ class BinManager:
             print "Error: Unrecognised format:", outFormat
             return
 
-        for bid in sorted(self.bins):
+        for bid in self.getBids():
             self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
             self.bins[bid].getKmerColourStats(self.PM.contigColours)
             self.bins[bid].calcTotalSize(self.PM.contigLengths)
@@ -1119,17 +1181,17 @@ class BinManager:
 
     def plotProfileDistributions(self):
         """Plot the coverage and kmer distributions for each bin"""
-        for bid in sorted(self.bins):
+        for bid in self.getBids():
             self.bins[bid].plotProfileDistributions(self.PM.transformedCP, self.PM.kmerSigs, fileName="PROFILE_"+str(bid))
 
     def plotBins(self, FNPrefix="BIN", sideBySide=False):
         """Make plots of all the bins"""
-        for bid in sorted(self.bins):
+        for bid in self.getBids():
             self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
         if(sideBySide):
             self.plotSideBySide(self.bins.keys(), tag=FNPrefix)
         else:
-            for bid in sorted(self.bins):
+            for bid in self.getBids():
                 self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, fileName=FNPrefix+"_"+str(bid))
 
     def plotSideBySide(self, bids, fileName="", tag=""):
@@ -1170,7 +1232,7 @@ class BinManager:
             ax.text(bin_centroid_points[outer_index,0], 
                     bin_centroid_points[outer_index,1], 
                     bin_centroid_points[outer_index,2], 
-                    str(bid), 
+                    str(int(bid)), 
                     color=bin_centroid_colours[outer_index]
                     )
             outer_index += 1
@@ -1209,7 +1271,7 @@ class SOMManager:
     def __init__(self,
                  binManager,
                  numSoms=3,
-                 somSide=150,
+                 somSide=0,
                  somIterations=1000,
                  makeBins=True,
                  load=False
@@ -1257,7 +1319,10 @@ class SOMManager:
             self.loadSoms(self.DM.getSOMDataInfo(self.PM.dbFileName), meta=meta)
             
         else:
-            self.somSide = somSide
+            if(somSide == 0):
+                self.somSide = somSide
+            else:
+                self.somSide = int(np.sqrt(75*len(self.BM.bins)))
             self.covDim = len(self.PM.transformedCP[0])
             self.merDim = len(self.PM.kmerSigs[0])
             
@@ -1369,7 +1434,8 @@ class SOMManager:
     
     def DoSOMPipeline(self, merge=True, force=False, tag=""):
         """Wrap the various tasks needed to produce SOMs"""
-        self.buildSomWeights(force=force)
+        if(not self.buildSomWeights(force=force)):
+            return
         self.regionalise(force=True)
         self.findRegionNeighbours(merge=merge)
         self.validateRegions()
@@ -1381,81 +1447,51 @@ class SOMManager:
 #------------------------------------------------------------------------------
 # CLASSIFICATION
 
-    def classify(self, rowIndex, mode='consensus'):
-        """Classify a contig (rowIndex) against the SOMS"""
-        m_bids = {}
-        c_bids = {}
-        m_choice = 0
-        c_choice = 0
+    def remapCollapsed(self, bid):
+        """Replace this bid with it's match in the collaped mappings"""
+        while(bid in self.collapsedMappings):
+            bid = self.collapsedMappings[bid]
+        return bid
+
+    def classify(self, rowIndex):
+        """Classify a contig (rowIndex) against the SOMS et al
         
-        if(mode == 'mer' or mode == 'consensus'):
-            for i in self.merSoms:
-                tmp_bid = self.merSoms[i].classify(self.whitenKVector(self.PM.kmerSigs[rowIndex]))
-                while(tmp_bid in self.collapsedMappings):
-                    tmp_bid = self.collapsedMappings[tmp_bid]
-                if(tmp_bid not in m_bids):
-                    m_bids[tmp_bid] = 1
+        If the soms retuen a clear majority for both profiles 
+        then we just go with that. If there are any problems at all
+        we check the bin stats of all the regions hit by the soms and
+        all of the neighbouring regions. 
+        """
+        # mers first!
+        mc_bids = [{}, {}]
+        choices = [0,0]
+        whiteVectors = [self.whitenKVector(self.PM.kmerSigs[rowIndex]),
+                        self.whitenCVector(self.PM.transformedCP[rowIndex])]
+        soms = (self.merSoms, self.covSoms)
+        for i in range(2):
+            for j in soms[i]:
+                tmp_bid = self.remapCollapsed(soms[i][j].classify(whiteVectors[i]))
+                if(tmp_bid not in mc_bids[i]):
+                    mc_bids[i][tmp_bid] = 1
                 else:
-                    m_bids[tmp_bid] += 1
-            for bid in m_bids:
-                if(m_bids[bid] > 1):    # choose based on consensus of mer classifications
-                    m_choice = bid
-            if(mode != 'consensus'):
-                # we classify based just on this
-                return m_choice
-        if(mode == 'cov' or mode == 'consensus'):                
-            for i in self.covSoms:
-                tmp_bid = self.covSoms[i].classify(self.whitenCVector(self.PM.transformedCP[rowIndex]))
-                while(tmp_bid in self.collapsedMappings):
-                    tmp_bid = self.collapsedMappings[tmp_bid]
-                if(tmp_bid not in c_bids):
-                    c_bids[tmp_bid] = 1
-                else:
-                    c_bids[tmp_bid] += 1
-            for bid in c_bids:
-                if(c_bids[bid] > 1):
-                    c_choice = bid
-            if(mode != 'consensus'):
-                # we classify based just on this
-                return c_choice
+                    mc_bids[i][tmp_bid] += 1
+            for bid in mc_bids[i]:
+                if(mc_bids[i][bid] > 1):    # choose based on consensus of mer classifications (assumes 3 soms)
+                    choices[i] = self.remapCollapsed(bid)
+                    break
+
+        # if they agree, we are done        
+        if(choices[0] == choices[1] and choices[0] != 0):
+            return (choices[0], "=")
         
-        #print self.PM.contigNames[rowIndex], m_choice, c_choice," : ",
+        # m_choice and c_choice disagree
+        # we will need to make
+        n_query_bids =  []
+        n_query_bids.extend([self.remapCollapsed(i) for i in mc_bids[0].keys() if i not in n_query_bids])
+        n_query_bids.extend([self.remapCollapsed(i) for i in mc_bids[1].keys() if i not in n_query_bids])
         
-        # to get here the mode must be consensus
-        # in this case we need the m_choice and the c_choice to agree
-        if((m_choice == c_choice) or (c_choice == 0)):
-            #print m_choice
-            return m_choice
-        if(m_choice == 0):
-            #print c_choice
-            return c_choice
-        
-        # m_choice and c_choice disagree and are not 0
-        max_count = 0
-        winning_bid = 0
-        combined_bids = {}
-        #print c_bids, m_bids, " : ",
-        for bid in c_bids:
-            combined_bids[bid] = c_bids[bid]
-            if(combined_bids[bid] > max_count):
-                max_count = combined_bids[bid]
-                winning_bid = bid
-        for bid in m_bids:
-            if(bid not in combined_bids):
-                combined_bids[bid] = m_bids[bid]
-            else:
-                combined_bids[bid] += m_bids[bid]
-            if(combined_bids[bid] > max_count):
-                max_count = combined_bids[bid]
-                winning_bid = bid
-        if((combined_bids[winning_bid] > 3) and
-           (m_bids[winning_bid] != 0) and
-           (c_bids[winning_bid] != 0)
-           ):
-            #print winning_bid
-            return winning_bid
-        #print 0
-        return 0
+        (classification, info) = self.BM.classify(rowIndex, self.getNeighbours(n_query_bids))
+        classification = self.remapCollapsed(classification)
+        return (classification, "@@"+info)
 
 #------------------------------------------------------------------------------
 # REGIONS
@@ -1493,7 +1529,7 @@ class SOMManager:
             if(save):
                 self.saveCovRegions(i)
 
-    def findRegionNeighbours(self, merge=False):
+    def findRegionNeighbours(self, merge=False, printMergers=False):
         """Find out which regions neighbour which other regions"""
         print "    Finding region neighbours"
         mer_Ns = {}
@@ -1516,34 +1552,47 @@ class SOMManager:
         # now find out who is consistently next to whom
         combined_Ns = {}
         for N in mer_Ns:
-            if(mer_Ns[N] >= 2):
-                combined_Ns[N] = mer_Ns[N]
+            combined_Ns[N] = mer_Ns[N]
         for N in cov_Ns:
-            if(cov_Ns[N] >= 2):
-                if(N in combined_Ns):
-                    combined_Ns[N] += cov_Ns[N]
+            if(N in combined_Ns):
+                combined_Ns[N] += cov_Ns[N]
                 
         # now refine tis search further
         filtered_Ns = {}
         for N in combined_Ns:
             if(combined_Ns[N] >= 4):
                 filtered_Ns[N] = combined_Ns[N]
+
         
-        print filtered_Ns
         # now back it up with some stats
         for N in filtered_Ns:
+            #print "FN", N, filtered_Ns[N],
             bin1 = self.BM.getBin(N[0])
             bin2 = self.BM.getBin(N[1])
-            #print N[0], bin1.covMeans, bin1.covStdevs, bin1.kValMean, bin1.kValStdev
-            #print N[1], bin2.covMeans, bin2.covStdevs, bin2.kValMean, bin2.kValStdev
-            if(bin1.isSimilar(bin2)): # this test is symmetrical
+            if(self.BM.shouldMerge(bin1, bin2, kDistWobble=1.3, cDistWobble=1.3)):
+            #if(bin1.isSimilar(bin2)): # this test is symmetrical
                 # always map down to the smaller
                 self.collapsedMappings[N[1]] = N[0]
-                #print "MERGE(",N[0],",",N[1],")"
-            #print "========="
-            
-        if(merge):
+            #    print True
+            #else:
+            #    print False
+
+        if(printMergers and not merge):
+            ml = self.makeMergeLists(verbose=True)
+            #for mml in ml:
+            #    print mml
+        elif(merge):
             self.merge()
+
+    def getNeighbours(self, bids=[]):
+        """Return a list of neighbours based on regions"""
+        if(bids == []): return []
+        ret_list = list(bids)
+        for i in self.merSoms:
+            ret_list.extend([i for i in self.merSoms[i].getNeighbours(bids) if i not in ret_list])
+        for i in self.covSoms:
+            ret_list.extend([i for i in self.covSoms[i].getNeighbours(bids) if i not in ret_list])
+        return ret_list
 
     def validateRegions(self):
         """Basic validation of regions
@@ -1552,29 +1601,106 @@ class SOMManager:
         correct
         """
         print "Validating regions"
+        
+        adds = {}
+        removes = {}
+        
         self.loadTrainingVectors()
         bids = self.BM.getBids()
         for bid in bids:
+            adds[bid] = []
+            removes[bid] = {}
             bin = self.BM.getBin(bid)
-            tmp_bid = bid
-            while(tmp_bid in self.collapsedMappings):
-                    tmp_bid = self.collapsedMappings[tmp_bid]
-            print "    BID:",tmp_bid,":",
+            tmp_bid = self.remapCollapsed(bid)
+            print "    BID:",bid," (",tmp_bid,"):",
             total = 0
             correct = 0
             incorrect = 0
             unassigned = 0
             for row_index in bin.rowIndicies:
                 total += 1
-                class_bid = self.classify(row_index)
+                (class_bid, info) = self.classify(row_index)
+                print "{",class_bid,
                 if(class_bid == 0):
                     unassigned += 1
                 elif(class_bid != tmp_bid):
                     incorrect += 1
+                    print info
+                    removes[bid][row_index] = True
+                    if(class_bid not in adds):
+                        adds[class_bid] = []  
+                    adds[class_bid].append(row_index)
                 else:
                     correct += 1
-            print "Total %d, correct: %d, incorrect %d, unassigned %d" % (total,correct,incorrect,unassigned)
+                print "}",
+            print "\nTotal %d, correct: %d, incorrect %d, unassigned %d" % (total,correct,incorrect,unassigned)
+        #print adds
+        #print removes
+        for bid in bids:
+            bin = self.BM.getBin(bid)
+            bin.shuffleMembers(adds[bid], removes[bid])
+        self.BM.saveBins()
+
+    def assignmentMerge(self):
+        """Determine which regions should be merged
         
+        Classify each contig from each bin and see if the classification is
+        correct. Keep tabs on where it's wrong and use that to choose
+        which regions to merge
+        """
+        self.loadTrainingVectors()
+        bids = self.BM.getBids()
+        total_bids = len (self.BM.getBids())
+        done_bids = 0
+        joins = {}
+        for bid in bids:
+            incorrect_assignments = {}
+            bin = self.BM.getBin(bid)
+            done_bids += 1
+            print "    classifying %d (%d) of %d" % (done_bids, len(bin.rowIndicies), total_bids)
+            for row_index in bin.rowIndicies:
+                (class_bid, info) = self.classify(row_index)
+                if(class_bid != bid):
+                    # incorrect assignment, make note of which bin it was
+                    if(class_bid not in incorrect_assignments):
+                        incorrect_assignments[class_bid] = 1
+                    else:
+                        incorrect_assignments[class_bid] += 1
+            # make tuples of all the incorrect matches,
+            # this way we can find the worst offenders
+            for i in incorrect_assignments:
+                if(incorrect_assignments[i] > 1):
+                    join_key = self.makeNTuple(bid, i)
+                    if(join_key not in joins):
+                        joins[join_key] = incorrect_assignments[i]
+                    else:
+                        joins[join_key] += incorrect_assignments[i]
+                    
+        # sort the possible joins in descending order of number of instances
+        # those with the highest number *should* be the best...
+        import operator
+        sorted_joins = sorted(joins.iteritems(), key=operator.itemgetter(1), reverse=True)
+        for join in sorted_joins:
+            if(join[1] > 2):    # don't take anything too spurious
+                bid1 = self.remapCollapsed(join[0][0])
+                bid2 = self.remapCollapsed(join[0][1])
+                # stop circular mergers
+                if(bid1 != bid2):
+                    bin1 = self.BM.getBin(bid1)
+                    bin2 = self.BM.getBin(bid2)
+                    should_merge = self.BM.shouldMerge(bin1, bin2, kDistWobble=1.3, cDistWobble=1.3)
+                    if(should_merge):
+                        print bid1, bid2, join[1], should_merge
+                        rv = self.BM.merge([bid1, bid2], saveBins=True, printInstructions=False)
+                        if(rv == 2):
+                            # merge happened
+                            self.collapsedMappings[bid2] = bid1
+                            
+    def makeNTuple(self, bid1, bid2):
+        """A way for making standard tuples from bids"""
+        if(bid1 < bid2): return (bid1, bid2)
+        return (bid2, bid1)
+            
 #------------------------------------------------------------------------------
 # WEIGHTS 
 
@@ -1596,13 +1722,14 @@ class SOMManager:
                     print "Overwriting SOM weights in db:", self.PM.dbFileName
         
         # now we can start
-        print "Building SOM(s)"
+        print "Building %d SOMs of each type (coverage + kmer) with grid side %d," % (self.numSoms, self.somSide) 
         
         # get training data
         self.loadTrainingVectors()
         
         # build kmer SOMS
         for i in range(self.numSoms):
+            print "\n    Training kmer SOM #%d" % i
             map = som.SOM(self.somSide,self.merDim)
             self.merSoms[i] = map
             if(i == 0 and plot):
@@ -1614,6 +1741,7 @@ class SOMManager:
 
         # build coverage SOMS
         for i in range(self.numSoms):
+            print "\n    Training coverage SOM #%d" % i
             map = som.SOM(self.somSide,self.covDim)
             self.covSoms[i] = map
             if(i == 0 and plot):
@@ -1622,6 +1750,8 @@ class SOMManager:
                 map.train(self.cVecs, iterations=self.somIterations)
             if(save):
                 self.saveCovWeights(i)
+        print "--"
+        return True
     
     def whiten(self, profile):
         """Z normalize and scale profile columns"""
@@ -1649,10 +1779,8 @@ class SOMManager:
 #------------------------------------------------------------------------------
 # MERGE BINS
 
-    def merge(self):
-        """Merge bins, keeping the soms informed of changes"""
-        # self.collapsedMappings is a tree of values where key must be merged with value
-        print "    Merging gloablly adjacent regions"
+    def makeMergeLists(self, verbose=False):
+        """Use the collapsed mappings to build a set of merging lists"""
         working_lists = {}
         for bid in self.collapsedMappings:
             if(self.collapsedMappings[bid] not in working_lists and bid not in working_lists):
@@ -1675,17 +1803,25 @@ class SOMManager:
                 merge_lists.append(working_lists[bid])
                 for inner_id in working_lists[bid]:
                     used_ids[inner_id] = True
-        
-        num_reduced = 0
-        for ml in merge_lists:
-            num_reduced += (len(ml) - 1)
-        print "    Merging %d across %d bins" % (num_reduced,len(merge_lists))
-        
+        if(verbose):
+            num_reduced = 0
+            for ml in merge_lists:
+                print ml
+                num_reduced += (len(ml) - 1)
+            print "    Merging %d into %d bins, leaving %d bins" % (num_reduced,len(merge_lists),(len(self.BM.bins.keys())-num_reduced))
+        return merge_lists
+
+    def merge(self):
+        """Merge bins, keeping the soms informed of changes"""
+        # self.collapsedMappings is a tree of values where key must be merged with value
+        print "    Merging globally adjacent regions"
+        merge_lists = self.makeMergeLists(verbose=True)
         for ml in merge_lists:
             self.BM.merge(ml, auto=True, saveBins=True, printInstructions=False)
         
         # remake the regions
         self.regionalise(force=True)
+        self.findRegionNeighbours(merge=False, printMergers=False)
 
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
@@ -1962,11 +2098,15 @@ class ProfileManager:
 #------------------------------------------------------------------------------
 # DATA TRANSFORMATIONS 
 
-    def transformCP(self, silent=False):
+    def transformCP(self, silent=False, nolog=False):
         """Do the main ransformation on the coverage profile data"""
         # Update this guy now we know how big he has to be
         # do it this way because we may apply successive transforms to this
-        # guy and this is a neat way of clearing the data 
+        # guy and this is a neat way of clearing the data
+        shrinkFn = np.log10
+        if(nolog):
+            shrinkFn = lambda x:x
+         
         s = (self.numContigs,3)
         self.transformedCP = np.zeros(s)
         tmp_data = np.array([])
@@ -2008,7 +2148,7 @@ class ProfileManager:
             for point in self.covProfiles:
                 self.transformedCP[index,0] = tmp_data[index,0]
                 self.transformedCP[index,1] = tmp_data[index,1]
-                self.transformedCP[index,2] = np.log10(radialVals[index]/min_r)
+                self.transformedCP[index,2] = shrinkFn(radialVals[index]/min_r)
                 index += 1
         else:    
             # Project the points onto a 2d plane which is orthonormal
@@ -2024,7 +2164,7 @@ class ProfileManager:
                 if(0 > radialVals[index]):
                     self.transformedCP[index,2] = 0
                 else:
-                    self.transformedCP[index,2] = np.log10(radialVals[index]/min_r)
+                    self.transformedCP[index,2] = shrinkFn(radialVals[index]/min_r)
                 index += 1
 
         # finally scale the matrix to make it equal in all dimensions                

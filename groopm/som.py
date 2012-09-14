@@ -103,6 +103,9 @@ class SOM:
         self.weights = tm(self.side, dimension=self.dimension, randomize=True)
         self.regions = None
         
+        # we'd like to know who is next to whom
+        self.regionNeighbours = {}
+        
     def getWeights(self):
         """Get the weights nodes"""
         return self.weights.nodes
@@ -154,20 +157,46 @@ class SOM:
     def findRegionNeighbours(self):
         """Find out which regions neighbour which other regions"""
         neighbours = {}
+        self.regionNeighbours = {}
         for row in range(self.side-1):
             for col in range(self.side-1):
-                if(self.regions.nodes[row,col][0] != self.regions.nodes[row+1,col+1][0]):
-                    nt = self.makeNTuple(self.regions.nodes[row,col][0],
-                                         self.regions.nodes[row+1,col+1][0]
-                                         )
-                    neighbours[nt] = True
+                s_bid = self.regions.nodes[row,col][0]
+                # test against right, down and diagonally down
+                q_bids = [self.regions.nodes[row,col+1][0], 
+                          self.regions.nodes[row+1,col][0],
+                          self.regions.nodes[row+1,col+1][0]
+                         ]
+                for q_bid in q_bids:
+                    if(s_bid != q_bid):
+                        # make storage for this region
+                        if(s_bid not in self.regionNeighbours):
+                            self.regionNeighbours[s_bid] = []
+                        if(q_bid not in self.regionNeighbours):
+                            self.regionNeighbours[q_bid] = []
+                        # add in the neighbours
+                        if(q_bid not in self.regionNeighbours[s_bid]):
+                            self.regionNeighbours[s_bid].append(q_bid)
+                        if(s_bid not in self.regionNeighbours[q_bid]):
+                            self.regionNeighbours[q_bid].append(s_bid)
+
+                        # we only need to return a tuple                            
+                        nt = self.makeNTuple(s_bid,q_bid)
+                        neighbours[nt] = True
         return neighbours.keys()
         
     def makeNTuple(self, bid1, bid2):
         """A way for making standard tuples from bids"""
         if(bid1 < bid2): return (bid1, bid2)
         return (bid2, bid1)
-     
+
+    def getNeighbours(self, bids):
+        """return the neighbours of these bids"""
+        ret_list = []
+        for bid in bids:
+            if(bid in self.regionNeighbours):
+                ret_list.extend([i for i in self.regionNeighbours[bid] if i not in ret_list])
+        return ret_list        
+        
 #------------------------------------------------------------------------------
 # TRAINING 
         
@@ -177,7 +206,7 @@ class SOM:
         Train vector is a list of numpy arrays
         """
         
-        print "    Start training -->", iterations, "iterations"
+        print "    Start training. Max:", iterations, "iterations"
         t0 = time.time()
         
         # over time we'll shrink the radius of nodes which
@@ -200,8 +229,6 @@ class SOM:
             # gaussian decay on radius and amount of influence
             radius_decaying=self.radius*exp(-1.0*i/time_constant)
             if(radius_decaying < 2):
-                tf = time.time()
-                print "    Training complete - Total: "+self.secondsToStr(tf-t0)+" secs"
                 return
             
             radius_ratio = radius_decaying/ self.side
@@ -228,7 +255,7 @@ class SOM:
                 if(counter > cut_off):
                     break 
 
-                sys.stdout.write("\r    Iteration: %i of %i, Comparison: %i of %i, Radius: %04f / %04f " % (i, iterations, counter, cut_off, radius_decaying, radius_ratio) + "- (PREV: "+current_disp_time+", TOTAL: "+current_total_time+")   ")
+                sys.stdout.write("\r    Iteration: % 4d of % 4d, Comparison: % 4d of % 4d, Radius: %04f / %04f " % (i, iterations, counter, cut_off, radius_decaying, radius_ratio) + "- (PREV: "+current_disp_time+", TOTAL: "+current_total_time+")")
                 sys.stdout.flush()
 
                 # find the best match between then training vector and the
@@ -240,8 +267,6 @@ class SOM:
                 if(front_multiplier > epsilom):
                     delta_nodes[best[0],best[1]] += front_multiplier*(trainVector[j]-self.weights.nodes[best[0],best[1]])
                 else:
-                    tf = time.time()
-                    print "    Training complete - Total: "+self.secondsToStr(tf-t0)+" secs"
                     return
                 
                 # now do the crosshairs
@@ -318,9 +343,6 @@ class SOM:
                 filename = weightImgFileName+"_%04d" % i+".png"
                 print "   writing:",filename
                 self.weights.renderSurface(filename)
-
-        tf = time.time()
-        print "    Training complete - Total: "+self.secondsToStr(tf-t0)+" secs"
 
     def secondsToStr(self, t):
         rediv = lambda ll,b : list(divmod(ll[0],b)) + ll[1:]
