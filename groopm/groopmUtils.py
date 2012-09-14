@@ -50,6 +50,7 @@ __status__ = "Development"
 ###############################################################################
 import os
 import sys
+import errno
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -60,6 +61,7 @@ import numpy as np
 
 # GroopM imports
 import dataManagers
+import mstore
 
 np.seterr(all='raise')
 
@@ -71,10 +73,11 @@ np.seterr(all='raise')
 class GMExtractor:
     """Used for extracting reads and contigs based on bin assignments"""
     def __init__(self, dbFileName,
-                 data,
                  bids=[],
                  folder='',
                  ):
+        self.dbFileName = dbFileName
+        
         if bids is None:
             self.bids = []
         else:
@@ -82,22 +85,64 @@ class GMExtractor:
         
         if(folder == ''):
             # write to current working dir
-            self.outDir = os.path.cwd()
+            self.outDir = os.getcwd()
         else:
             self.outDir = folder
-            # make the dir if need be
+
+        # make the dir if need be
+        self.makeSurePathExists(self.outDir)
+        
         
     def extractContigs(self, fasta=[], cutoff=0):
         """Extract contigs and write to file"""
-        self.PM = dataManagers.ProfileManager(dbFileName)   # based on user specified length
-        self.BM = dataManagers.BinManager(dbFileName=dbFileName)   # bins
+        self.BM = dataManagers.BinManager(dbFileName=self.dbFileName)   # bins
         self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
-    
+        self.PM = self.BM.PM
+        
+        # load all the contigs which have been assigned to bins
+        CP = mstore.ContigParser()
+        # contigs looks like cid->seq
+        contigs = {}
+        try:
+            for file_name in fasta:
+                with open(file_name, "r") as f:  
+                    contigs = CP.getWantedSeqs(f, self.PM.contigNames, storage=contigs)
+        except:
+            print "Could not parse contig file:",fasta[0],sys.exc_info()[0]
+            raise
+        
+        # now print out the sequences
+        print "Writing files"
+        for bid in self.BM.getBids():
+            file_name = os.path.join(self.outDir, "BIN_%d.fa" % bid)
+            try:
+                with open(file_name, 'w') as f: 
+                    for row_index in self.BM.getBin(bid).rowIndicies:
+                        cid = self.PM.contigNames[row_index]
+                        if(cid in contigs):
+                            f.write(">%s\n%s\n" % (cid, contigs[cid]))
+                        else:
+                            print "WTF", bid, cid
+            except:
+                print "Could not open file for writing:",file_name,sys.exc_info()[0]
+                raise               
+        
     def  extractReads(self, bams=[], shuffled=False):
         """Extract reads from sam files and write to file"""
-        self.PM = dataManagers.ProfileManager(dbFileName)   # based on user specified length
-        self.BM = dataManagers.BinManager(dbFileName=dbFileName)   # bins
+        print "Soz LOL"
+        return
+        self.PM = dataManagers.ProfileManager(self.dbFileName)   # based on user specified length
+        self.BM = dataManagers.BinManager(dbFileName=self.dbFileName)   # bins
         self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+
+
+    def makeSurePathExists(self, path):
+        try:
+            os.makedirs(path)
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                raise
+
 
 ###############################################################################
 ###############################################################################
@@ -181,7 +226,7 @@ class BinExplorer:
         self.BM.loadBins(makeBins=True,bids=self.bids)
         print "Creating side by side plots"
         (bin_centroid_points, bin_centroid_colours, bin_ids) = self.BM.findCoreCentres()
-        self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colours)
+        self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colours, azim=11, elev=43, fileName="forGene")
 
     def plotIds(self):
         """Make a 3d plot of the bins but use IDs instead of points
@@ -198,25 +243,79 @@ class BinExplorer:
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
 
-    def plotCoresVsContigs(self, binCentroidPoints, binCentroidColours):
+    def plotCoresVsContigs(self, binCentroidPoints, binCentroidColours, azim=0, elev=0, fileName='', dpi=300, format='png'):
         """Render the image for validating cores"""
-        fig = plt.figure()
-        ax1 = fig.add_subplot(121, projection='3d')
-        ax1.scatter(self.PM.transformedCP[:,0], self.PM.transformedCP[:,1], self.PM.transformedCP[:,2], edgecolors=self.PM.contigColours, c=self.PM.contigColours, marker='.')
-        ax2 = fig.add_subplot(122, projection='3d')
-        ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColours, c=binCentroidColours)
-        try:
-            plt.show()
-            plt.close(fig)
-        except:
-            print "Error showing image", sys.exc_info()[0]
-            raise
-        del fig
-
-###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
+        if(fileName==""):
+            # plot on screen for user
+            fig = plt.figure()
+            ax1 = fig.add_subplot(121, projection='3d')
+            ax1.scatter(self.PM.transformedCP[:,0], self.PM.transformedCP[:,1], self.PM.transformedCP[:,2], edgecolors=self.PM.contigColours, c=self.PM.contigColours, marker='.')
+            ax2 = fig.add_subplot(122, projection='3d')
+            ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColours, c=binCentroidColours)
+            try:
+                plt.show()
+                plt.close(fig)
+            except:
+                print "Error showing image", sys.exc_info()[0]
+                raise
+            del fig
+        else:
+            f_name1 = fileName + "_1"
+            f_name2 = fileName + "_2"
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+            ax.scatter(self.PM.transformedCP[:,0], self.PM.transformedCP[:,1], self.PM.transformedCP[:,2], edgecolors='none', c=self.PM.contigColours, s=2, marker='.')
+            ax.azim = azim
+            ax.elev = elev
+            ax.set_xlim3d(0,self.PM.scaleFactor)
+            ax.set_ylim3d(0,self.PM.scaleFactor)
+            ax.set_zlim3d(0,self.PM.scaleFactor)
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_zticklabels([])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
+            try:
+                fig.set_size_inches(12,12)            
+                plt.savefig(f_name1,dpi=dpi,format=format)
+                plt.close(fig)
+            except:
+                print "Error saving image",f_name1, sys.exc_info()[0]
+                raise
+            del fig
+            
+            fig = plt.figure()
+            ax = fig.gca(projection='3d')
+            outer_index = 0
+            for bid in self.BM.getBids():
+                ax.text(binCentroidPoints[outer_index,0], 
+                        binCentroidPoints[outer_index,1], 
+                        binCentroidPoints[outer_index,2], 
+                        str(int(bid)), 
+                        color=binCentroidColours[outer_index]
+                        )
+                outer_index += 1
+            
+            ax.azim = azim
+            ax.elev = elev
+            ax.set_xlim3d(0,self.PM.scaleFactor)
+            ax.set_ylim3d(0,self.PM.scaleFactor)
+            ax.set_zlim3d(0,self.PM.scaleFactor)
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_zticklabels([])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
+            try:
+                fig.set_size_inches(12,12)            
+                plt.savefig(f_name2,dpi=dpi,format=format)
+                plt.close(fig)
+            except:
+                print "Error saving image",f_name1, sys.exc_info()[0]
+                raise
+            del fig
 
 ###############################################################################
 ###############################################################################

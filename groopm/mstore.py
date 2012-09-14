@@ -1015,6 +1015,14 @@ class ContigParser:
         table.flush()
         return con_names
 
+    def getWantedSeqs(self, contigFile, wanted, storage={}):
+        """Do the heavy lifting of parsing"""
+        print "Parsing contigs"        
+        for cid,seq,qual in self.readfq(contigFile):
+            if(cid in wanted):
+                storage[cid] = seq
+        return storage 
+
     def dumpTnTable(self, table, kmerCols):
         """Dump the guts of the TN table"""
         print "-----------------------------------"

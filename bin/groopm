@@ -146,8 +146,8 @@ if __name__ == '__main__':
                                       help='train SOMs and define classification regions',
                                       description='Train SOMs and define classification regions')
     som_maker.add_argument('dbname', help="name of the database to open")
-    som_maker.add_argument('-s', '--side', default=150, help="the side of the SOM grid")
-    som_maker.add_argument('-i', '--iterations', default=1000, help="the number of iterations used in training")
+    som_maker.add_argument('-s', '--side', type=int, default=150, help="the side of the SOM grid")
+    som_maker.add_argument('-i', '--iterations', type=int, default=1000, help="the number of iterations used in training")
     som_maker.add_argument('-N', '--no_merge', action='store_true', default=False, help="suppress bin merging after making regions")
     som_maker.add_argument('-t', '--tag', default='', help="make images of weights/regions. (No tag to skip plots)")    
     som_maker.add_argument('-f', '--force', action='store_true', default=False, help="overwrite any existing SOMs without prompting")
@@ -211,7 +211,7 @@ if __name__ == '__main__':
     bin_deleter.add_argument('-f', '--force', action="store_true", default=False, help="delete without prompting")
     
     ##################################################
-    # Utilities
+    # Plotting
     ##################################################
 
     #-------------------------------------------------
@@ -259,7 +259,11 @@ if __name__ == '__main__':
     # do what we came here to do
     try:
         GM_parser = groopm.GroopMOptionsParser()
-        GM_parser.parseOptions(args)
+        if(False):
+            import cProfile
+            cProfile.run('GM_parser.parseOptions(args)', 'prof')
+        else:        
+            GM_parser.parseOptions(args)
     except:
         print "Unexpected error:", sys.exc_info()[0]
         raise
