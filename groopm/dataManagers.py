@@ -105,7 +105,9 @@ class BinManager:
                  makeBins=False,
                  silent=True,
                  loadKmerSigs=False,
-                 loadCovProfiles=True):
+                 loadCovProfiles=True,
+                 min=None,
+                 max=None):
         """Load data and make bin objects"""
         # fix the condition
         condition=""
@@ -130,7 +132,7 @@ class BinManager:
         
         bin_members = self.initialiseContainers()
         if(makeBins):
-            self.PM.transformCP(silent=silent)
+            self.PM.transformCP(silent=silent, min=min, max=max)
             self.makeBins(bin_members)
 
     def initialiseContainers(self):
@@ -513,7 +515,7 @@ class BinManager:
                             have_bid = True
                     except ValueError:
                         print "You need to enter an integer value!"
-                self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours)
+                self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals)
                 
             elif(user_option == 'S'):
                 # split bins
@@ -740,7 +742,7 @@ class BinManager:
             parent_bin = makeNewBin()
             # now merge it with the first in the new list
             dead_bin = self.getBin(bids[0])
-            parent_bin.consume(self.PM.transformedCP, self.PM.kmerSigs, self.PM.contigLengths, self.PM.contigColours, dead_bin, verbose=verbose)
+            parent_bin.consume(self.PM.transformedCP, self.PM.kmerSigs, self.PM.contigLengths, self.PM.kmerVals, dead_bin, verbose=verbose)
             self.deleteBins([bids[0]], force=True)
             bin_stats[bids[0]] = 0
             bin_stats[parent_bin.id] = parent_bin.binSize
@@ -776,7 +778,7 @@ class BinManager:
                     ret_val = 2
                     continue_merge=True
             if(continue_merge):
-                parent_bin.consume(self.PM.transformedCP, self.PM.kmerSigs, self.PM.contigLengths, self.PM.contigColours, dead_bin, verbose=verbose)
+                parent_bin.consume(self.PM.transformedCP, self.PM.kmerSigs, self.PM.contigLengths, self.PM.kmerVals, dead_bin, verbose=verbose)
                 self.deleteBins([bids[i]], force=True)
                 bin_stats[bids[i]] = 0
                 bin_stats[parent_bin.id] = parent_bin.binSize
@@ -1192,7 +1194,7 @@ class BinManager:
             self.plotSideBySide(self.bins.keys(), tag=FNPrefix)
         else:
             for bid in self.getBids():
-                self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, fileName=FNPrefix+"_"+str(bid))
+                self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName=FNPrefix+"_"+str(bid))
 
     def plotSideBySide(self, bids, fileName="", tag=""):
         """Plot two bins side by side in 3d"""
@@ -1869,6 +1871,7 @@ class ProfileManager:
         self.contigLengths = np.array([])
         self.contigColours = np.array([])
         self.kmerSigs = np.array([])        # raw kmer signatures
+        self.kmerVals = np.array([])        # PCA'd kmer sigs
         self.binIds = np.array([])          # list of bin IDs
         self.isCore = np.array([])          # True False values
         # --> end section
@@ -1932,12 +1935,12 @@ class ProfileManager:
                 if(makeColours):
                     if(verbose):
                         print "    Creating colour profiles"
-                    colourProfile = self.makeColourProfile()
+                    self.makeColourProfile()
                     # use HSV to RGB to generate colours
                     S = 1       # SAT and VAL remain fixed at 1. Reduce to make
                     V = 1       # Pastels if that's your preference...
                     self.contigColours = np.array([])
-                    for val in colourProfile:
+                    for val in self.kmerVals:
                         self.contigColours = np.append(self.contigColours, [colorsys.hsv_to_rgb(val, S, V)])
                     self.contigColours = np.reshape(self.contigColours, (self.numContigs, 3))            
 
@@ -2099,11 +2102,8 @@ class ProfileManager:
 #------------------------------------------------------------------------------
 # DATA TRANSFORMATIONS 
 
-    def transformCP(self, silent=False, nolog=False):
+    def transformCP(self, silent=False, nolog=False, min=None, max=None):
         """Do the main ransformation on the coverage profile data"""
-        # Update this guy now we know how big he has to be
-        # do it this way because we may apply successive transforms to this
-        # guy and this is a neat way of clearing the data
         shrinkFn = np.log10
         if(nolog):
             shrinkFn = lambda x:x
@@ -2114,6 +2114,7 @@ class ProfileManager:
         if(not silent):
             print "    Dimensionality reduction"
 
+        # get the median distance from the origin
         unit_vectors = [(np.cos(i*2*np.pi/self.numStoits),np.sin(i*2*np.pi/self.numStoits)) for i in range(self.numStoits)]
         for i in range(len(self.indicies)):
             norm = np.linalg.norm(self.covProfiles[i])
@@ -2121,30 +2122,41 @@ class ProfileManager:
                 radial = shrinkFn(norm)
             else:
                 radial = norm
-            shifted_vector = [0,0]
-            flat_vector = self.covProfiles[i] / sum(self.covProfiles[i])
+            shifted_vector = np.array([0.0,0.0])
+            flat_vector = (self.covProfiles[i] / sum(self.covProfiles[i]))
+            
             for j in range(self.numStoits):
                 shifted_vector[0] += unit_vectors[j][0] * flat_vector[j]
                 shifted_vector[1] += unit_vectors[j][1] * flat_vector[j]
+
+            # log scale it towards the centre
+            scaling_vector = shifted_vector * self.scaleFactor
+            sv_size = np.linalg.norm(scaling_vector)
+            if(sv_size > 1):
+                shifted_vector /= shrinkFn(sv_size)
+
             self.transformedCP[i,0] = shifted_vector[0]
             self.transformedCP[i,1] = shifted_vector[1]
             self.transformedCP[i,2] = radial
-#            self.transformedCP[i] = [shrinkFn(k) if k != 0 else 0 for k in [shifted_vector[0], shifted_vector[1], norm]]
 
         if(not silent):
             print "    Reticulating splines"
             
-        # finally scale the matrix to make it equal in all dimensions                
-        min = np.amin(self.transformedCP, axis=0)
-        max = np.amax(self.transformedCP, axis=0)
-        max = max - min
-        max = max / (self.scaleFactor-1)
+        # finally scale the matrix to make it equal in all dimensions
+        if(min is None):                
+            min = np.amin(self.transformedCP, axis=0)
+            max = np.amax(self.transformedCP, axis=0)
+            max = max - min
+            max = max / (self.scaleFactor-1)
+
         for i in range(0,3):
             self.transformedCP[:,i] = (self.transformedCP[:,i] -  min[i])/max[i]
+            
+        return(min,max)
 
     def makeColourProfile(self):
         """Make a colour profile based on ksig information"""
-        ret_array = np.array([0.0]*np.size(self.indicies))
+        self.kmerVals = np.array([0.0]*np.size(self.indicies))
         working_data = np.array(self.kmerSigs, copy=True) 
         PCA.Center(working_data,verbose=0)
         p = PCA.PCA(working_data)
@@ -2153,19 +2165,18 @@ class ProfileManager:
         # now make the colour profile based on PC1
         index = 0
         for point in components:
-            ret_array[index] = float(components[index,0])
+            self.kmerVals[index] = float(components[index,0])
             index += 1
         
         # normalise to fit between 0 and 1
-        ret_array -= np.min(ret_array)
-        ret_array /= np.max(ret_array)
+        self.kmerVals -= np.min(self.kmerVals)
+        self.kmerVals /= np.max(self.kmerVals)
         if(False):
             print ret_array
             plt.figure(1)
             plt.subplot(111)
             plt.plot(components[:,0], components[:,1], 'r.')
             plt.show()
-        return ret_array
         
     def rotateVectorAndScale(self, point, las, centerVector, delta_max=0.25):
         """
