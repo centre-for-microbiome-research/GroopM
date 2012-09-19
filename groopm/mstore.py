@@ -1039,7 +1039,7 @@ class ContigParser:
 ###############################################################################
 class KmerSigEngine:
     """Simple class for determining kmer signatures"""
-    def __init__(self, kLen):
+    def __init__(self, kLen=4):
         self.kLen = kLen
         self.compl = string.maketrans('ACGT', 'TGCA')
         self.kmerCols = self.makeKmerColNames()
@@ -1064,7 +1064,22 @@ class KmerSigEngine:
             if lmer not in ret_list:
                 ret_list.append(lmer)
         return ret_list
-    
+
+    def getKmerSigWeights(self):
+        """Return a hash of index into kmer sig -> GC %"""
+        kmer_names = self.makeKmerColNames()
+        weights = []
+        compl = string.maketrans('ACGTacgt', '01100110')
+        for kmer in kmer_names:
+            weights.append(sum([float(x) for x in list(kmer.translate(compl))])/float(self.kLen))
+        return weights
+
+    def getGC(self, seq):
+        """Get the GC of a sequence"""
+        Ns = seq.count('N') + seq.count('n')
+        compl = string.maketrans('ACGTacgtnN', '0110011000')
+        return sum([float(x) for x in list(seq.translate(compl))])/float(len(seq) - Ns)
+
     def shiftLowLexi(self, seq):
         """Return the lexicographically lowest form of this sequence"""
         rseq = self.revComp(seq)
