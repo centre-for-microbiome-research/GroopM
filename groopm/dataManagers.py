@@ -715,11 +715,11 @@ class BinManager:
                 else:
                     #print bin1.id, bin2.id, bin1_cM, bin2_cM, c_cut, tmp_cM, bin1_kM, bin2_kM, k_cut, tmp_kM, True
                     #print "------------------"
-                    return True
+                    return (True,True)
         self.deleteBins([tmp_bin.id], force=True)
         #print bin1.id, bin2.id, bin1_cM, bin2_cM, c_cut, tmp_cM, False
         #print "------------------"
-        return False
+        return (False,False)
 
     def merge(self, bids, auto=False, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=True):
         """Merge two or more bins
@@ -1936,6 +1936,7 @@ class ProfileManager:
                     # use HSV to RGB to generate colours
                     S = 1       # SAT and VAL remain fixed at 1. Reduce to make
                     V = 1       # Pastels if that's your preference...
+                    self.contigColours = np.array([])
                     for val in colourProfile:
                         self.contigColours = np.append(self.contigColours, [colorsys.hsv_to_rgb(val, S, V)])
                     self.contigColours = np.reshape(self.contigColours, (self.numContigs, 3))            
@@ -2109,64 +2110,30 @@ class ProfileManager:
          
         s = (self.numContigs,3)
         self.transformedCP = np.zeros(s)
-        tmp_data = np.array([])
 
         if(not silent):
-            print "    Radial mapping"
-        # first we shift the edge values accordingly and then 
-        # map each point onto the surface of a hyper-sphere
-        # the vector we wish to move closer to...
-        radialVals = np.array([])        
-        ax = np.zeros_like(self.covProfiles[0])
-        ax[0] = 1
-        center_vector = np.ones_like(self.covProfiles[0])
-        las = self.getAngBetween(ax, center_vector)
-        center_vector /= np.linalg.norm(center_vector)
-        for point in self.covProfiles:
-            norm = np.linalg.norm(point)
-            radialVals = np.append(radialVals, norm)
-            point /= np.abs(np.log(norm+1)) # make sure we're always taking a log of something greater than 1
-            tmp_data = np.append(tmp_data, self.rotateVectorAndScale(point, las, center_vector, delta_max=0.25))
+            print "    Dimensionality reduction"
 
-        # it's nice to think that we can divide through by the min
-        # but we need to make sure that it's not at 0!
-        min_r = np.amin(radialVals)
-        if(0 == min_r):
-            min_r = 1
-        # reshape this guy
-        tmp_data = np.reshape(tmp_data, (self.numContigs,self.numStoits))
+        unit_vectors = [(np.cos(i*2*np.pi/self.numStoits),np.sin(i*2*np.pi/self.numStoits)) for i in range(self.numStoits)]
+        for i in range(len(self.indicies)):
+            norm = np.linalg.norm(self.covProfiles[i])
+            if(norm != 0):
+                radial = shrinkFn(norm)
+            else:
+                radial = norm
+            shifted_vector = [0,0]
+            flat_vector = self.covProfiles[i] / sum(self.covProfiles[i])
+            for j in range(self.numStoits):
+                shifted_vector[0] += unit_vectors[j][0] * flat_vector[j]
+                shifted_vector[1] += unit_vectors[j][1] * flat_vector[j]
+            self.transformedCP[i,0] = shifted_vector[0]
+            self.transformedCP[i,1] = shifted_vector[1]
+            self.transformedCP[i,2] = radial
+#            self.transformedCP[i] = [shrinkFn(k) if k != 0 else 0 for k in [shifted_vector[0], shifted_vector[1], norm]]
 
         if(not silent):
             print "    Reticulating splines"
-    
-        # now we use PCA to map the surface points back onto a 
-        # 2 dimensional plane, thus making the data usefuller
-        index = 0
-        if(self.numStoits == 2):
-            if(not silent):
-                print "Skip dimensionality reduction (dim < 3)"
-            for point in self.covProfiles:
-                self.transformedCP[index,0] = tmp_data[index,0]
-                self.transformedCP[index,1] = tmp_data[index,1]
-                self.transformedCP[index,2] = shrinkFn(radialVals[index]/min_r)
-                index += 1
-        else:    
-            # Project the points onto a 2d plane which is orthonormal
-            # to the Z axis
-            if(not silent):
-                print "    Dimensionality reduction"
-            PCA.Center(tmp_data,verbose=0)
-            p = PCA.PCA(tmp_data)
-            components = p.pc()
-            for point in components:
-                self.transformedCP[index,0] = components[index,0]
-                self.transformedCP[index,1] = components[index,1]
-                if(0 > radialVals[index]):
-                    self.transformedCP[index,2] = 0
-                else:
-                    self.transformedCP[index,2] = shrinkFn(radialVals[index]/min_r)
-                index += 1
-
+            
         # finally scale the matrix to make it equal in all dimensions                
         min = np.amin(self.transformedCP, axis=0)
         max = np.amax(self.transformedCP, axis=0)
@@ -2199,7 +2166,7 @@ class ProfileManager:
             plt.plot(components[:,0], components[:,1], 'r.')
             plt.show()
         return ret_array
-    
+        
     def rotateVectorAndScale(self, point, las, centerVector, delta_max=0.25):
         """
         Move a vector closer to the center of the positive quadrant
