@@ -92,6 +92,9 @@ class Tracer:
             self.oldstream.write("".join(newStack))
             self.lastStack = newStack
         self.oldstream.write(s)
+    
+    def flush(self):
+        self.oldstream.flush()
 
 ###############################################################################
 ###############################################################################
