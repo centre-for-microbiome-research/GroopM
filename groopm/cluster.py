@@ -77,20 +77,21 @@ np.seterr(all='raise')
 
 class ClusterEngine:
     """Top level interface for clustering contigs"""
-    def __init__(self, dbFileName, plot=False, force=False):
+    def __init__(self, dbFileName, plot=False, force=False, numImgMaps=1):
         # worker classes
         self.PM = dataManagers.ProfileManager(dbFileName) # store our data
         self.BM = dataManagers.BinManager(pm=self.PM)   # store our bins
     
         # heat maps
-        self.imageMaps = np.zeros((3,self.PM.scaleFactor,self.PM.scaleFactor))
-        self.blurredMaps = np.zeros((3,self.PM.scaleFactor,self.PM.scaleFactor))
+        self.numImgMaps = numImgMaps
+        self.imageMaps = np.zeros((self.numImgMaps,self.PM.scaleFactor,self.PM.scaleFactor))
+        self.blurredMaps = np.zeros((self.numImgMaps,self.PM.scaleFactor,self.PM.scaleFactor))
         
         # we need a way to reference from the imageMaps back onto the transformed data
         self.im2RowIndicies = {}  
         
         # When blurring the raw image maps I chose a radius to suit my data, you can vary this as you like
-        self.blurRadius = 12
+        self.blurRadius = 2
         self.span = 30                  # amount we can travel about when determining "hot spots"
         
         # misc
@@ -163,8 +164,8 @@ class ClusterEngine:
         print "Apply data transformations"
         self.PM.transformCP()
         # plot the transformed space (if we've been asked to...)
-        if(self.debugPlots):
-            self.PM.renderTransCPData()
+#        if(self.debugPlots):
+#            self.PM.renderTransCPData()
         t2 = time.time()
         print "    THIS: [",self.secondsToStr(t2-t1),"]\tTOTAL: [",self.secondsToStr(t2-t0),"]"
         
@@ -189,8 +190,9 @@ class ClusterEngine:
         # First we need to find the centers of each blob.
         # We can make a heat map and look for hot spots
         self.populateImageMaps()
+        sub_counter = 0
         print "    .... .... .... .... .... .... .... .... .... ...."
-        print "   ",
+        print "%03d" % sub_counter,
         new_line_counter = 0
         while(num_below_cutoff < breakout_point):
             #if(self.numBins > 3):
@@ -202,7 +204,7 @@ class ClusterEngine:
     
             # now search for the "hottest" spots on the blurred map
             # this is a new bin centroid
-            (center_row_indicies, max_blur_value) = self.findNewClusterCenter()
+            (center_row_indicies, (max_blur_value, max_x, max_y)) = self.findNewClusterCenter()
             if(np.size(center_row_indicies) == 0):
                 break
             else:
@@ -217,11 +219,11 @@ class ClusterEngine:
                 
                 # Plot?
                 if(self.debugPlots):          
-                    bin.plotBin(self.PM.transformedCP, self.PM.contigColours, fileName="Image_"+str(self.imageCounter))
+                    bin.plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName="Image_"+str(self.imageCounter))
                     self.imageCounter += 1
         
                 # neaten up the bin
-                self.removeOutliers(bin.id, fixBinnedRI=False)
+                #self.removeOutliers(bin.id, fixBinnedRI=False)
                 
                 # recruit more contigs
                 bin_size = bin.recruit(self.PM.transformedCP, self.PM.kmerSigs, self.im2RowIndicies, self.PM.binnedRowIndicies)
@@ -232,11 +234,16 @@ class ClusterEngine:
                         is_good_bin = True
                 else:                                                     # contains enough bp to pass regardless of number of contigs
                     is_good_bin = True
+
+                if(self.debugPlots):
+                    self.plotHeat("HM_"+str(self.roundNumber)+".png", max=max_blur_value, x=max_x, y=max_y)
+                    
                 if(is_good_bin):
                     # Plot?
                     if(self.debugPlots):          
-                        bin.plotBin(self.PM.transformedCP, self.PM.contigColours, fileName="Image_"+str(self.imageCounter))
+                        bin.plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName="P_BIN_"+str(self.imageCounter))
                         self.imageCounter += 1
+
                     # append this bins list of mapped rowIndicies to the main list
                     self.updatePostBin(bin)
                     num_below_cutoff = 0
@@ -252,13 +259,11 @@ class ClusterEngine:
                 new_line_counter += 1
                 if(new_line_counter > 9):
                     new_line_counter = 0
-                    print "\n   ",
-                                        
-                if(self.debugPlots):
-                    self.plotHeat("HM_"+str(self.roundNumber)+".png", max=max_blur_value)
+                    sub_counter += 10
+                    print "\n%03d" % sub_counter,
         
         print "\n    .... .... .... .... .... .... .... .... .... ...."
-        
+
         # neaten up the bins
         self.removeOutliersWrapper()
         
@@ -286,7 +291,7 @@ class ClusterEngine:
                                     self.PM.transformedCP,
                                     self.PM.kmerSigs,
                                     self.PM.contigLengths,
-                                    self.PM.contigColours)
+                                    self.PM.kmerVals)
 
     def condenseCores(self, auto=False):
         """Itterative wrapper for the BinManager method"""
@@ -314,60 +319,54 @@ class ClusterEngine:
     def populateImageMaps(self):
         """Load the transformed data into the main image maps"""
         # reset these guys... JIC
-        self.imageMaps = np.zeros((3,self.PM.scaleFactor,self.PM.scaleFactor))
+        self.imageMaps = np.zeros((self.numImgMaps,self.PM.scaleFactor,self.PM.scaleFactor))
         self.im2RowIndicies = {}
         
         # add to the grid wherever we find a contig
         row_index = -1
         for point in np.around(self.PM.transformedCP):
             row_index += 1
-
             # can only bin things once!
             if row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies:
-                # readability
-                px = point[0]
-                py = point[1]
-                pz = point[2]
-                
                 # add to the row_index dict so we can relate the 
                 # map back to individual points later
-                if (px,py,pz) in self.im2RowIndicies:
-                    self.im2RowIndicies[(px,py,pz)].append(row_index)
+                p = tuple(point)
+                if p in self.im2RowIndicies:
+                    self.im2RowIndicies[p].append(row_index)
                 else:
-                    self.im2RowIndicies[(px,py,pz)] = [row_index]
+                    self.im2RowIndicies[p] = [row_index]
                 
                 # now increment in the grid
                 # for each point we encounter we incrmement
                 # it's position + the positions to each side
                 # and touching each corner
-                multiplier = np.log10(self.PM.contigLengths[row_index])
-                self.incrementAboutPoint(0, px, py, multiplier=multiplier)
-                self.incrementAboutPoint(1, self.PM.scaleFactor - pz - 1, py, multiplier=multiplier)
-                self.incrementAboutPoint(2, self.PM.scaleFactor - pz - 1, self.PM.scaleFactor - px - 1, multiplier=multiplier)
+                self.incrementViaRowIndex(row_index, p)
 
-    def incrementViaRowIndex(self, rowIndex):
+    def incrementViaRowIndex(self, rowIndex, point=None):
         """Wrapper to increment about point"""
-        point = np.around(self.PM.transformedCP[rowIndex])
-        # readability
-        px = point[0]
-        py = point[1]
-        pz = point[2]
+        if(point is None):
+            point = tuple(np.around(self.PM.transformedCP[rowIndex]))
+        #px = point[0]
+        #py = point[1]
+        #pz = point[2]
         multiplier = np.log10(self.PM.contigLengths[rowIndex])
-        self.incrementAboutPoint(0, px, py, multiplier=multiplier)
-        self.incrementAboutPoint(1, self.PM.scaleFactor - pz - 1, py, multiplier=multiplier)
-        self.incrementAboutPoint(2, self.PM.scaleFactor - pz - 1, self.PM.scaleFactor - px - 1, multiplier=multiplier)
+        self.incrementAboutPoint(0, point[0], point[1], multiplier=multiplier)
+        if(self.numImgMaps > 1):
+            self.incrementAboutPoint(1, self.PM.scaleFactor - point[2] - 1, point[1], multiplier=multiplier)
+            self.incrementAboutPoint(2, self.PM.scaleFactor - point[2] - 1, self.PM.scaleFactor - point[0] - 1, multiplier=multiplier)
 
-    def decrementViaRowIndex(self, rowIndex):
+    def decrementViaRowIndex(self, rowIndex, point=None):
         """Wrapper to decrement about point"""
-        point = np.around(self.PM.transformedCP[rowIndex])
-        # readability
-        px = point[0]
-        py = point[1]
-        pz = point[2]
+        if(point is None):
+            point = tuple(np.around(self.PM.transformedCP[rowIndex]))
+        #px = point[0]
+        #py = point[1]
+        #pz = point[2]
         multiplier = np.log10(self.PM.contigLengths[rowIndex])
-        self.decrementAboutPoint(0, px, py, multiplier=multiplier)
-        self.decrementAboutPoint(1, self.PM.scaleFactor - pz - 1, py, multiplier=multiplier)
-        self.decrementAboutPoint(2, self.PM.scaleFactor - pz - 1, self.PM.scaleFactor - px - 1, multiplier=multiplier)
+        self.decrementAboutPoint(0, point[0], point[1], multiplier=multiplier)
+        if(self.numImgMaps > 1):
+            self.decrementAboutPoint(1, self.PM.scaleFactor - point[2] - 1, point[1], multiplier=multiplier)
+            self.decrementAboutPoint(2, self.PM.scaleFactor - point[2] - 1, self.PM.scaleFactor - point[0] - 1, multiplier=multiplier)
 
     def incrementAboutPoint(self, view_index, px, py, valP=1, valS=0.6, valC=0.2, multiplier=1):
         """Increment value at a point in the 2D image maps
@@ -410,43 +409,29 @@ class ClusterEngine:
         valC *= multiplier
         if px > 0:
             if py > 0:
-                self.imageMaps[view_index,px-1,py-1] -= valC      # Top left corner
-                if self.imageMaps[view_index,px-1,py-1] < np.finfo(float).eps:
-                    self.imageMaps[view_index,px-1,py-1] = 0
-                
-            self.imageMaps[view_index,px-1,py] -= valS            # Top
-            if self.imageMaps[view_index,px-1,py] < np.finfo(float).eps:
-                self.imageMaps[view_index,px-1,py] = 0
-            if py < self.PM.scaleFactor-1:             
-                self.imageMaps[view_index,px-1,py+1] -= valC      # Top right corner
-                if self.imageMaps[view_index,px-1,py+1] < np.finfo(float).eps:
-                    self.imageMaps[view_index,px-1,py+1] = 0
+                self.safeDecrement(self.imageMaps[view_index], px-1, py-1, valC) # Top left corner
+            self.safeDecrement(self.imageMaps[view_index], px-1, py, valS)       # Top    
+            if py < self.PM.scaleFactor-1:
+                self.safeDecrement(self.imageMaps[view_index], px-1, py+1, valC) # Top right corner
 
         if py > 0:
-            self.imageMaps[view_index,px,py-1] -= valS            # Left side
-            if self.imageMaps[view_index,px,py-1] < np.finfo(float).eps:
-                self.imageMaps[view_index,px,py-1] = 0
-            
-        self.imageMaps[view_index,px,py] -= valP                  # Point
-        if self.imageMaps[view_index,px,py] < np.finfo(float).eps:
-            self.imageMaps[view_index,px,py] = 0
+            self.safeDecrement(self.imageMaps[view_index], px, py-1, valS)       # Left side
+        self.safeDecrement(self.imageMaps[view_index], px, py, valP)             # Point
         if py < self.PM.scaleFactor-1:             
-            self.imageMaps[view_index,px,py+1] -= valS            # Right side
-            if self.imageMaps[view_index,px,py+1] < np.finfo(float).eps:
-                self.imageMaps[view_index,px,py+1] = 0
+            self.safeDecrement(self.imageMaps[view_index], px, py+1, valS)       # Right side
 
         if px < self.PM.scaleFactor-1:
             if py > 0:
-                self.imageMaps[view_index,px+1,py-1] -= valC      # Bottom left corner
-                if self.imageMaps[view_index,px+1,py-1] < np.finfo(float).eps:
-                    self.imageMaps[view_index,px+1,py-1] = 0
-            self.imageMaps[view_index,px+1,py] -= valS            # Bottom
-            if self.imageMaps[view_index,px+1,py] < np.finfo(float).eps:
-                self.imageMaps[view_index,px+1,py] = 0
+                self.safeDecrement(self.imageMaps[view_index], px+1, py-1, valC) # Bottom left corner
+            self.safeDecrement(self.imageMaps[view_index], px+1, py, valS)       # Bottom    
             if py < self.PM.scaleFactor-1:             
-                self.imageMaps[view_index,px+1,py+1] -= valC      # Bottom right corner
-                if self.imageMaps[view_index,px+1,py+1] < np.finfo(float).eps:
-                    self.imageMaps[view_index,px+1,py+1] = 0
+                self.safeDecrement(self.imageMaps[view_index], px+1, py+1, valC) # Bottom right corner
+                    
+    def safeDecrement(self, map, px, py, value):
+        """Decrement a value and make sure it's not negative or something shitty"""
+        map[px][py] -= value
+        if map[px][py] < np.finfo(float).eps:
+            map[px][py] = 0
 
     def incrementAboutPoint3D(self, workingBlock, px, py, pz, vals=(6.4,4.9,2.5,1.6), multiplier=1):
         """Increment a point found in a 3D column
@@ -499,12 +484,11 @@ class ClusterEngine:
     
     def blurMaps(self):
         """Blur the 2D image maps"""
-        self.blurredMaps = np.zeros((3,self.PM.scaleFactor,self.PM.scaleFactor))
-        #self.maxMaps = np.zeros((3,self.PM.scaleFactor,self.PM.scaleFactor))
-        
-        for i in range (0,3): # top, front and side
-            self.blurredMaps[i,:,:] = ndi.gaussian_filter(self.imageMaps[i,:,:]**0.5, (self.blurRadius,self.blurRadius)) 
+        self.blurredMaps = np.zeros((self.numImgMaps,self.PM.scaleFactor,self.PM.scaleFactor))
+        for i in range(self.numImgMaps): # top, front and side
+            self.blurredMaps[i,:,:] = ndi.gaussian_filter(self.imageMaps[i,:,:], 8)#self.blurRadius) 
 
+        return
         # there's still a lot of background signal to remove
         # we wish to remove 90% of the data, this will leave just the really hot spots
         # Make a histogram of the data (use the top face)
@@ -519,7 +503,7 @@ class ClusterEngine:
         lop_val = points[lop_index]
 
         # remove these low values and down normalise so that the largest value is equal to exactly 1
-        for i in range (0,3): # top, front and side
+        for i in range (self.numImgMaps): # top, front and side
             self.blurredMaps[i,:,:] = np.where(self.blurredMaps[i,:,:] >= lop_val, self.blurredMaps[i,:,:], 0)/lop_val
 
     def makeCoordRanges(self, pos, span):
@@ -528,8 +512,8 @@ class ClusterEngine:
         upper = pos+span+1
         if(lower < 0):
             lower = 0
-        if(upper >= self.PM.scaleFactor):
-            upper = self.PM.scaleFactor - 1
+        if(upper > self.PM.scaleFactor):
+            upper = self.PM.scaleFactor
         return (lower, upper)
 
     def findNewClusterCenter(self):
@@ -542,15 +526,10 @@ class ClusterEngine:
         max_y = max_index - self.PM.scaleFactor*max_x
         max_z = -1
 
-        this_span = int(1.5 * self.span)
-        span_len = 2*this_span+1
-        
-        # work out the region this max value lives in
-        x_density = np.zeros(span_len)
-        x_offset = max_x - this_span
-        
-        y_density = np.zeros(span_len)
-        y_offset = max_y - this_span
+        ret_values = (max_value, max_x, max_y)
+
+        start_span = int(1.5 * self.span)
+        span_len = 2*start_span+1
         
         if(self.debugPlots):
             self.plotRegion(max_x,max_y,max_z, fileName="Image_"+str(self.imageCounter), tag="column", column=True)
@@ -560,9 +539,10 @@ class ClusterEngine:
         working_block = np.zeros((span_len, span_len, self.PM.scaleFactor))
         
         # go through the entire column
-        (x_lower, x_upper) = self.makeCoordRanges(max_x, this_span)
-        (y_lower, y_upper) = self.makeCoordRanges(max_y, this_span)
-        for z in range(0, self.PM.scaleFactor):
+        (x_lower, x_upper) = self.makeCoordRanges(max_x, start_span)
+        (y_lower, y_upper) = self.makeCoordRanges(max_y, start_span)
+        super_putative_row_indicies = []
+        for z in range(self.PM.scaleFactor):
             realz = self.PM.scaleFactor - z - 1
             for x in range(x_lower, x_upper):
                 for y in range(y_lower, y_upper):
@@ -573,110 +553,184 @@ class ClusterEngine:
                                 # this is an unassigned point. 
                                 multiplier = np.log10(self.PM.contigLengths[row_index])
                                 self.incrementAboutPoint3D(working_block, x-x_lower, y-y_lower, z,multiplier=multiplier)
+                                super_putative_row_indicies.append(row_index)
 
         # blur and find the highest value
         bwb = ndi.gaussian_filter(working_block, self.blurRadius)
-        
         densest_index = np.unravel_index(np.argmax(bwb), (np.shape(bwb)))
         max_x = densest_index[0] + x_lower
         max_y = densest_index[1] + y_lower
         max_z = densest_index[2]
-       
-        if(self.debugPlots):
-            self.plotRegion(max_x,max_y,max_z, fileName="Image_"+str(self.imageCounter), tag="first approx")
-            self.imageCounter += 1
-
+                    
         # now get the basic color of this dense point
+        center_k_vals = np.array([])
+        center_contig_lengths = np.array([]) 
+        putative_center_row_indicies = []
+
         (x_lower, x_upper) = self.makeCoordRanges(max_x, self.span)
         (y_lower, y_upper) = self.makeCoordRanges(max_y, self.span)
-        (z_lower, z_upper) = self.makeCoordRanges(max_z, self.span)
-        center_values = np.array([])
-        cv_colours = np.array([])
-        c_inc = 0
-        for z in range(z_lower, z_upper):
-            realz = self.PM.scaleFactor - z - 1
-            for x in range(x_lower, x_upper):
-                for y in range(y_lower, y_upper):
-                    if((x,y,realz) in self.im2RowIndicies):
-                        for row_index in self.im2RowIndicies[(x,y,realz)]:
-                            if row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies:
-                                center_values = np.append(center_values, self.PM.kmerSigs[row_index])
-                                cv_colours = np.append(cv_colours, self.PM.contigColours[row_index])
-                                c_inc += 1
+        (z_lower, z_upper) = self.makeCoordRanges(max_z, 2*self.span)
+        
+        # fix this
+        tmp = z_lower
+        z_lower = self.PM.scaleFactor - z_upper - 1
+        z_upper = self.PM.scaleFactor - tmp - 1
+        for row_index in super_putative_row_indicies:
+            point = np.around(self.PM.transformedCP[row_index])
+            if(point[0] >= x_lower and point[0] < x_upper):
+                if(point[1] >= y_lower and point[1] < y_upper):
+                    if(point[2] >= z_lower and point[2] < z_upper):
+                        # we are within the range!
+                        center_k_vals = np.append(center_k_vals, self.PM.kmerVals[row_index])
+                        center_contig_lengths = np.append(center_contig_lengths, self.PM.contigLengths[row_index])
+                        putative_center_row_indicies.append(row_index)
 
         # make sure we have something to go on here
-        if(np.size(center_values) == 0 or c_inc < 2):
-            return (np.array([]), -1)
-
-        # reshape these guys!
-        center_values = np.reshape(center_values, (c_inc, np.size(self.PM.kmerSigs[0])))
-        cv_colours = np.reshape(cv_colours, (c_inc, 3))
-        
-        # transform them into one dimensional points
-        oneD_center_values = np.zeros(c_inc)
-        working_centres = np.array(center_values, copy=True) 
-        PCA.Center(working_centres,verbose=0)
-        p = PCA.PCA(working_centres)
-        components = p.pc()
-        index = 0
-        for point in components:
-            oneD_center_values[index] = components[index,0]
-            index += 1
-
-        if(False):
-            plt.figure(1)
-            plt.subplot(111)
-            cm = mpl.colors.LinearSegmentedColormap('my_colormap', cv_colours, 1024)
-            plt.scatter(components[:,0], components[:,1], edgecolors=cv_colours, c=cv_colours, cmap=cm, marker='.')
-            plt.show()
-
-        # find the sig which lies at the center
-        cf = CenterFinder()
-        oneD_center_values -= np.min(oneD_center_values)
-        oneD_center_values /= np.max(oneD_center_values)
-        centroid_sig = center_values[cf.findArrayCenter(oneD_center_values)]
-        
-        # now we need to work out how close to this sig we need to be...
-        dists = np.array([])
-        for sig in center_values:
-            dists = np.append(dists, np.linalg.norm(sig - centroid_sig))
+        if(np.size(center_k_vals) == 0):
+            print "GLUG"
+            return (np.array([]), (-1,-1,-1))
+        elif(np.size(center_k_vals) == 1):
+            return (np.array([putative_center_row_indicies[0]]), ret_values)
+        else:
+            # find the kmer val which lies at the center
+            # more specifically, we need to find the kmer vall which
+            # is giving the strongest signal
+            # partition of the colours in this column
+            partitions = self.partitionKvals(center_k_vals)
+            # now go and score these guys
+            chosen_partiton_index = -1
+            max_p_score = 0
+            print len(partitions), [len(p) for p in partitions]
+            for i in range(len(partitions)):
+                # find the greatest number of base pairs
+                score = sum([center_contig_lengths[j] for j in partitions[i]])
+                if(score > max_p_score):
+                    max_p_score = score
+                    chosen_partiton_index = i
+    
+            if(chosen_partiton_index == -1):
+                print "flug", partitions
+                return (np.array([]), (-1,-1,-1))
             
-        # get a first approximation on the upper cutoff
-        tol = 2
-        dists = np.sort(dists)
-        sub_dists = dists[0:int(np.size(dists)/4):1]
-        if(not np.size(sub_dists) > 0):
-            return (np.array([]), -1)
-        upper_dist = np.mean(sub_dists) + tol * np.std(sub_dists)
-
-        # now refine (expand) based on the first approximation
-        sub_dists = np.array([x for x in dists if x < upper_dist])
-        if(np.size(sub_dists) == 0):
-            return (np.array([]), -1)                
+            # restrict the fluff...
+            for i in range(len(partitions)):
+                if(len(partitions[i]) < 5 and i != chosen_partiton_index):
+                    self.restrictRowIndicies([putative_center_row_indicies[j] for j in partitions[i]])
             
-        upper_dist = np.mean(sub_dists) + tol * np.std(sub_dists)
+            if(self.debugPlots):
+                median_kVal = np.median([center_k_vals[i] for i in partitions[chosen_partiton_index]])
+                self.plotRegion(max_x,max_y,max_z, fileName="Image_"+str(self.imageCounter), tag="first approx (%f)" % median_kVal)
+                self.imageCounter += 1
 
-        # now scoot out around this point and soak up similar points
-        # get all the real rowIndicies of these points so we can use them in
-        # the primary data map
-        center_row_indicies = np.array([])
-        for z in range(z_lower, z_upper):
-            realz = self.PM.scaleFactor - z - 1
-            for x in range(x_lower, x_upper):
-                for y in range(y_lower, y_upper):
-                    # check that the point is real and that it has not yet been binned
-                    if((x,y,realz) in self.im2RowIndicies):
-                        for row_index in self.im2RowIndicies[(x,y,realz)]:
-                            if(row_index not in center_row_indicies) and (row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies):
-                                # make sure the kmer sig is close enough
-                                dist = np.linalg.norm(self.PM.kmerSigs[row_index] - centroid_sig)
-                                if(dist < upper_dist):
-                                    center_row_indicies = np.append(center_row_indicies, row_index)
-        if(np.size(center_row_indicies) > 0):
-            return (center_row_indicies, max_value)
+            center_row_indicies = np.array([putative_center_row_indicies[i] for i in partitions[chosen_partiton_index]])
+            return (center_row_indicies, ret_values)
+
+    def expandSelection(self, startIndex, vals, stdevCutoff=0.05, maxSpread=0.05):
+        """Expand a selection left and right from a staring index in a list of values
         
-        return (np.array([]), -1)
+        Keep expanding unless the stdev of the values goes above the cutoff
+        Return a list of indices into the original list
+        """
+        ret_list = [startIndex]   # this is what we will give back
+        start_val = vals[startIndex]
+        value_store = [start_val]
+        
+        sorted_indicies = np.argsort(vals)
+        max_index = len(vals)
+        
+        # set the upper and lower to point to the position
+        # where the start resides 
+        lower_index = 0
+        upper_index = 0
+        for i in range(max_index):
+            if(sorted_indicies[i] == startIndex):
+                break
+            lower_index += 1
+            upper_index += 1
+        do_lower = True
+        do_upper = True
+        max_index -= 1
+        
+        while(do_lower or do_upper):
+            if(do_lower):
+                do_lower = False
+                if(lower_index > 0):
+                    try_val = vals[sorted_indicies[lower_index - 1]]
+                    if(np.abs(try_val - start_val) < maxSpread):
+                        try_array = value_store + [try_val]
+                        if(np.std(try_array) < stdevCutoff):
+                            value_store = try_array
+                            lower_index -= 1
+                            ret_list.append(sorted_indicies[lower_index])
+                            do_lower = True
+            if(do_upper):
+                do_upper = False
+                if(upper_index < max_index):
+                    try_val = vals[sorted_indicies[upper_index + 1]]
+                    if(np.abs(try_val - start_val) < maxSpread):
+                        try_array = value_store + [try_val]
+                        if(np.std(try_array) < stdevCutoff):
+                            value_store = try_array
+                            upper_index += 1
+                            ret_list.append(sorted_indicies[upper_index])
+                            do_upper = True
+        return sorted(ret_list)
 
+    def partitionKvals(self, kVals, stdevCutoff=0.04):
+        """Work out where shifts in kmer vals happen"""
+        partitions = []
+        working_list = list(kVals)
+        fix_dict = dict(zip(range(len(working_list)),range(len(working_list))))
+        while(len(working_list) > 2):
+            cf = CenterFinder()
+            c_index = cf.findArrayCenter(working_list)
+            expanded_indicies = self.expandSelection(c_index, working_list, stdevCutoff=stdevCutoff)
+            # fix any munges from previous deletes
+            morphed_indicies = [fix_dict[i] for i in expanded_indicies]
+            partitions.append(morphed_indicies)
+            # shunt the indicies to remove down!
+            shunted_indicies = []
+            for offset, index in enumerate(expanded_indicies):
+                shunted_indicies.append(index - offset)
+
+            #print "FD:", fix_dict 
+            #print "EI:", expanded_indicies
+            #print "MI:", morphed_indicies
+            #print "SI:", shunted_indicies
+            
+            # make an updated working list and fix the fix dict
+            nwl = []
+            nfd = {}
+            shifter = 0
+            for i in range(len(working_list) - len(shunted_indicies)):
+                #print "================="
+                if(len(shunted_indicies) > 0):
+                    #print i, shunted_indicies[0], shifter
+                    if(i >= shunted_indicies[0]):
+                        tmp = shunted_indicies.pop(0)
+                        shifter += 1
+                        # consume any and all conseqs
+                        while(len(shunted_indicies) > 0):
+                            if(shunted_indicies[0] == tmp):
+                                shunted_indicies.pop(0)
+                                shifter += 1
+                            else:
+                                break
+                #else:
+                #    print i, "_", shifter
+
+                nfd[i] = fix_dict[i + shifter]
+                nwl.append(working_list[i + shifter])
+
+                #print nfd
+                #print nwl
+                
+            fix_dict = nfd
+            working_list = nwl
+        if(len(working_list) > 0):
+            partitions.append(fix_dict.values())       
+        return partitions
+    
     def Ablur(self, blur, density, incAtPoint, index, offset, size):
         """AUX: Used when finding the densest point in a small block"""
         point = index + offset;
@@ -705,7 +759,7 @@ class ClusterEngine:
         """
         del self.PM.binnedRowIndicies[rowIndex]
         
-        # now update the image map, decrement
+        # now update the image map, increment
         self.incrementViaRowIndex(rowIndex)
 
     def restrictRowIndicies(self, indicies):
@@ -784,33 +838,48 @@ class ClusterEngine:
         plt.close(fig)
         del fig
     
-    def plotHeat(self, fileName = "", max=-1):
+    def plotHeat(self, fileName = "", max=-1, x=-1, y=-1):
         """Print the main heat maps
         
         Useful for debugging
         """
         fig = plt.figure()
         images = []
+        ax = None
+        if(self.numImgMaps == 1):
+            ax = fig.add_subplot(121)
+            images.append(ax.imshow(self.blurredMaps[0,:,:]**0.5))
+            if(max > 0):
+                title = "Max value: %f (%f, %f)" % (max, x, y)
+                plt.title(title)
+        else:
+            ax = fig.add_subplot(231)
+            images.append(ax.imshow(self.blurredMaps[0,:,:]**0.5))
+            if(max > 0):
+                title = str.join(" ", ["Max value:",str(max)])
+                plt.title(title)
+            ax = fig.add_subplot(232)
+            images.append(ax.imshow(self.blurredMaps[1,:,:]**0.5))
+            ax = fig.add_subplot(233)
+            images.append(ax.imshow(self.blurredMaps[2,:,:]**0.5))
 
-        ax = fig.add_subplot(231)
-        images.append(ax.imshow(self.blurredMaps[0,:,:]**0.5))
-        if(max > 0):
-            title = str.join(" ", ["Max value:",str(max)])
-            plt.title(title)
-        ax = fig.add_subplot(232)
-        images.append(ax.imshow(self.blurredMaps[1,:,:]**0.5))
-        ax = fig.add_subplot(233)
-        images.append(ax.imshow(self.blurredMaps[2,:,:]**0.5))
-
-        ax = fig.add_subplot(234)
-        images.append(ax.imshow(self.imageMaps[0,:,:]**0.5))
-        ax = fig.add_subplot(235)
-        images.append(ax.imshow(self.imageMaps[1,:,:]**0.5))
-        ax = fig.add_subplot(236)
-        images.append(ax.imshow(self.imageMaps[2,:,:]**0.5))
+        if(self.numImgMaps == 1):
+            ax = fig.add_subplot(122)
+            images.append(ax.imshow(self.imageMaps[0,:,:]**0.5))
+        else:
+            ax = fig.add_subplot(234)
+            images.append(ax.imshow(self.imageMaps[0,:,:]**0.5))
+            ax = fig.add_subplot(235)
+            images.append(ax.imshow(self.imageMaps[1,:,:]**0.5))
+            ax = fig.add_subplot(236)
+            images.append(ax.imshow(self.imageMaps[2,:,:]**0.5))
         
         if(fileName != ""):
-            fig.set_size_inches(18,18)
+            if(self.numImgMaps == 1):
+                fig.set_size_inches(12,6)
+            else:
+                fig.set_size_inches(18,18)
+                
             plt.savefig(fileName,dpi=300)
         elif(show):
             plt.show()
@@ -831,8 +900,6 @@ class CenterFinder:
     come across a value. Gravity is bringing the ball down. If we plot
     the height of the ball vs array index then the highest the ball
     reaches is the index in the center of the densest part of the array 
-    
-    NOTE: Assumes the data is normalised between 0 and 1!
     """
     def __init__(self): pass
     
@@ -847,8 +914,15 @@ class CenterFinder:
 
         working = np.array([])
         final_index = -1
+        
+        # sort and normalise between 0 -> 1
+        sorted_indicies = np.argsort(vals)
+        vals_sorted = [vals[i] for i in sorted_indicies]
+        vals_sorted -= vals_sorted[0]
+        if(vals_sorted[-1] != 0):
+            vals_sorted /= vals_sorted[-1]        
+
         # run through in one direction
-        vals_sorted = np.sort(vals)
         for val in vals_sorted:
             # calculate delta
             delta = val - last_val
@@ -867,6 +941,7 @@ class CenterFinder:
         current_val_max = -1
         height = 0
         last_val = 0
+        
         # run through in the reverse direction
         vals_sorted = vals_sorted[::-1]
         for val in vals_sorted:
@@ -880,18 +955,9 @@ class CenterFinder:
             working[final_index] += height
             final_index -= 1
             last_val = val
-        
-        max_index = np.argmax(working)
-        vals_sorted = np.sort(vals_sorted)
-        max_value = vals_sorted[max_index]
-        
+
         # find the original index!
-        index = 0
-        for val in vals:
-            if(val == max_value):
-                return index
-            index += 1
-        return -1
+        return sorted_indicies[np.argmax(working)]
     
     def reduceViaDelta(self, height, bounce_amount, delta):
         """Reduce the height of the 'ball'"""
