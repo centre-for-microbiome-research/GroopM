@@ -125,7 +125,7 @@ class Bin:
 #------------------------------------------------------------------------------
 # Grow and shrink 
     
-    def consume(self, transformedCP, kmerSigs, contigLengths, contigColours, deadBin, verbose=False):
+    def consume(self, transformedCP, kmerSigs, contigLengths, kmerVals, deadBin, verbose=False):
         """Combine the contigs of another bin with this one"""
         # consume all the other bins rowIndicies
         if(verbose):
@@ -136,7 +136,7 @@ class Bin:
         # fix the stats on our bin
         self.makeBinDist(transformedCP, kmerSigs)
         self.calcTotalSize(contigLengths)
-        self.getKmerColourStats(contigColours)
+        self.getKmerColourStats(kmerVals)
 
     def scoreProfile(self, kmerSig, transformedCP):
         """Determine how similar this profile is to the bin distribution
@@ -176,7 +176,7 @@ class Bin:
                 return False
         return True
 
-    def purge(self, deadIndicies, transformedCP, kmerSigs, contigLengths, contigColours):
+    def purge(self, deadIndicies, transformedCP, kmerSigs, contigLengths, kmerVals):
         """Delete some rowIndicies and remake stats"""
         old_ri = self.rowIndicies
         self.rowIndicies = np.array([])
@@ -187,7 +187,7 @@ class Bin:
         # fix the stats on our bin
         self.makeBinDist(transformedCP, kmerSigs)
         self.calcTotalSize(contigLengths)
-        self.getKmerColourStats(contigColours)
+        self.getKmerColourStats(kmerVals)
         
 #------------------------------------------------------------------------------
 # Stats and properties 
@@ -265,7 +265,8 @@ class Bin:
         tmp_stds = np.std(working_list,axis=0)
         mean_std = np.mean(tmp_stds)
         std = np.array([x if x != 0 else mean_std for x in tmp_stds])
-        return (np.mean(working_list,axis=0), std)
+        #return (np.mean(working_list,axis=0), std)
+        return (np.median(working_list,axis=0), std)
         
     def getInnerVariance(self, profile, mode="kmer"):
         """Work out the variance for the coverage/kmer profile"""
@@ -297,15 +298,11 @@ class Bin:
             centroid = self.covMeans
         return np.linalg.norm(Csig-centroid)
     
-    def getKmerColourStats(self, contigColours):
+    def getKmerColourStats(self, kmerVals):
         """Determine the mean and stdev of the kmer profile colours"""
         kmer_vals = np.array([])
         for row_index in self.rowIndicies:
-            kmer_vals = np.append(kmer_vals, colorsys.rgb_to_hsv(contigColours[row_index][0],
-                                                                 contigColours[row_index][1],
-                                                                 contigColours[row_index][2]
-                                                                 )[0]
-                                  )
+            kmer_vals = np.append(kmer_vals, kmerVals[row_index])
 
         self.kValMean = np.mean(kmer_vals)
         self.kValStdev = np.std(kmer_vals)
@@ -462,10 +459,10 @@ class Bin:
         del fig
             
         
-    def plotBin(self, transformedCP, contigColours, fileName=""):
+    def plotBin(self, transformedCP, contigColours, kmerVals, fileName=""):
         """Plot a single bin"""
         fig = plt.figure()
-        title = self.plotOnAx(fig, 1, 1, 1, transformedCP, contigColours, fileName=fileName)
+        title = self.plotOnAx(fig, 1, 1, 1, transformedCP, contigColours, kmerVals, fileName=fileName)
         plt.title(title)
         if(fileName != ""):
             try:
@@ -483,7 +480,7 @@ class Bin:
         plt.close(fig)
         del fig
 
-    def plotOnAx(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigColours, fileName=""):
+    def plotOnAx(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigColours, kmerVals, fileName=""):
         """Plot a bin in a given subplot"""
         disp_vals = np.array([])
         disp_cols = np.array([])
@@ -504,7 +501,7 @@ class Bin:
         
         # fix these
         self.makeLimits()
-        self.getKmerColourStats(contigColours)
+        self.getKmerColourStats(kmerVals)
 
         # reshape
         disp_vals = np.reshape(disp_vals, (num_points, 3))
