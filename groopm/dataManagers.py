@@ -64,7 +64,7 @@ from pylab import plot,subplot,axis,stem,show,figure
 import numpy as np
 import scipy.ndimage as ndi
 import scipy.spatial.distance as ssdist
-from scipy.stats import kstest
+from scipy.stats import f_oneway, distributions
 
 import tables
 import networkx as nx
@@ -159,10 +159,8 @@ class BinManager:
     def makeBins(self, binMembers):
         """Make bin objects from loaded data"""
         for bid in self.PM.validBinIds.keys():
-            self.bins[bid] = bin.Bin(np.array(binMembers[bid]), self.PM.kmerSigs, bid, self.PM.scaleFactor-1)
-            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)      
-            self.bins[bid].calcTotalSize(self.PM.contigLengths)
-            self.bins[bid].getKmerColourStats(self.PM.contigColours)
+            self.bins[bid] = bin.Bin(np.array(binMembers[bid]), bid, self.PM.scaleFactor-1)
+            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)      
 
     def saveBins(self, doCores=True, saveBinStats=True, updateBinStats=True):
         """Save binning results"""
@@ -287,10 +285,10 @@ class BinManager:
     def getCentroidProfiles(self, mode="mer"):
         """Return an array containing the centroid stats for each bin"""
         if(mode == "mer"):
-            ret_vecs = np.zeros((len(self.bins), len(self.PM.kmerSigs[0])))
+            ret_vecs = np.zeros((len(self.bins)))
             outer_index = 0
             for bid in self.getBids():
-                ret_vecs[outer_index] = self.bins[bid].merMeans
+                ret_vecs[outer_index] = self.bins[bid].kValMean
                 outer_index += 1
             return ret_vecs
         elif(mode == "cov"):
@@ -307,14 +305,16 @@ class BinManager:
         """identify and remove chimeric bins"""
         (kill_list, M_cut) = self.measureBinVariance(makeKillList=True, verbose=True)
         print "    Removing chimeras"
+        removed = 0
         for bid in kill_list:
             # make these guys here
             if(not self.split(bid, 2, M_cut, auto=True, printInstructions=False)):
                 # the bin could not be split, delete the parent
+                print self.bins[bid].rowIndicies
                 self.deleteBins([bid], force=True, freeBinnedRowIndicies=True, saveBins=False)
-        for bid in self.getBids():
-            # make these guys here
-            self.bins[bid].getKmerColourStats(self.PM.contigColours)
+                removed += 1
+
+        print "Deleted %d bins" % removed 
 
     def split(self, bid, n, mode='kmer', MCut=0.0, auto=False, test=False, saveBins=False, verbose=False, printInstructions=True):
         """split a bin into n parts
@@ -332,12 +332,9 @@ class BinManager:
         bin = self.getBin(bid)
         obs = np.array([])
         if(mode=='kmer'):
-            for row_index in bin.rowIndicies:
-                obs = np.append(obs, self.PM.kmerSigs[row_index])
-            obs = np.reshape(obs, (len(bin.rowIndicies),len(self.PM.kmerSigs[0])))
+            obs = np.array([self.PM.kmerVals[i] for i in bin.rowIndicies])
         elif(mode=='cov'):
-            for row_index in bin.rowIndicies:
-                obs = np.append(obs, self.PM.covProfiles[row_index])
+            obs = np.array([self.PM.covProfiles[i] for i in bin.rowIndicies])
             obs = np.reshape(obs, (len(bin.rowIndicies),len(self.PM.covProfiles[0])))
         
         # do the clustering
@@ -367,8 +364,7 @@ class BinManager:
                     for row_index in holding_array:
                         bin_update[self.PM.indicies[row_index]] = split_bin.id
                     bin_stats[split_bin.id] = split_bin.binSize  
-                    split_bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
-                    split_bin.calcTotalSize(self.PM.contigLengths)
+                    split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
                     bids.append(split_bin.id)
                     holding_array = np.array([])
                 current_group = idx[i]
@@ -379,8 +375,7 @@ class BinManager:
             for row_index in holding_array:
                 bin_update[self.PM.indicies[row_index]] = split_bin.id  
             bin_stats[split_bin.id] = split_bin.binSize  
-            split_bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
-            split_bin.calcTotalSize(self.PM.contigLengths)
+            split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
             bids.append(split_bin.id)
 
         if(auto and saveBins):
@@ -408,8 +403,8 @@ class BinManager:
             del bids[0]
             bin1 = self.getBin(bids[0])
             bin2 = self.getBin(bids[1])
-            (b1_kM, b1_kS, b1_kR)= bin1.getInnerVariance(self.PM.kmerSigs)
-            (b2_kM, b2_kS, b2_kR)= bin2.getInnerVariance(self.PM.kmerSigs)
+            (b1_kM, b1_kS, b1_kR)= bin1.getInnerVariance(self.PM.kmerVals)
+            (b2_kM, b2_kS, b2_kR)= bin2.getInnerVariance(self.PM.kmerVals)
             print "Split", b1_kM,b1_kR,b2_kM,b2_kR
             if((b1_kM < MCut) and (b2_kM < MCut)):
                 # ok!, delete the parent bin
@@ -543,185 +538,114 @@ class BinManager:
             else:
                 return
         return
-                    
-    def autoCondenseBins(self, 
-                      verbose=True,
-                      manual=False,          # do we need to ask permission every merge?
-                      save=False,            # should we save the merges as we go?
-                      medianVariance=-1
-                      ):
-        """combine similar bins using super auto algorithm"""
-        any_merged = False
-        merged = {}       # who is getting merged by who?
-        merged_order = [] # and in what order to merge!
-        num_cores_merged = 0
+    
+    def autoCondenseBins(self, searchSpan):
+        """Automagically condense bins"""
+        print "Condense cores [begin: %d]" % len(self.bins)
+        all_dists = self.findAllNeighbours(searchSpan)
+        condense_map = {}   # keep track of where bin ids go to
+        for key in all_dists.keys():
+            bin1_id = key[0]
+            bin2_id = key[1]
+            if(bin1_id in condense_map):
+                bin1_id = condense_map[bin1_id]
+            if(bin2_id in condense_map):
+                bin2_id = condense_map[bin2_id]
 
-        # we'd like to know beforehand, whom can merge with who
-        # the following function returns a graph of such relationships 
-        (merge_allowed, scores) = self.calculateAllowableMergers(self.bins.keys())
-        # we should join large cliques first
-        all_cliques = []
-        for clique in nx.find_cliques(merge_allowed):
-            all_cliques.append(clique)
-
-        ordered_cliques = sorted(all_cliques, key=len)[::-1]
-        for clique in ordered_cliques:
-            cl = len(clique)
-            if(cl > 1):
-                for i in range(cl):
-                    subject_bid = clique[i] # subject may already be merged. It's ok, we'll fix it up below
-                    subject_bin = self.getBin(subject_bid)
-                    (subject_cM, subject_cS, subject_cR) = subject_bin.getInnerVariance(self.PM.transformedCP, mode="cov")
-                    (subject_kM, subject_kS, subject_kR) = subject_bin.getInnerVariance(self.PM.kmerSigs)
-                    j = i + 1
-                    while(j < cl):
-                        query_bid = clique[j]
-                        if(query_bid not in merged):                    
-                            query_bin = self.getBin(query_bid)
-                            # always test against the unchanged subject
-                            (continue_merge,m_auto) = self.shouldMerge(subject_bin, query_bin, bin1_cM=subject_cM, bin1_kM=subject_kM, medianVariance=medianVariance)
-                            if(continue_merge):
-                                # work out if this merge can be done on the fly or if we need someone to look it over
-                                auto = True
-                                if(manual):
-                                    if(not m_auto):
-                                        # check to see if the merge is reciporical
-                                        if(scores[self.makeBidKey(subject_bid,query_bid)] < 2): 
-                                            auto = False
-                                        # check to see if the kmer sigs are remotely close to each other
-                                        elif(np.abs(subject_bin.kValMean - query_bin.kValMean) > 0.05):
-                                            auto = False
-                                else: # do nothing complex
-                                    auto = m_auto
-
-                                if(manual or auto):
-                                    if(subject_bid in merged):
-                                        subject_bid = merged[subject_bid]   
-                                    if(subject_bid != query_bid):          # make sure there are no loops 
-                                        merged[query_bid] = subject_bid    # subject consumes query, enforce the tree structure
-                                        merged_order.append([subject_bid,query_bid,auto])
-                        j += 1
-        
-        # Merge them in the order they were seen in
-        for merge_job in merged_order:
-            m_bids = [merge_job[0],merge_job[1]]
-            merge_status = self.merge(m_bids, auto=merge_job[2], manual=manual, saveBins=save, verbose=verbose, printInstructions=False)
-            if(merge_status == 2):
-                num_cores_merged += 1
-            elif(merge_status == 0):
-                return (num_cores_merged,False)
-        return (num_cores_merged,True)
-
-    def calculateMergeLimits(self, bid, tolerance):
-        """Calculate allowable upper and lower limits"""
-        bin = self.getBin(bid)
-        return [[bin.covMeans[0] - tolerance * bin.covStdevs[0],
-                 bin.covMeans[1] - tolerance * bin.covStdevs[1],
-                 bin.covMeans[2] - tolerance * bin.covStdevs[2],
-                 bin.kValMean - tolerance * bin.kValStdev],
-                [bin.covMeans[0] + tolerance * bin.covStdevs[0],
-                 bin.covMeans[1] + tolerance * bin.covStdevs[1],
-                 bin.covMeans[2] + tolerance * bin.covStdevs[2],
-                 bin.kValMean + tolerance * bin.kValStdev]]
-
-    def calculateAllowableMergers(self, bids, tolerance=3.0):
-        """Create a list of allowable but not necessary mergers"""
-        merge_allowed = nx.Graph()
-        scores = {}
-        lower_limits = {}
-        upper_limits = {}
-        bins = []
-
-        # make sure everyone has stats!
-        for bid in bids:
-            bin = self.getBin(bid)
-            bins.append(bin)
-            bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
-            bin.getKmerColourStats(self.PM.contigColours)
-            [lower_limits[bid],upper_limits[bid]] = self.calculateMergeLimits(bid, tolerance)
-            merge_allowed.add_node(bid)
+            if(bin1_id != bin2_id):
+                if(self.shouldMerge(self.getBin(bin1_id), self.getBin(bin2_id))):
+                    # merge!
+                    self.merge([bin1_id,bin2_id], auto=True, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=False)
+                    condense_map[bin2_id] = bin1_id # add this one in so we know how to map it next time
+                    for key in condense_map:
+                        if condense_map[key] == bin2_id:
+                            # bin2 consumed this key, so we'll need to update it
+                            condense_map[key] = bin1_id
             
-        # sort bins according to kmer profile (kValMean)
-        bins_sorted = sorted(bins)
-        for i in range(len(bids)):
-            subject_bin = bins_sorted[i]
-            #print "SUB",subject_bin.id,lower_limits[subject_bin.id],upper_limits[subject_bin.id]
-            for j in range(i+1,len(bids)):
-                query_bin = bins_sorted[j]
-                #print "QRY",query_bin.id,query_bin.covMeans[0],query_bin.covMeans[1],query_bin.covMeans[2],query_bin.kValMean
-                k_test_1 = (query_bin.kValMean >= lower_limits[subject_bin.id][3] and
-                            query_bin.kValMean <= upper_limits[subject_bin.id][3])
-                k_test_2 = (subject_bin.kValMean >= lower_limits[query_bin.id][3] and
-                            subject_bin.kValMean <= upper_limits[query_bin.id][3])
-                still_allowed = False
-                score = 0
-                if(k_test_1 and k_test_2):
-                    still_allowed = True
-                    score = 2
-                elif(k_test_1 or k_test_2):
-                    still_allowed = True
-                    score= 1
-                if(still_allowed):
-                    #print "t1",
-                    for k in range(3):
-                        still_allowed &= ((query_bin.covMeans[k] >= lower_limits[subject_bin.id][k] and
-                                           query_bin.covMeans[k] <= upper_limits[subject_bin.id][k]) or
-                                          (subject_bin.covMeans[k] >= lower_limits[query_bin.id][k] and
-                                           subject_bin.covMeans[k] <= upper_limits[query_bin.id][k]))
-                        #print still_allowed, 
-                    if(still_allowed):
-                        #print "\nt2"
-                        merge_allowed.add_edge(query_bin.id, subject_bin.id)
-                        scores[self.makeBidKey(query_bin.id, subject_bin.id)] = score
-                    #else:
-                    #    print "\nf2"
+    def findAllNeighbours(self, maxDist):
+        """Create a lookup of all the bins and their nearest neighbours"""
+        # first we make three sorted lists for X, Y and Z
+        # this will save us an all Vs all comparison
+        bids = self.getBids()
+        max_index = len(bids)
+        Xs = []
+        Ys = []
+        Zs = []
+        for bid in bids:
+            CM = self.getBin(bid).covMeans
+            Xs.append(CM[0])
+            Ys.append(CM[1])
+            Zs.append(CM[2])
+        sorted_Xs = np.argsort(Xs)
+        sorted_Ys = np.argsort(Ys)
+        sorted_Zs = np.argsort(Zs)
+
+        x_dists = {}
+        for i in range(max_index):
+            for j in range(i + 1, max_index):
+                dist = np.abs(Xs[sorted_Xs[i]] - Xs[sorted_Xs[j]])
+                if(dist <= maxDist):
+                    key = self.makeBidKey(bids[sorted_Xs[i]], bids[sorted_Xs[j]])
+                    x_dists[key] = dist
                 else:
-                    #print "f1"
-                    break
-
-        return (merge_allowed, scores)
-
-    def shouldMerge(self, bin1, bin2, kDistWobble=1.1, cDistWobble=1.1, bin1_cM=0.0, bin1_kM=0.0, medianVariance=-1):
-        """Should two bins be merged?"""
-        
-        # make the bin that would be if it should be
-        tmp_bin = self.makeNewBin(np.concatenate([bin1.rowIndicies,bin2.rowIndicies]))
-        tmp_bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
-        tmp_bin.calcTotalSize(self.PM.contigLengths)
-        
-        # coverage is cheaper to test first
-        (bin2_cM, bin2_cS, bin2_cR) = bin2.getInnerVariance(self.PM.transformedCP, mode="cov")
-        if(bin1_cM==0):
-            (bin1_cM, bin1_cS, bin1_cR) = bin1.getInnerVariance(self.PM.transformedCP, mode="cov")
-        c_cut = cDistWobble * np.max([bin1_cM, bin2_cM])
-        (tmp_cM, tmp_cS, tmp_cR) = tmp_bin.getInnerVariance(self.PM.transformedCP, mode="cov")
-
-        #print "------------------"
-        #bin1.printBin(self.PM.contigNames, self.PM.contigLengths, outFormat="summary", separator="\t")
-        #bin2.printBin(self.PM.contigNames, self.PM.contigLengths, outFormat="summary", separator="\t")
-
-        if(tmp_cM < c_cut):
-            # coverage passed, test kmerness
-            (bin2_kM, bin2_kS, bin2_kR) = bin2.getInnerVariance(self.PM.kmerSigs)
-            if(bin1_kM==0):
-                (bin1_kM, bin1_kS, bin1_kR) = bin1.getInnerVariance(self.PM.kmerSigs) 
-            k_cut = kDistWobble * np.max([bin1_kM, bin2_kM])
-            (tmp_kM, tmp_kS, tmp_kR) = tmp_bin.getInnerVariance(self.PM.kmerSigs)
-            if(tmp_kM < k_cut):
-                self.deleteBins([tmp_bin.id], force=True)
-                if(medianVariance != -1):        # check whether the variance of the new bin is less than the median 
-                    if(tmp_kM < medianVariance): # varience observed across all bins
-                        return (True,True)
-                    else:
-                        return (True,False)
+                    break 
+        y_dists = {}
+        for i in range(max_index):
+            for j in range(i + 1, max_index):
+                dist = np.abs(Ys[sorted_Ys[i]] - Ys[sorted_Ys[j]])
+                if(dist <= maxDist):
+                    key = self.makeBidKey(bids[sorted_Ys[i]], bids[sorted_Ys[j]])
+                    if(key in x_dists):
+                        y_dists[key] = dist
                 else:
-                    #print bin1.id, bin2.id, bin1_cM, bin2_cM, c_cut, tmp_cM, bin1_kM, bin2_kM, k_cut, tmp_kM, True
-                    #print "------------------"
-                    return (True,True)
-        self.deleteBins([tmp_bin.id], force=True)
-        #print bin1.id, bin2.id, bin1_cM, bin2_cM, c_cut, tmp_cM, False
-        #print "------------------"
-        return (False,False)
+                    break 
+        actual_dists = {}
+        for i in range(max_index):
+            for j in range(i + 1, max_index):
+                dist = np.abs(Zs[sorted_Zs[i]] - Zs[sorted_Zs[j]])
+                if(dist <= maxDist):
+                    key = self.makeBidKey(bids[sorted_Zs[i]], bids[sorted_Zs[j]])
+                    if(key in y_dists):
+                        dist = np.sqrt(y_dists[key]**2 + x_dists[key]**2 + dist**2)
+                        if(dist <= maxDist):
+                            actual_dists[key] = dist
+                else:
+                    break 
+
+        return actual_dists
+
+    def shouldMerge(self, bin1, bin2, verbose=False):
+        """Determine whether its wise to merge two bins
+        
+        Perfoms a one-way anova to determine if the larger bin would be 
+        significantly changed if it consumed the smaller
+        """
+        if(bin1.id != bin2.id):         
+            b1_c_dist = bin1.getAverageCoverageDist(self.PM.averageCoverages) 
+            b2_c_dist = bin2.getAverageCoverageDist(self.PM.averageCoverages)
+            b1_k_dist = bin1.getkmerValDist(self.PM.kmerVals) 
+            b2_k_dist = bin2.getkmerValDist(self.PM.kmerVals)
+        
+            if(bin1.binSize < bin2.binSize):
+                k_dist_1 = b2_k_dist
+                c_dist_1 = b2_c_dist
+            else:
+                k_dist_1 = b1_k_dist
+                c_dist_1 = b1_c_dist
+                
+            k_dist_2 = np.append(b2_k_dist, b1_k_dist)
+            c_dist_2 = np.append(b2_c_dist, b1_c_dist)
+        
+            return self.isSameVariance(c_dist_1, c_dist_2, verbose=verbose) and self.isSameVariance(k_dist_1, k_dist_2, verbose=verbose)
+        return False
+
+    def isSameVariance(self, dist1, dist2, confidence=0.95, verbose=False):
+        """Test to see if the kmerValues for two bins are the same"""
+        F_cutoff =  distributions.f.ppf(confidence, 2, len(dist1)+len(dist2)-2)
+        F_value = f_oneway(dist1,dist2)[0]
+        if verbose:
+           print "[%f, %f]" % (F_value, F_cutoff)
+        return F_value < F_cutoff
 
     def merge(self, bids, auto=False, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=True):
         """Merge two or more bins
@@ -742,7 +666,7 @@ class BinManager:
             parent_bin = makeNewBin()
             # now merge it with the first in the new list
             dead_bin = self.getBin(bids[0])
-            parent_bin.consume(self.PM.transformedCP, self.PM.kmerSigs, self.PM.contigLengths, self.PM.kmerVals, dead_bin, verbose=verbose)
+            parent_bin.consume(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths, dead_bin, verbose=verbose)
             self.deleteBins([bids[0]], force=True)
             bin_stats[bids[0]] = 0
             bin_stats[parent_bin.id] = parent_bin.binSize
@@ -761,9 +685,7 @@ class BinManager:
                 continue_merge = True
             else:
                 tmp_bin = self.makeNewBin(np.concatenate([parent_bin.rowIndicies,dead_bin.rowIndicies]))
-                tmp_bin.makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
-                tmp_bin.calcTotalSize(self.PM.contigLengths)
-                tmp_bin.getKmerColourStats(self.PM.contigColours)
+                tmp_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
                 self.plotSideBySide([parent_bin.id,dead_bin.id,tmp_bin.id])
                 self.deleteBins([tmp_bin.id], force=True)
                 user_option = self.promptOnMerge(bids=[parent_bin.id,dead_bin.id]) 
@@ -778,7 +700,7 @@ class BinManager:
                     ret_val = 2
                     continue_merge=True
             if(continue_merge):
-                parent_bin.consume(self.PM.transformedCP, self.PM.kmerSigs, self.PM.contigLengths, self.PM.kmerVals, dead_bin, verbose=verbose)
+                parent_bin.consume(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths, dead_bin, verbose=verbose)
                 self.deleteBins([bids[i]], force=True)
                 bin_stats[bids[i]] = 0
                 bin_stats[parent_bin.id] = parent_bin.binSize
@@ -793,8 +715,8 @@ class BinManager:
     def makeBidKey(self, bid1, bid2):
         """Make a unique key from two bids"""
         if(bid1 < bid2):
-            return bid1 * 1000000 + bid2
-        return bid2 * 1000000 + bid1
+            return (bid1, bid2)
+        return (bid2, bid1)
 
     def getBin(self, bid):
         """get a bin or raise an error"""
@@ -835,7 +757,7 @@ class BinManager:
         if bid is None:
             self.nextFreeBinId +=1
             bid = self.nextFreeBinId
-        self.bins[bid] = bin.Bin(rowIndicies, self.PM.kmerSigs, bid, self.PM.scaleFactor-1)        
+        self.bins[bid] = bin.Bin(rowIndicies, bid, self.PM.scaleFactor-1)        
         return self.bins[bid]
 
 #------------------------------------------------------------------------------
@@ -1014,7 +936,7 @@ class BinManager:
 
     def scoreContig(self, rowIndex, bid):
         """Determine how well a particular contig fits with a bin"""
-        return self.getBin(bid).scoreProfile(self.PM.kmerSigs[rowIndex], self.PM.transformedCP[rowIndex])
+        return self.getBin(bid).scoreProfile(self.PM.kmerVals[rowIndex], self.PM.transformedCP[rowIndex])
 
     def measureBinVariance(self, mode='kmer', makeKillList=False, tolerance=1.0, verbose=False):
         """Get the stats on M's across all bins
@@ -1027,7 +949,7 @@ class BinManager:
         Rs = {}
         for bid in self.getBids():
             if(mode == 'kmer'):
-                (Ms[bid], Ss[bid], Rs[bid]) = self.bins[bid].getInnerVariance(self.PM.kmerSigs)
+                (Ms[bid], Ss[bid], Rs[bid]) = self.bins[bid].getInnerVariance(self.PM.kmerVals)
             elif(mode == 'cov'):
                 (Ms[bid], Ss[bid], Rs[bid]) = self.bins[bid].getInnerVariance(self.PM.transformedCP, mode="cov")
         
@@ -1176,9 +1098,7 @@ class BinManager:
             return
 
         for bid in self.getBids():
-            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
-            self.bins[bid].getKmerColourStats(self.PM.contigColours)
-            self.bins[bid].calcTotalSize(self.PM.contigLengths)
+            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
             self.bins[bid].printBin(self.PM.contigNames, self.PM.contigLengths, outFormat=outFormat, separator=separator)
 
     def plotProfileDistributions(self):
@@ -1189,7 +1109,7 @@ class BinManager:
     def plotBins(self, FNPrefix="BIN", sideBySide=False):
         """Make plots of all the bins"""
         for bid in self.getBids():
-            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.kmerSigs)
+            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
         if(sideBySide):
             self.plotSideBySide(self.bins.keys(), tag=FNPrefix)
         else:
@@ -1571,7 +1491,7 @@ class SOMManager:
             #print "FN", N, filtered_Ns[N],
             bin1 = self.BM.getBin(N[0])
             bin2 = self.BM.getBin(N[1])
-            if(self.BM.shouldMerge(bin1, bin2, kDistWobble=1.3, cDistWobble=1.3)):
+            if(self.BM.shouldMerge(bin1, bin2)):
             #if(bin1.isSimilar(bin2)): # this test is symmetrical
                 # always map down to the smaller
                 self.collapsedMappings[N[1]] = N[0]
@@ -1690,7 +1610,7 @@ class SOMManager:
                 if(bid1 != bid2):
                     bin1 = self.BM.getBin(bid1)
                     bin2 = self.BM.getBin(bid2)
-                    should_merge = self.BM.shouldMerge(bin1, bin2, kDistWobble=1.3, cDistWobble=1.3)
+                    should_merge = self.BM.shouldMerge(bin1, bin2)
                     if(should_merge):
                         print bid1, bid2, join[1], should_merge
                         rv = self.BM.merge([bid1, bid2], saveBins=True, printInstructions=False)
@@ -1867,11 +1787,14 @@ class ProfileManager:
         self.indicies = np.array([])        # indicies into the data structure based on condition
         self.covProfiles = np.array([])     # coverage based coordinates
         self.transformedCP = np.array([])   # the munged data points
-        self.contigNames = np.array([])
-        self.contigLengths = np.array([])
-        self.contigColours = np.array([])
+        self.averageCoverages = np.array([]) # average coverage across all stoits
         self.kmerSigs = np.array([])        # raw kmer signatures
         self.kmerVals = np.array([])        # PCA'd kmer sigs
+
+        self.contigNames = np.array([])
+        self.contigLengths = np.array([])
+        self.contigColours = np.array([])   # calculated from kmerVals
+        
         self.binIds = np.array([])          # list of bin IDs
         self.isCore = np.array([])          # True False values
         # --> end section
@@ -1920,12 +1843,15 @@ class ProfileManager:
             self.numContigs = len(self.indicies)
             
             if(not silent):
-                print "    Working with:",self.numContigs,"contigs"
+                print "    Working with: %d contigs" % self.numContigs
 
             if(loadCovProfiles):
                 if(verbose):
                     print "    Loading coverage profiles"
                 self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indicies=self.indicies)
+
+                # work out average coverages
+                self.averageCoverages = np.array([sum(i)/self.numStoits for i in self.covProfiles])
 
             if(loadKmerSigs):
                 if(verbose):
@@ -1953,6 +1879,7 @@ class ProfileManager:
                 if(verbose):
                     print "    Loading contig lengths"
                 self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indicies=self.indicies)
+                print "    Contigs contain %d BP" % ( sum(self.contigLengths) )
             
             if(loadBins):
                 if(verbose):
@@ -1993,6 +1920,7 @@ class ProfileManager:
         self.contigLengths = np.delete(self.contigLengths, deadRowIndicies, axis=0)
         self.contigColours = np.delete(self.contigColours, deadRowIndicies, axis=0)
         self.kmerSigs = np.delete(self.kmerSigs, deadRowIndicies, axis=0)
+        self.kmerVals = np.delete(self.kmerVals, deadRowIndicies, axis=0)
         self.binIds = np.delete(self.binIds, deadRowIndicies, axis=0)
         self.isCore = np.delete(self.isCore, deadRowIndicies, axis=0)
         
@@ -2102,6 +2030,10 @@ class ProfileManager:
 #------------------------------------------------------------------------------
 # DATA TRANSFORMATIONS 
 
+    def getAverageCoverage(self, rowIndex):
+        """Return the average coverage for this contig across all stoits"""
+        return sum(self.transformedCP[rowIndex])/self.numStoits
+
     def transformCP(self, silent=False, nolog=False, min=None, max=None):
         """Do the main ransformation on the coverage profile data"""
         shrinkFn = np.log10
@@ -2156,23 +2088,18 @@ class ProfileManager:
 
     def makeColourProfile(self):
         """Make a colour profile based on ksig information"""
-        self.kmerVals = np.array([0.0]*np.size(self.indicies))
         working_data = np.array(self.kmerSigs, copy=True) 
         PCA.Center(working_data,verbose=0)
         p = PCA.PCA(working_data)
         components = p.pc()
         
         # now make the colour profile based on PC1
-        index = 0
-        for point in components:
-            self.kmerVals[index] = float(components[index,0])
-            index += 1
+        self.kmerVals = np.array([float(i) for i in components[:,0]])
         
         # normalise to fit between 0 and 1
         self.kmerVals -= np.min(self.kmerVals)
         self.kmerVals /= np.max(self.kmerVals)
         if(False):
-            print ret_array
             plt.figure(1)
             plt.subplot(111)
             plt.plot(components[:,0], components[:,1], 'r.')
