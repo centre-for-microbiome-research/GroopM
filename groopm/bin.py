@@ -85,7 +85,7 @@ class Bin:
     column names array. The ClusterBlob has a list of bins which it can
     update etc...
     """
-    def __init__(self, rowIndicies, kmerSigs, id, upperCov, covtol=2, mertol=2):
+    def __init__(self, rowIndicies, id, upperCov, covtol=2, mertol=2):
         self.id = id
         self.rowIndicies = rowIndicies             # all the indicies belonging to this bin
         self.binSize = self.rowIndicies.shape[0]
@@ -93,28 +93,31 @@ class Bin:
         self.totalBP = 0
 
         self.covTolerance = covtol
-        self.kDistTolerance = mertol
+        self.kValTolerance = mertol
         
-        # we need some objects to manage the distribution of contig proerties
+        # COVERAGE (3D COVERAGE VALUES)
         self.covMeans = np.zeros((3))
         self.covStdevs = np.zeros((3))
         self.covLowerLimits = np.zeros((3)) # lower and upper limits based on tolerance
         self.covUpperLimits = np.zeros((3))
         
-        self.merMeans = np.array([])
-        self.merStdevs = np.array([])
-        self.merZeros = np.zeros((np.size(kmerSigs[0])))
-        self.kDistMean = 0.0
-        self.kDistStdev = 0.0
+        # AVERAGE COVERAGE
+        self.cValMean = 0.0
+        self.cValStdev = 0.0
+        self.cValUpperLimit = 0.0
+        self.cValLowerLimit = 0.0
+        
+        # KMER VALUES (1ST AXIS IN PCA)
         self.kValMean = 0.0
         self.kValStdev = 0.0
-        self.kDistUpperLimit = 0.0
+        self.kValUpperLimit = 0.0
+        self.kValLowerLimit = 0.0
 
 #------------------------------------------------------------------------------
 # Tools used for comparing / condensing 
     
     def __cmp__(self, alien):
-        """Sort bins based on PC1 of kmersig values"""
+        """Sort bins based on kmerVals"""
         if self.kValMean < alien.kValMean:
             return -1
         elif self.kValMean == alien.kValMean:
@@ -125,7 +128,7 @@ class Bin:
 #------------------------------------------------------------------------------
 # Grow and shrink 
     
-    def consume(self, transformedCP, kmerSigs, contigLengths, kmerVals, deadBin, verbose=False):
+    def consume(self, transformedCP, averageCoverages, kmerVals, contigLengths, deadBin, verbose=False):
         """Combine the contigs of another bin with this one"""
         # consume all the other bins rowIndicies
         if(verbose):
@@ -134,17 +137,15 @@ class Bin:
         self.binSize  = self.rowIndicies.shape[0]
         
         # fix the stats on our bin
-        self.makeBinDist(transformedCP, kmerSigs)
-        self.calcTotalSize(contigLengths)
-        self.getKmerColourStats(kmerVals)
+        self.makeBinDist(transformedCP, averageCoverages, kmerVals, contigLengths)
 
-    def scoreProfile(self, kmerSig, transformedCP):
+    def scoreProfile(self, kmerVal, transformedCP):
         """Determine how similar this profile is to the bin distribution
         
         This is the norm of the vector containing z distances for both profiles
         """
         covZ = np.mean(np.abs((transformedCP - self.covMeans)/self.covStdevs))**2
-        merZ = np.mean(np.abs((kmerSig - self.merMeans)/self.merStdevs))**2
+        merZ = (np.abs(kmerVal - self.kValMean)/self.kValStdev)**2 
         return (np.sqrt(covZ + merZ), (covZ,merZ))
 
     def isSimilar(self, alien, merValTol=5, covTol=5):
@@ -176,7 +177,7 @@ class Bin:
                 return False
         return True
 
-    def purge(self, deadIndicies, transformedCP, kmerSigs, contigLengths, kmerVals):
+    def purge(self, deadIndicies, transformedCP, averageCoverages, kmerVals, contigLengths):
         """Delete some rowIndicies and remake stats"""
         old_ri = self.rowIndicies
         self.rowIndicies = np.array([])
@@ -185,14 +186,12 @@ class Bin:
                 self.rowIndicies = np.append(self.rowIndicies, i)
             
         # fix the stats on our bin
-        self.makeBinDist(transformedCP, kmerSigs)
-        self.calcTotalSize(contigLengths)
-        self.getKmerColourStats(kmerVals)
+        self.makeBinDist(transformedCP, averageCoverages, kmerVals, contigLengths)
         
 #------------------------------------------------------------------------------
 # Stats and properties 
 
-    def clearBinDist(self, kmerSigs):
+    def clearBinDist(self):
         """Clear any set distribution statistics"""
         self.totalBP = 0
         
@@ -201,32 +200,34 @@ class Bin:
         self.covLowerLimits = np.zeros((3)) # lower and upper limits based on tolerance
         self.covUpperLimits = np.zeros((3))
         
-        self.merMeans = np.zeros((np.size(kmerSigs[0])))
-        self.merStdevs = np.zeros((np.size(kmerSigs[0])))
-        self.kDistMean = 0.0
-        self.kDistStdev = 0.0
-        self.kDistUpperLimit = 0.0
         self.kValMean = 0.0
         self.kValStdev = 0.0
+        self.kValUpperLimit = 0.0
+        self.kValLowerLimit = 0.0
         
-    def makeBinDist(self, transformedCP, kmerSigs):
+    def makeBinDist(self, transformedCP, averageCoverages, kmerVals, contigLengths):
         """Determine the distribution of the points in this bin
         
         The distribution is largely normal, except at the boundaries.
         """
         #print "MBD", self.id, self.binSize 
         self.binSize = self.rowIndicies.shape[0]
-        self.kValMean = 0.0
-        self.kValStdev = 0.0
         if(0 == np.size(self.rowIndicies)):
             return
 
         # get the centroids
         (self.covMeans, self.covStdevs) = self.getCentroidStats(transformedCP)
-        (self.merMeans, self.merStdevs) = self.getCentroidStats(kmerSigs)
         
-        # work out the distribution of distances of kmersigs
-        (self.kDistMean, self.kDistStdev, range) = self.getInnerVariance(kmerSigs, mode="kmer")
+        kvals = [kmerVals[i] for i in self.rowIndicies]
+        self.kValMean = np.mean(kvals)
+        self.kValStdev = np.std(kvals)
+
+        cvals = self.getAverageCoverageDist(averageCoverages)
+        self.cValMean = np.mean(cvals)
+        self.cValStdev = np.std(cvals)
+
+        # work out the total size
+        self.totalBP = sum([contigLengths[i] for i in self.rowIndicies])
         
         # set the acceptance ranges
         self.makeLimits()
@@ -236,7 +237,8 @@ class Bin:
         if(-1 == covTol):
             covTol=self.covTolerance
         if(-1 == merTol):
-            merTol=self.kDistTolerance
+            merTol=self.kValTolerance
+        
         for i in range(0,3):
             self.covLowerLimits[i] = int(self.covMeans[i] - covTol * self.covStdevs[i])
             if(self.covLowerLimits[i] < 0):
@@ -244,14 +246,17 @@ class Bin:
             self.covUpperLimits[i] = int(self.covMeans[i] + covTol * self.covStdevs[i])
             if(self.covUpperLimits[i] > self.upperCov):
                 self.covUpperLimits[i] = self.upperCov            
-        self.kDistUpperLimit = self.kDistMean + merTol * self.kDistStdev
+        
+        self.kValLowerLimit = self.kValMean - merTol * self.kValStdev
+        if(self.kValLowerLimit < 0):
+            self.kValLowerLimit = 0
+        self.kValUpperLimit = self.kValMean + merTol * self.kValStdev
 
-    def calcTotalSize(self, contigLengths):
-        """Work out the total size of this bin in BP"""
-        totalBP = 0
-        for row_index in self.rowIndicies:
-            totalBP += contigLengths[row_index]
-        self.totalBP = totalBP
+        self.cValLowerLimit = self.cValMean - covTol * self.cValStdev
+        if(self.cValLowerLimit < 0):
+            self.cValLowerLimit = 0
+        self.cValUpperLimit = self.cValMean + covTol * self.cValStdev
+
 
     def getCentroidStats(self, profile):
         """Calculate the centroids of the profile"""
@@ -268,29 +273,26 @@ class Bin:
         #return (np.mean(working_list,axis=0), std)
         return (np.median(working_list,axis=0), std)
         
+    def getkmerValDist(self, kmerVals):
+        """Return an array of kmer vals for this bin"""
+        return np.array([kmerVals[i] for i in self.rowIndicies])
+
+    def getAverageCoverageDist(self, averageCoverages):
+        """Return the average coverage for all contigs in this bin"""
+        return np.array([averageCoverages[i] for i in self.rowIndicies])
+    
     def getInnerVariance(self, profile, mode="kmer"):
         """Work out the variance for the coverage/kmer profile"""
         dists = []
         if(mode == "kmer"):
-            for row_index in self.rowIndicies:
-                dist = self.getKDist(profile[row_index])
-                dists.append(dist)
+            dists = [np.abs(self.kValMean - profile[i]) for i in self.rowIndicies]
         elif(mode =="cov"):
-            for row_index in self.rowIndicies:
-                dist = self.getCDist(profile[row_index])
-                dists.append(dist)
+            dists = [self.getCDist(profile[i]) for i in self.rowIndicies]
         else:
             raise ModeNotAppropriateException("Mode",mode,"unknown")
         range = np.max(np.array(dists)) - np.min(np.array(dists))
         return (np.mean(np.array(dists)), np.std(np.array(dists)), range)
         
-    def getKDist(self, Ksig, centroid=None):
-        """Get the distance of this kmer sig from the centroid"""
-        # z-norm and then distance!
-        if centroid is None:
-            centroid = self.merMeans
-        return np.linalg.norm(Ksig-centroid)
-
     def getCDist(self, Csig, centroid=None):
         """Get the distance of this contig from the coverage centroid"""
         # z-norm and then distance!
@@ -298,16 +300,7 @@ class Bin:
             centroid = self.covMeans
         return np.linalg.norm(Csig-centroid)
     
-    def getKmerColourStats(self, kmerVals):
-        """Determine the mean and stdev of the kmer profile colours"""
-        kmer_vals = np.array([])
-        for row_index in self.rowIndicies:
-            kmer_vals = np.append(kmer_vals, kmerVals[row_index])
-
-        self.kValMean = np.mean(kmer_vals)
-        self.kValStdev = np.std(kmer_vals)
-  
-    def findOutliers(self, transformedCP, kmerSigs, percent=0.1, mode="kmer"):
+    def findOutliers(self, transformedCP, kmerVals, percent=0.1, mode="kmer"):
         """Return the list of row indicies which least match the profile of the bin"""
 
         # check we're not trying to do something stupid
@@ -318,11 +311,9 @@ class Bin:
         # make a list of all the profile distances
         dists = []
         if(mode == "kmer"):
-            for row_index in self.rowIndicies:
-                dists.append(self.getKDist(kmerSigs[row_index]))
+            dists = [np.abs(self.kValMean - kmerVals[i]) for i in self.rowIndicies]
         elif(mode =="cov"):
-            for row_index in self.rowIndicies:
-                dists.append(self.getCDist(transformedCP[row_index]))
+            dists = [self.getCDist(transformedCP[i]) for i in self.rowIndicies]
         else:
             raise ModeNotAppropriateException("Mode",mode,"unknown")
         
@@ -336,49 +327,71 @@ class Bin:
 #------------------------------------------------------------------------------
 # Grow the bin 
     
-    def recruit(self, transformedCP, kmerSigs, im2RowIndicies, binnedRowIndicies):
+    def recruit(self, transformedCP, averageCoverages, kmerVals, contigLengths, im2RowIndicies, binnedRowIndicies, restrictedRowIndicies, verbose=True):
         """Iteratively grow the bin"""
         # save these
         pt = self.covTolerance
-        st = self.kDistTolerance
+        st = self.kValTolerance
 
-        self.binSize = self.rowIndicies.shape[0]
-        num_recruited = self.recruitRound(transformedCP, kmerSigs, im2RowIndicies, binnedRowIndicies) 
+        if(verbose):
+            print "Recruit - [ID: %d, SIZE: %d]:" % (self.id, self.binSize),
+
+        num_recruited = 1
+        RIs = []
         while(num_recruited > 0):
-            # reduce these to force some kind of convergence
+            (num_recruited, RIs) = self.recruitRound(transformedCP, averageCoverages, kmerVals, contigLengths, im2RowIndicies, binnedRowIndicies, restrictedRowIndicies, RIs)
             self.covTolerance *= 0.8
-            self.kDistTolerance *= 0.8
-            # fix these
-            self.binSize = self.rowIndicies.shape[0]
-            self.makeBinDist(transformedCP, kmerSigs)
-            # go again
-            num_recruited = self.recruitRound(transformedCP, kmerSigs, im2RowIndicies, binnedRowIndicies)
-        
-        # put everything back where we found it...
-        self.binSize = self.rowIndicies.shape[0]
+            self.kValTolerance *= 0.8
+            self.makeLimits()
+            if(verbose):
+                print num_recruited,
+
         self.covTolerance = pt
-        self.kDistTolerance = st
-        self.makeBinDist(transformedCP, kmerSigs)
-        
-        # finally, fix this guy
+        self.kValTolerance = st
+        self.makeLimits()
+
+        if(verbose):
+            print "[END_SIZE: %d]" % self.binSize
         return self.binSize
         
-    def recruitRound(self, transformedCP, kmerSigs, im2RowIndicies, binnedRowIndicies):
+    def recruitRound(self, transformedCP, averageCoverages, kmerVals, contigLengths, im2RowIndicies, binnedRowIndicies, restrictedRowIndicies, rowIndicies):
         """Recruit more points in from outside the current blob boundaries"""
-        #print "RRR",self.id,self.binSize,"(",self.covLowerLimits[0],self.covUpperLimits[0],")","(",self.covLowerLimits[1],self.covUpperLimits[1],")","(",self.covLowerLimits[2],self.covUpperLimits[2],")" 
         num_recruited = 0
-        for x in range(int(self.covLowerLimits[0]), int(self.covUpperLimits[0])):
-            for y in range(int(self.covLowerLimits[1]), int(self.covUpperLimits[1])):
-                for z in range(int(self.covLowerLimits[2]), int(self.covUpperLimits[2])):
-                    if((x,y,z) in im2RowIndicies):
-                        for row_index in im2RowIndicies[(x,y,z)]:
-                            if (row_index not in binnedRowIndicies) and (row_index not in self.rowIndicies):
-                                k_dist = self.getKDist(kmerSigs[row_index])
-                                if(k_dist <= self.kDistUpperLimit):
-                                    self.rowIndicies = np.append(self.rowIndicies,row_index)
-                                    num_recruited += 1
-        return num_recruited
-
+        ris_seen = []
+        if(rowIndicies == []):
+            # do it the hard way...
+            for x in range(int(self.covLowerLimits[0]), int(self.covUpperLimits[0])):
+                for y in range(int(self.covLowerLimits[1]), int(self.covUpperLimits[1])):
+                    for z in range(int(self.covLowerLimits[2]), int(self.covUpperLimits[2])):
+                        # make sure it's a legit point
+                        if((x,y,z) in im2RowIndicies):
+                            for row_index in im2RowIndicies[(x,y,z)]:
+                                if (row_index not in binnedRowIndicies) and (row_index not in self.rowIndicies) and (row_index not in restrictedRowIndicies):
+                                    if(self.withinLimits(kmerVals, averageCoverages, row_index)):
+                                        self.rowIndicies = np.append(self.rowIndicies,row_index)
+                                        num_recruited += 1
+                                    else:
+                                        # we may check next time!
+                                        ris_seen.append(row_index)
+        else:
+            for row_index in rowIndicies:
+                if (row_index not in binnedRowIndicies) and (row_index not in self.rowIndicies) and (row_index not in restrictedRowIndicies):
+                    if(self.withinLimits(kmerVals, averageCoverages, row_index)):
+                        self.rowIndicies = np.append(self.rowIndicies,row_index)
+                        num_recruited += 1
+                    else:
+                        # we may check next time!
+                        ris_seen.append(row_index)
+            
+        # fix these
+        self.makeBinDist(transformedCP, averageCoverages, kmerVals, contigLengths)
+        self.binSize = self.rowIndicies.shape[0]
+        return (num_recruited, ris_seen)
+    
+    def withinLimits(self, kmerVals, averageCoverages, rowIndex):
+        """Is the contig within the limits of this bin?"""
+        return kmerVals[rowIndex] >= self.kValLowerLimit and kmerVals[rowIndex] <= self.kValUpperLimit and averageCoverages[rowIndex] >= self.cValLowerLimit and averageCoverages[rowIndex] <= self.cValUpperLimit
+        
     def shuffleMembers(self, adds, removes):
         """add some guys, take some guys away"""
         for row_index in self.rowIndicies:
@@ -462,7 +475,7 @@ class Bin:
     def plotBin(self, transformedCP, contigColours, kmerVals, fileName=""):
         """Plot a single bin"""
         fig = plt.figure()
-        title = self.plotOnAx(fig, 1, 1, 1, transformedCP, contigColours, kmerVals, fileName=fileName)
+        title = self.plotOnAx(fig, 1, 1, 1, transformedCP, contigColours, fileName=fileName)
         plt.title(title)
         if(fileName != ""):
             try:
@@ -480,7 +493,7 @@ class Bin:
         plt.close(fig)
         del fig
 
-    def plotOnAx(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigColours, kmerVals, fileName=""):
+    def plotOnAx(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigColours, fileName=""):
         """Plot a bin in a given subplot"""
         disp_vals = np.array([])
         disp_cols = np.array([])
@@ -501,7 +514,6 @@ class Bin:
         
         # fix these
         self.makeLimits()
-        self.getKmerColourStats(kmerVals)
 
         # reshape
         disp_vals = np.reshape(disp_vals, (num_points, 3))
@@ -544,6 +556,8 @@ class Bin:
             print "Bin:", self.id
             print "Bin size:", self.binSize
             print "Total BP:", self.totalBP
+            print "KMean:", kvm_str
+            print "KStdev:", kvs_str
             print "--------------------------------------"
 
 ###############################################################################
