@@ -60,6 +60,7 @@ from pylab import plot,subplot,axis,stem,show,figure
 
 import numpy as np
 import scipy.ndimage as ndi
+from scipy.spatial.distance import cdist
 
 # GroopM imports
 import PCA
@@ -92,9 +93,11 @@ class ClusterEngine:
         
         # When blurring the raw image maps I chose a radius to suit my data, you can vary this as you like
         self.blurRadius = 2
-        self.span = 50                  # amount we can travel about when determining "hot spots"
+        self.span = 30                  # amount we can travel about when determining "hot spots"
         
         # misc
+        self.minSize=10                 # Min number of contigs for a bin to be considered legit
+        self.minVol=1000000             # Override on the min size, if we have this many BP
         self.forceWriting = force
         self.debugPlots = plot
         self.imageCounter = 1           # when we print many images
@@ -154,6 +157,9 @@ class ClusterEngine:
         if(not self.promptOnOverwrite()):
             return False
 
+        self.minVol = minVol
+        self.minSize = minSize
+
         # get some data
         t0 = time.time()
         self.PM.loadData(condition="length >= "+str(coreCut))
@@ -171,7 +177,7 @@ class ClusterEngine:
         
         # cluster and bin!
         print "Create cores"
-        cum_contigs_used_good = self.initialiseCores(minVol)
+        cum_contigs_used_good = self.initialiseCores()
         t3 = time.time()
         print "    THIS: [",self.secondsToStr(t3-t2),"]\tTOTAL: [",self.secondsToStr(t3-t0),"]"
 
@@ -181,9 +187,8 @@ class ClusterEngine:
         t4 = time.time()
         print "    THIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
 
-    def initialiseCores(self, minVol):
+    def initialiseCores(self):
         """Process contigs and form CORE bins"""
-        small_bin_cutoff = 10           # anything with less than this many contigs is not a real bin
         num_below_cutoff = 0            # how many consecutive attempts have produced small bins
         breakout_point = 50             # how many will we allow before we stop this loop
         
@@ -195,9 +200,10 @@ class ClusterEngine:
         print "%03d" % sub_counter,
         new_line_counter = 0
         num_bins = 0
+        ss=0
         while(num_below_cutoff < breakout_point):
-            if(num_bins > 70):
-                break
+            #if(num_bins > 70):
+            #    break
             sys.stdout.flush()
             # apply a gaussian blur to each image map to make hot spots
             # stand out more from the background 
@@ -205,7 +211,8 @@ class ClusterEngine:
     
             # now search for the "hottest" spots on the blurred map
             # and check for possible bin centroids
-            putative_clusters = self.findNewClusterCenters()
+            ss += 200
+            putative_clusters = self.findNewClusterCenters(ss=ss)
             if(putative_clusters is None):
                 break
             else:
@@ -215,11 +222,14 @@ class ClusterEngine:
                 self.roundNumber += 1
                 sub_round_number = 1
                 for center_row_indicies in partitions:
-                    if(len(center_row_indicies) > 1):   # Can we trust very small bins?.
+                    total_BP = sum([self.PM.contigLengths[i] for i in center_row_indicies])
+                    num_contigs = len(center_row_indicies)
+                    #MM__print "Round: %d tBP: %d tC: %d" % (sub_round_number, total_BP, num_contigs)
+                    if self.isGoodBin(total_BP, num_contigs, ms=5):   # Can we trust very small bins?.
 
                         # time to make a bin
                         bin = self.BM.makeNewBin(rowIndicies=center_row_indicies)
-
+                        #MM__print "NEW:", total_BP, len(center_row_indicies)
                         # work out the distribution in points in this bin
                         bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)     
 
@@ -238,22 +248,15 @@ class ClusterEngine:
                                                self.PM.restrictedRowIndicies
                                                )
 
-                        is_good_bin = False
-                        if(bin.totalBP < minVol):                   # less than the good volume
-                            if(bin_size > small_bin_cutoff):        # but has enough contigs
-                                is_good_bin = True
-                        else:                                       # contains enough bp to pass regardless of number of contigs
-                            is_good_bin = True
-
                         if(self.debugPlots):
                             self.plotHeat("HM_%d.%d.png" % (self.roundNumber, sub_round_number), max=max_blur_value, x=max_x, y=max_y)
                             sub_round_number += 1
 
-                        if(is_good_bin):
+                        if(self.isGoodBin(self, bin.totalBP, bin_size)):
                             # Plot?
                             bids_made.append(bin.id)
                             num_bins += 1
-                            if(self.debugPlots):          
+                            if(True):#self.debugPlots):          
                                 bin.plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName="P_BIN_%d"%(bin.id))
 
                             # append this bins list of mapped rowIndicies to the main list
@@ -273,6 +276,9 @@ class ClusterEngine:
                             new_line_counter = 0
                             sub_counter += 10
                             print "\n%03d" % sub_counter,
+                    else:
+                        # this partition was too small, restrict these guys we don't run across them again
+                        self.restrictRowIndicies(center_row_indicies)
                 
                 # did we do anything?
                 num_bids_made = len(bids_made)
@@ -282,7 +288,7 @@ class ClusterEngine:
                         self.restrictRowIndicies(row_indicies)
                 else:#if(False):
                     # now is as good a time as any to see if we can merge these guys
-                    print "\n"
+                    #MM__print "\n"
                     bids_consumed = {}
                     for i in range(num_bids_made):
                         base_bid = bids_made[i]
@@ -291,16 +297,16 @@ class ClusterEngine:
                             for j in range(i+1, num_bids_made):
                                 query_bid = bids_made[j]
                                 if(query_bid not in bids_consumed):
-                                    print base_bid,query_bid,
-                                    if(self.BM.shouldMerge(base_bin, self.BM.getBin(query_bid), verbose=True)):
+                                    #MM__print base_bid,query_bid,
+                                    if(self.BM.shouldMerge(base_bin, self.BM.getBin(query_bid))):
                                         # merge!
-                                        print "OK"
+                                        #MM__print "OK"
                                         self.BM.merge([base_bid,query_bid], auto=True, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=False)
                                         bids_consumed[query_bid] = True
                                         if(self.debugPlots):          
                                             base_bin.plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName="C_BIN_%d"%(bin.id))
-                                    else:
-                                        print "NOPE"
+#MM__                                    else:
+#MM__                                        print "NOPE"
         print "\n    .... .... .... .... .... .... .... .... .... ...."
 
         # condense bins
@@ -313,8 +319,22 @@ class ClusterEngine:
         perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
         print "\n   ",num_binned,"contigs are distributed across",len(self.BM.bins.keys()),"cores (",perc,"% )"
 
-    def findNewClusterCenters(self):
+    def isGoodBin(self, totalBP, binSize, ms=0):
+        """Does this bin meet my exacting requirements?"""
+        if(ms == 0):
+            ms = self.minSize               # let the user choose
+        if(totalBP < self.minVol):          # less than the good volume
+            if(binSize > ms):               # but has enough contigs
+                return True
+        else:                               # contains enough bp to pass regardless of number of contigs
+            return True        
+        return False
+    
+    def findNewClusterCenters(self, ss=0):
         """Find a putative cluster"""
+        
+        inRange = lambda x,l,u : x >= l and x < u
+
         # we work from the top view as this has the base clustering
         max_index = np.argmax(self.blurredMaps[0])
         max_value = self.blurredMaps[0].ravel()[max_index]
@@ -339,25 +359,23 @@ class ClusterEngine:
         (x_lower, x_upper) = self.makeCoordRanges(max_x, start_span)
         (y_lower, y_upper) = self.makeCoordRanges(max_y, start_span)
         super_putative_row_indicies = []
-        for z in range(self.PM.scaleFactor):
-            realz = self.PM.scaleFactor - z - 1
-            for x in range(x_lower, x_upper):
-                for y in range(y_lower, y_upper):
+        for p in self.im2RowIndicies:
+            if inRange(p[0],x_lower,x_upper) and inRange(p[1],y_lower,y_upper):
+                for row_index in self.im2RowIndicies[p]: 
                     # check that the point is real and that it has not yet been binned
-                    if((x,y,realz) in self.im2RowIndicies):
-                        for row_index in self.im2RowIndicies[(x,y,realz)]:
-                            if row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies:
-                                # this is an unassigned point. 
-                                multiplier = np.log10(self.PM.contigLengths[row_index])
-                                self.incrementAboutPoint3D(working_block, x-x_lower, y-y_lower, z,multiplier=multiplier)
-                                super_putative_row_indicies.append(row_index)
-
+                    if row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies:
+                        # this is an unassigned point. 
+                        multiplier = np.log10(self.PM.contigLengths[row_index])
+                        self.incrementAboutPoint3D(working_block, p[0]-x_lower, p[1]-y_lower, p[2],multiplier=multiplier)
+                        super_putative_row_indicies.append(row_index)
+    
         # blur and find the highest value
         bwb = ndi.gaussian_filter(working_block, 8)#self.blurRadius)
         densest_index = np.unravel_index(np.argmax(bwb), (np.shape(bwb)))
         max_x = densest_index[0] + x_lower
         max_y = densest_index[1] + y_lower
         max_z = densest_index[2]
+
                     
         # now get the basic color of this dense point
         putative_center_row_indicies = []
@@ -365,78 +383,278 @@ class ClusterEngine:
         (x_lower, x_upper) = self.makeCoordRanges(max_x, self.span)
         (y_lower, y_upper) = self.makeCoordRanges(max_y, self.span)
         (z_lower, z_upper) = self.makeCoordRanges(max_z, 2*self.span)
-        
-        # fix this
-        tmp = z_lower
-        z_lower = self.PM.scaleFactor - z_upper - 1
-        z_upper = self.PM.scaleFactor - tmp - 1
-        for row_index in super_putative_row_indicies:
-            point = np.around(self.PM.transformedCP[row_index])
-            if(point[0] >= x_lower and point[0] < x_upper):
-                if(point[1] >= y_lower and point[1] < y_upper):
-                    if(point[2] >= z_lower and point[2] < z_upper):
-                        # we are within the range!
-                        putative_center_row_indicies.append(row_index)
 
+        for row_index in super_putative_row_indicies:
+            p = np.around(self.PM.transformedCP[row_index])
+            if inRange(p[0],x_lower,x_upper) and inRange(p[1],y_lower,y_upper) and inRange(p[2],z_lower,z_upper):  
+                # we are within the range!
+                putative_center_row_indicies.append(row_index)
+         
         # make sure we have something to go on here
         if(np.size(putative_center_row_indicies) == 0):
-            print "GLUG"
+            # it's all over!
             return None
         elif(np.size(putative_center_row_indicies) == 1):
-            return [[np.array([putative_center_row_indicies[0]])], ret_values]
+            # get out of here but keep trying
+            # the callig function should restrict these indicies
+            return [[np.array(putative_center_row_indicies)], ret_values]
         else:
-            center_k_vals = np.array([self.PM.kmerVals[i] for i in putative_center_row_indicies])
-            center_c_vals = np.array([self.PM.averageCoverages[i] for i in putative_center_row_indicies])
-            k_partitions = self.partitionVals(center_k_vals)
-            c_partitions = self.partitionVals(center_c_vals)
-            
-            if(len(k_partitions) == 0):
-                print "HLUG"
-                return None
+            total_BP = sum([self.PM.contigLengths[i] for i in putative_center_row_indicies])
+            if not self.isGoodBin(total_BP, len(putative_center_row_indicies), ms=5):   # Can we trust very small bins?.
+                # get out of here but keep trying
+                # the calling function should restrict these indicies
+                return [[np.array(putative_center_row_indicies)], ret_values]
             else:
-                ret_ps = []
-                p_means = np.array([])
-                for p in k_partitions:
-                    ret_ps.append(np.array([putative_center_row_indicies[i] for i in p]))
-                    p_means = np.append(p_means, np.mean([center_k_vals[i] for i in p]))
+                # we've got a few good guys here, partition them up!
+                # shift these guys around a bit
+                center_k_vals = np.array([self.PM.kmerVals[i] for i in putative_center_row_indicies])
+                centre_transformed_CP = np.reshape(np.array([self.PM.transformedCP[i] for i in putative_center_row_indicies]),(len(putative_center_row_indicies),3))
+                c_cols = np.array([self.PM.contigColours[i] for i in putative_center_row_indicies])
+                #MM__print "PRE SHIFT: %d" % len(center_k_vals)
+                shifted_k_vals = self.shiftVals(center_k_vals, centre_transformed_CP, c_cols, ss=ss)
+                if(len(shifted_k_vals) == 0):
+                    return None
+                
+                sk_partitions = self.partitionVals(shifted_k_vals)
+                #MM__print "# PARTS: %d" % len(sk_partitions)
+                
+                if(len(sk_partitions) == 0):
+                    return None
+                else:
+                    ret_ps = [np.array([putative_center_row_indicies[i] for i in p]) for p in sk_partitions]
+                    return [ret_ps, ret_values]
 
-                p_means_sorted = np.argsort(p_means)
-                
-                # now it's worthwhile seeing if we can collapse these
-                # k_partitions into fewer groups
-                c_vals = []
-                k_vals = []
-                indies = []
-                counter = 0    
-                largest = 0
-                #for p in ret_ps:
-                for p in range(len(p_means)):
-                    print p_means[p_means_sorted[p]]
-                    counter += 1
-                    c_vals = c_vals + [self.PM.averageCoverages[i] for i in ret_ps[p_means_sorted[p]]]
-                    k_vals = k_vals + [self.PM.kmerVals[i] for i in ret_ps[p_means_sorted[p]]]
-                    indies += [i + largest for i in range(len(ret_ps[p_means_sorted[p]]))]
-                    largest = indies[-1]+1
+    def shiftVals(self, kVals, tCP, cols, ss=0):
+        """Use principles from self organisation to auto cluster these points
+        
+        assumes len(kVals) == len(cVals)
+        """
+        v_size = len(kVals)
+        fig = plt.figure()
+        if(False):
+            plt.clf()
+            ax = plt.subplot(111, projection='3d')
+            ax.scatter(tCP[:,0], tCP[:,1], tCP[:,2], edgecolors=cols, c=cols, marker='.')
+            ax.azim = 45
+            ax.elev = 45
+            filename="original"
+            try:
+                fig.set_size_inches(4,4)
+                plt.savefig(filename,dpi=100)
+            except:
+                print "Error showing image", sys.exc_info()[0]
+                raise
             
-                fig = plt.figure()
-                plt.subplot(311)
-                plt.plot(k_vals, c_vals, 'b.')
-                plt.subplot(312)
-                plt.plot(indies, c_vals, 'r.')
-                plt.subplot(313)
-                plt.plot(indies, k_vals, 'g.')
-                
+###############################################################################
+###############################################################################
+###############################################################################
+  #
+  # BEWARE! HERE BE DRAGONS!
+  #
+  # MAGIC NUMBERS ABOUND! WHY ARE THEY HERE? HOW WERE THEY CHOSEN?
+  #  
+  # ONE DAY I WILL EXPLAIN, UNTIL THEN REST ASSURED THAT:
+  #
+  # A. THEY (KINDA) WORK WELL ENOUGH
+  # B. IT TAKES ABOUT THREE DAYS OF LONG HARD TRIAL AND ERROR TO DERIVE THEM
+  # C. THEY BASICALLY ENCODE MY INTUITION 
+  #
+###############################################################################
+###############################################################################
+###############################################################################
+  #
+  # first we normalise the entire space. We would like a cube with a diagonal of 128px
+  #
+        tCP -= np.min(tCP, axis=0)
+        try:
+            tCP /= (np.max(tCP, axis=0)/70) # 70 is the side of said cube
+        except FloatingPointError:
+            # must be a zero in there somwhere...
+            return []
+  #
+  # want to add a long range repulsive force which tries to push all the points
+  # apart, should be quadratically decreasing, think gravity!
+  # This force, if left to its owen devices will push the points
+  # apart until they fill the spherical space.
+  # [0 3], [128, 0]
+  #
+        global_repulsive_force = lambda x : 3 - 0.000183105*np.square(x)
+  #
+  # Add to this another repulsive force which is proportional to the
+  # kmer distance. In combination with the global_repulsive_force it
+  # will force similar kmers to group together, by forcing dissimilar kmers
+  # to move apart
+  # [0 -1], [0.05 0], [1 1]
+  #
+        kmer_force = lambda x : -18.9473684211*np.square(x) + 20.9473684211*x -1.0
+  #
+  # as kmers won;t change, we can just calculate this force once.
+  #
+        k_dm = np.reshape(np.tile(kVals, v_size),(v_size,v_size))
+        k_dm_full = k_dm - k_dm.T
+        k_dm = np.abs(k_dm_full)
+        kf = kmer_force(k_dm)
+  #
+  # [0 -2], [40 0], [128 1]
+  # cov_force = lambda x : -0.0003018466*np.square(x) + 0.0620738636*x + -2.0
+  # [0 -2], [25 0], [128 2]
+  #
+        cov_force = lambda x : -0.0004733010*np.square(x) + 0.0918325243*x -2.0
+        tCP_dm = cdist(tCP,tCP,'euclidean')
+        cf = cov_force(tCP_dm)
+   #
+###############################################################################
+###############################################################################
+###############################################################################
+        
+        counter = ss
+        true_counter = 0
+        total_movement = 0.0
+        movement_grad = 0.0
+        sg = 0
+        while(True):
+            if(False):
+                if(true_counter % 4 == 0):
+                    plt.clf()
+                    ax = plt.subplot(111, projection='3d')
+                    ax.scatter(tCP[:,0], tCP[:,1], tCP[:,2], edgecolors=cols, c=cols, marker='.')
+                    ax.azim = 45
+                    ax.elev = 45
+                    plt.title("Total movement %0.4f \nGradient: %0.4f" % (total_movement, movement_grad))
+                    filename="squeeze_%d.png" % counter
+                    try:
+                        fig.set_size_inches(4,4)
+                        plt.savefig(filename,dpi=100)
+                    except:
+                        print "Error showing image", sys.exc_info()[0]
+                        raise
+                               
+            true_counter += 1
+            counter += 1
+            
+            # get the two lists of values as points and work out how far apart the points are
+            tCP_dm = cdist(tCP,tCP,'euclidean')
+            
+            #k_dm = np.reshape(np.tile(kVals, v_size),(v_size,v_size))
+            #k_dm = np.abs(k_dm - k_dm.T)
+
+            # get the inverse of the distance matrix so we can normalise
+            #tCP_idm = np.array(tCP_dm, copy=True)
+            # no dividing by 0
+            #np.fill_diagonal(tCP_idm, 1.0)
+            tCP_idm = np.where(tCP_dm > 0, tCP_dm, 1.0)
+            # now work out the residual forces
+            # work out the force between points
+            # we will need to normalise for distance below but we'll
+            # just do it now...
+            forces = (global_repulsive_force(tCP_dm) + kf + cf)/tCP_idm
+            
+            #forces = np.where(forces > 0, forces, 0)
+            #forces *= (1-k_dm)
+            
+            # get a list of vectors pointing from one vector to the
+            # other, we should normalise this but we'll be multiplying 
+            # it  by the forces vector above so...
+            # THIS IS UNREADABLE, BUT IT'S THE FASTEST I COULD MAKE IT GO
+            pointers = np.reshape(np.reshape(np.repeat(tCP.ravel(),v_size), (3*v_size,v_size)).T - np.tile(tCP, v_size), (v_size,v_size,3))
+            
+            # now we can calculate the effect on each point being made by each other point
+            movement = np.mean(pointers * forces[:,:,np.newaxis], axis=0)     
+            movement_grad = total_movement 
+            total_movement = np.sum(np.sqrt(np.sum(np.square(movement),axis=1)))
+            movement_grad = np.abs(movement_grad - total_movement)
+            tCP += movement 
+            tCP -= np.min(tCP, axis=0)
+            tCP /= (np.max(tCP, axis=0)/70)
+
+            # break out if we stop condensing
+            if(sg == 0):
+                sg = movement_grad
+            if(movement_grad < 0.1 and true_counter > 30):
+                break
+        #MM__print "Start: %0.4f, End: %0.4F, Rounds: %d" % (sg, movement_grad, true_counter)
+        
+        # Now do a quick few rounds with just kmers, to pull things a little tighter...
+        # [0 -3], [0.15 0], [1 0.5] make this guy stronger
+        kmer_force = lambda x : -19.4117647059*np.square(x) + 22.9117647059*x -3.0
+        kf = kmer_force(k_dm)   
+        # [0 2], [128, 0] # make this guy weaker
+        global_repulsive_force = lambda x : 2 - 0.00012207*np.square(x)
+        for l in range(15):
+            if(False):
+                plt.clf()
+                ax = plt.subplot(111, projection='3d')
+                ax.scatter(tCP[:,0], tCP[:,1], tCP[:,2], edgecolors=cols, c=cols, marker='.')
+                ax.azim = 45
+                ax.elev = 45
+                plt.title("Total movement %0.4f \nGradient: %0.4f" % (total_movement, movement_grad))
+                filename="squeeze_%d_FINAL.png" % counter
                 try:
-                    plt.show()
-                    plt.close(fig)
+                    fig.set_size_inches(4,4)
+                    plt.savefig(filename,dpi=100)
                 except:
                     print "Error showing image", sys.exc_info()[0]
                     raise
-                del fig                
-                
-                
-                    
-                return [ret_ps, ret_values]
+                               
+            counter += 1
+            tCP_dm = cdist(tCP,tCP,'euclidean')
+            tCP_idm = np.where(tCP_dm > 0, tCP_dm, 1.0)
+            # no coverage force!
+            forces = (global_repulsive_force(tCP_dm) + kf)/tCP_idm
+            pointers = np.reshape(np.reshape(np.repeat(tCP.ravel(),v_size), (3*v_size,v_size)).T - np.tile(tCP, v_size), (v_size,v_size,3))
+            movement = np.mean(pointers * forces[:,:, np.newaxis], axis=0)     
+            movement_grad = total_movement 
+            total_movement = np.sum(np.sqrt(np.sum(np.square(movement),axis=1)))
+            movement_grad = np.abs(movement_grad - total_movement)
+            tCP += movement 
+        #MM__print "R2: %0.4F" % movement_grad
+        
+        # Now fade the values together, this will make kmer selection easier
+        k_blur_factor = lambda k,c : 1 - np.square(k)/0.0009 - np.square(c)/25
+        tCP_dm = cdist(tCP,tCP,'euclidean')
+        
+        blurs = k_blur_factor(k_dm, tCP_dm)
+        # no negative numbers and no self interference!
+        blurs = np.where(blurs > 0, blurs, 0.0)
+        np.fill_diagonal(blurs,0.0)
+
+        min_kVals = np.min(kVals)
+        max_kVals = np.max(kVals)
+        k_range = max_kVals - min_kVals
+        min_kVals += min_kVals*k_range/5 
+        max_kVals -= max_kVals*k_range/5
+        
+        # get the direction the colours should move in
+        effect = np.sum(blurs*k_dm_full, axis=1)
+        kVals += effect
+        
+        # renorm within the same zone
+        kVals -= np.min(kVals)                  # shift to 0
+        kVals *= ((max_kVals - min_kVals) / np.max(kVals))
+        kVals += min_kVals
+
+        if(False):
+            # remake the colours
+            S = 1
+            V = 1
+            cols = np.array([colorsys.hsv_to_rgb(val, S, V) for val in kVals])
+            
+            plt.clf()
+            ax = plt.subplot(111, projection='3d')
+            ax.scatter(tCP[:,0], tCP[:,1], tCP[:,2], edgecolors=cols, c=cols, marker='.')
+            ax.azim = 45
+            ax.elev = 45
+            plt.title("Total movement %0.4f \nGradient: %0.4f" % (total_movement, movement_grad))
+            filename="squeeze_%d_BLUR.png" % counter
+            try:
+                fig.set_size_inches(4,4)
+                plt.savefig(filename,dpi=100)
+            except:
+                print "Error showing image", sys.exc_info()[0]
+                raise
+
+        del fig 
+        return kVals
             
     def expandSelection(self, startIndex, vals, stdevCutoff=0.05, maxSpread=0.1):
         """Expand a selection left and right from a staring index in a list of values
@@ -489,15 +707,15 @@ class ClusterEngine:
                             do_upper = True
         return sorted(ret_list)
 
-    def partitionVals(self, kVals, stdevCutoff=0.04):
+    def partitionVals(self, vals, stdevCutoff=0.04, maxSpread=0.15):
         """Work out where shifts in kmer/coverage vals happen"""
         partitions = []
-        working_list = list(kVals)
+        working_list = list(vals)
         fix_dict = dict(zip(range(len(working_list)),range(len(working_list))))
         while(len(working_list) > 2):
             cf = CenterFinder()
             c_index = cf.findArrayCenter(working_list)
-            expanded_indicies = self.expandSelection(c_index, working_list, stdevCutoff=stdevCutoff)
+            expanded_indicies = self.expandSelection(c_index, working_list, stdevCutoff=stdevCutoff, maxSpread=maxSpread)
             # fix any munges from previous deletes
             morphed_indicies = [fix_dict[i] for i in expanded_indicies]
             partitions.append(morphed_indicies)
@@ -762,24 +980,6 @@ class ClusterEngine:
         self.blurredMaps = np.zeros((self.numImgMaps,self.PM.scaleFactor,self.PM.scaleFactor))
         for i in range(self.numImgMaps): # top, front and side
             self.blurredMaps[i,:,:] = ndi.gaussian_filter(self.imageMaps[i,:,:], 8)#self.blurRadius) 
-
-        return
-        # there's still a lot of background signal to remove
-        # we wish to remove 90% of the data, this will leave just the really hot spots
-        # Make a histogram of the data (use the top face)
-        [vals,points] = np.histogram(np.reshape(self.blurredMaps[0,:,:], (self.PM.scaleFactor, self.PM.scaleFactor,1)), 50)
-        total = np.sum(vals)*0.80
-        lop_index = 1       # where we lop off the low values
-        for val in vals:
-            total -= val
-            if total <= 0:
-                break
-            lop_index += 1
-        lop_val = points[lop_index]
-
-        # remove these low values and down normalise so that the largest value is equal to exactly 1
-        for i in range (self.numImgMaps): # top, front and side
-            self.blurredMaps[i,:,:] = np.where(self.blurredMaps[i,:,:] >= lop_val, self.blurredMaps[i,:,:], 0)/lop_val
 
     def makeCoordRanges(self, pos, span):
         """Make search ranges which won't go out of bounds"""

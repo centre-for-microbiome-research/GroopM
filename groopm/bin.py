@@ -327,7 +327,7 @@ class Bin:
 #------------------------------------------------------------------------------
 # Grow the bin 
     
-    def recruit(self, transformedCP, averageCoverages, kmerVals, contigLengths, im2RowIndicies, binnedRowIndicies, restrictedRowIndicies, verbose=True):
+    def recruit(self, transformedCP, averageCoverages, kmerVals, contigLengths, im2RowIndicies, binnedRowIndicies, restrictedRowIndicies, verbose=False):
         """Iteratively grow the bin"""
         # save these
         pt = self.covTolerance

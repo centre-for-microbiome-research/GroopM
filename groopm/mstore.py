@@ -618,7 +618,7 @@ class GMDataManager:
                     pass
                 # make a new tmp table
                 db_desc = {'bid' : tables.Int32Col(pos=0), 'numMembers' : tables.Int32Col(dflt=0,pos=1) }
-                BIN_table = meta_group.createTable('/', 'tmp_bins', db_desc, "Bin information")
+                BIN_table = meta_group.createTable('/', 'tmp_bins', db_desc, "Bin information", expectedrows=len(contig_names))
                 # rename as the bins table
                 meta_group.renameNode('/', 'bins', 'tmp_bins', overwrite=True)       
 

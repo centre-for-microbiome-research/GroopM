@@ -1865,10 +1865,7 @@ class ProfileManager:
                     # use HSV to RGB to generate colours
                     S = 1       # SAT and VAL remain fixed at 1. Reduce to make
                     V = 1       # Pastels if that's your preference...
-                    self.contigColours = np.array([])
-                    for val in self.kmerVals:
-                        self.contigColours = np.append(self.contigColours, [colorsys.hsv_to_rgb(val, S, V)])
-                    self.contigColours = np.reshape(self.contigColours, (self.numContigs, 3))            
+                    self.contigColours = np.array([colorsys.hsv_to_rgb(val, S, V) for val in self.kmerVals])
 
             if(loadContigNames):
                 if(verbose):
