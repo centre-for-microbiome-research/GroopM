@@ -67,7 +67,6 @@ import scipy.spatial.distance as ssdist
 from scipy.stats import f_oneway, distributions
 
 import tables
-import networkx as nx
 
 # GroopM imports
 import PCA

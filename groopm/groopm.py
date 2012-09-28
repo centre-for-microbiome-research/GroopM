@@ -51,11 +51,11 @@ __status__ = "Development"
 
 import argparse
 import sys
-import code
-import readline 
-import rlcompleter 
 import os 
-import atexit
+#import code
+#import readline 
+#import rlcompleter 
+#import atexit
 
 # GroopM imports
 import mstore
@@ -63,12 +63,12 @@ import cluster
 import bin
 import dataManagers
 import groopmUtils
-from groopmExceptions import Tracer
 ###############################################################################
 ###############################################################################
 ###############################################################################
 ###############################################################################
 # Track rogue print statements
+#from groopmExceptions import Tracer
 #sys.stdout = Tracer(sys.stdout)
 #sys.stderr = Tracer(sys.stderr)
 ###############################################################################

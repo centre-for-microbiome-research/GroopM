@@ -64,8 +64,6 @@ import scipy.ndimage as ndi
 import scipy.spatial.distance as ssdist
 from scipy.stats import kstest
 
-import networkx as nx
-
 import time
 
 # GroopM imports
