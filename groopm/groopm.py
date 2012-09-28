@@ -51,11 +51,11 @@ __status__ = "Development"
 
 import argparse
 import sys
-import code
-import readline 
-import rlcompleter 
 import os 
-import atexit
+#import code
+#import readline 
+#import rlcompleter 
+#import atexit
 
 # GroopM imports
 import mstore
@@ -63,11 +63,19 @@ import cluster
 import bin
 import dataManagers
 import groopmUtils
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+# Track rogue print statements
+#from groopmExceptions import Tracer
+#sys.stdout = Tracer(sys.stdout)
+#sys.stderr = Tracer(sys.stderr)
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
 
-###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
 class GroopMOptionsParser():
     def __init__(self):
         return
@@ -107,7 +115,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             BM = dataManagers.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
-            BM.condenseWrapper(save=True,manual=options.manual,plotter=options.plotter)
+            BM.condenseWrapper(save=True,manual=False,plotter=True)
 
         elif(options.subparser_name == 'makesoms'):
             # make SOMs

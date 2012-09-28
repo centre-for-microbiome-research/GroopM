@@ -10,3 +10,9 @@ groopm/PCA.pyc
 groopm/binUtils.pyc
 groopm/cluster.pyc
 groopm/mstore.pyc
+groopm/bin.pyc
+groopm/dataManagers.pyc
+groopm/groopmExceptions.pyc
+groopm/rainbow.pyc
+groopm/som.pyc
+groopm/torusMesh.pyc

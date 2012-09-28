@@ -99,6 +99,77 @@ class GMExtractor:
         self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
         self.PM = self.BM.PM
         
+############################
+############################
+        if(False):
+            kse = mstore.KmerSigEngine()
+            k_weights = kse.getKmerSigWeights()
+            print kse.makeKmerColNames()
+            sys.exit(0)
+            # load all the contigs which have been assigned to bins
+            CP = mstore.ContigParser()
+            # contigs looks like cid->seq
+            contigs = {}
+            try:
+                for file_name in fasta:
+                    with open(file_name, "r") as f:  
+                        contigs = CP.getWantedSeqs(f, self.PM.contigNames, storage=contigs)
+            except:
+                print "Could not parse contig file:",fasta[0],sys.exc_info()[0]
+                raise
+            
+            lengths = np.array([])
+            GCs = np.array([])
+            dists = np.array([])
+            sigs = np.array([])
+             
+            for bid in self.BM.getBids():
+                bin = self.BM.getBin(bid)
+                b_lengths = np.array([])
+                b_GCs = np.array([])
+                b_dists = np.array([])
+                b_sigs = np.array([])
+                b_names = np.array([])
+                for row_index in bin.rowIndicies:
+                    dist = np.linalg.norm(self.PM.covProfiles[row_index])
+                    b_dists = np.append(b_dists, dist)
+                    b_GCs = np.append(b_GCs, kse.getGC(contigs[self.PM.contigNames[row_index]]))
+                    b_sigs = np.append(b_sigs, self.PM.kmerSigs[row_index])
+                    b_lengths = np.append(b_lengths, self.PM.contigLengths[row_index])
+                    b_names = np.append(b_names, self.PM.contigNames[row_index])
+                    
+                mean_dist = np.mean(b_dists)
+                mean_length = np.mean(b_lengths)
+                b_sigs = np.reshape(b_sigs, (bin.binSize, len(self.PM.kmerSigs[0])))
+                for i in range(len(b_dists)):
+                    print "C_"+b_names[i], b_dists[i]/mean_dist, b_GCs[i]
+                    print "K_"+b_names[i], b_sigs[i] 
+                    dists = np.append(dists, b_dists[i]/mean_dist)
+                    GCs = np.append(GCs, b_GCs[i])
+                    lengths = np.append(lengths, b_lengths[i])
+    
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+            ax.scatter(dists, GCs, lengths, edgecolors='none', marker='.')
+                            
+            #fig = plt.figure()
+            #plt.subplot(211)
+            #plt.plot(dists, lengths, 'b.')
+            #plt.subplot(212)
+            #plt.plot(dists, GCs, 'r.')
+            
+            try:
+                plt.show()
+                plt.close(fig)
+            except:
+                print "Error showing image", sys.exc_info()[0]
+                raise
+            del fig
+    
+            return
+#######################
+#######################
+        
         # load all the contigs which have been assigned to bins
         CP = mstore.ContigParser()
         # contigs looks like cid->seq
@@ -152,8 +223,9 @@ class GMExtractor:
 class BinExplorer:
     """Inspect bins, used for validation"""
     def __init__(self, dbFileName, bids=[]):
-        self.PM = dataManagers.ProfileManager(dbFileName)   # based on user specified length
         self.BM = dataManagers.BinManager(dbFileName=dbFileName)   # bins
+        self.PM = self.BM.PM
+        self.PM2 = None
         if bids is None:
             self.bids = []
         else:
@@ -219,14 +291,26 @@ class BinExplorer:
         self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
         self.BM.plotBinPoints()
     
+    def kmerSig2GC(self, sig_weightings, sig):
+        """Calculate the GC content of a contig working from its kmer sig"""
+        GC = 0
+        outer_index = 0
+        for s in sig:
+            GC += s * sig_weightings[outer_index]
+            outer_index += 1
+        return GC
+    
+    
     def plotSideBySide(self, coreCut):
         """Plot cores side by side with their contigs"""
-        self.PM.loadData(condition="length >= "+str(coreCut))
-        self.PM.transformCP()
-        self.BM.loadBins(makeBins=True,bids=self.bids)
+        self.PM2 = dataManagers.ProfileManager(dbFileName=self.BM.PM.dbFileName)
+        self.PM2.loadData(condition="length >= "+str(coreCut))
+        (min,max) = self.PM2.transformCP()
+        self.BM.loadBins(makeBins=True,bids=self.bids, silent=False, min=min, max=max)
         print "Creating side by side plots"
         (bin_centroid_points, bin_centroid_colours, bin_ids) = self.BM.findCoreCentres()
-        self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colours, azim=11, elev=43, fileName="forGene")
+        self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colours)
+        #self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colours, azim=11, elev=43, fileName="forGene")
 
     def plotIds(self):
         """Make a 3d plot of the bins but use IDs instead of points
@@ -249,7 +333,7 @@ class BinExplorer:
             # plot on screen for user
             fig = plt.figure()
             ax1 = fig.add_subplot(121, projection='3d')
-            ax1.scatter(self.PM.transformedCP[:,0], self.PM.transformedCP[:,1], self.PM.transformedCP[:,2], edgecolors=self.PM.contigColours, c=self.PM.contigColours, marker='.')
+            ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors=self.PM2.contigColours, c=self.PM2.contigColours, marker='.')
             ax2 = fig.add_subplot(122, projection='3d')
             ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColours, c=binCentroidColours)
             try:
@@ -264,12 +348,12 @@ class BinExplorer:
             f_name2 = fileName + "_2"
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(self.PM.transformedCP[:,0], self.PM.transformedCP[:,1], self.PM.transformedCP[:,2], edgecolors='none', c=self.PM.contigColours, s=2, marker='.')
+            ax.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors='none', c=self.PM2.contigColours, s=2, marker='.')
             ax.azim = azim
             ax.elev = elev
-            ax.set_xlim3d(0,self.PM.scaleFactor)
-            ax.set_ylim3d(0,self.PM.scaleFactor)
-            ax.set_zlim3d(0,self.PM.scaleFactor)
+            ax.set_xlim3d(0,self.PM2.scaleFactor)
+            ax.set_ylim3d(0,self.PM2.scaleFactor)
+            ax.set_zlim3d(0,self.PM2.scaleFactor)
             ax.set_xticklabels([])
             ax.set_yticklabels([])
             ax.set_zticklabels([])
@@ -299,9 +383,9 @@ class BinExplorer:
             
             ax.azim = azim
             ax.elev = elev
-            ax.set_xlim3d(0,self.PM.scaleFactor)
-            ax.set_ylim3d(0,self.PM.scaleFactor)
-            ax.set_zlim3d(0,self.PM.scaleFactor)
+            ax.set_xlim3d(0,self.PM2.scaleFactor)
+            ax.set_ylim3d(0,self.PM2.scaleFactor)
+            ax.set_zlim3d(0,self.PM2.scaleFactor)
             ax.set_xticklabels([])
             ax.set_yticklabels([])
             ax.set_zticklabels([])
