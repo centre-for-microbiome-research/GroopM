@@ -115,7 +115,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             BM = dataManagers.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
-            BM.condenseWrapper(save=True,manual=options.manual,plotter=options.plotter)
+            BM.condenseWrapper(save=True,manual=False,plotter=True)
 
         elif(options.subparser_name == 'makesoms'):
             # make SOMs
