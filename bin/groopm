@@ -72,7 +72,6 @@ def printHelp():
     groopm parse        -> Load the raw data and save to disk
     groopm core         -> Create cores used for training SOMs
     groopm refine       -> Refine these cores a little
-    groopm expand       -> Recruit more contigs to the bins
     groopm extract      -> Extract binned contigs
     
     Extra features:
@@ -152,16 +151,16 @@ if __name__ == '__main__':
         som_maker.add_argument('-t', '--tag', default='', help="make images of weights/regions. (No tag to skip plots)")    
         som_maker.add_argument('-f', '--force', action='store_true', default=False, help="overwrite any existing SOMs without prompting")
 
-    #-------------------------------------------------
-    # enlarge bins
-    bin_expander = subparsers.add_parser('expand',
-                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                        help='load saved data and enlarge bins',
-                                        description='Load data and enlarge bins using SOMs')
-    bin_expander.add_argument('dbname', help="name of the database to open")
-    bin_expander.add_argument('-c', '--cutoff', default=500, help="cutoff contig size")
-    bin_expander.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing db file without prompting")
-    #bin_expander.add_argument('-p', '--plot', action="store_true", default=False, help="create plots during bin expansion")
+        #-------------------------------------------------
+        # enlarge bins
+        bin_expander = subparsers.add_parser('expand',
+                                            formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                            help='load saved data and enlarge bins',
+                                            description='Load data and enlarge bins using SOMs')
+        bin_expander.add_argument('dbname', help="name of the database to open")
+        bin_expander.add_argument('-c', '--cutoff', default=500, help="cutoff contig size")
+        bin_expander.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing db file without prompting")
+        #bin_expander.add_argument('-p', '--plot', action="store_true", default=False, help="create plots during bin expansion")
 
     #-------------------------------------------------
     # extract reads and contigs from saved
