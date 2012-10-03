@@ -70,7 +70,7 @@ def printHelp():
     Typical workflow:
 
     groopm parse        -> Load the raw data and save to disk
-    groopm core         -> Create cores used for training SOMs
+    groopm core         -> Create core bins
     groopm refine       -> Refine these cores a little
     groopm extract      -> Extract binned contigs
     
