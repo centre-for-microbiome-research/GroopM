@@ -600,11 +600,19 @@ class GMDataManager:
         contig_names = {}
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
+                # get a dictionary of contigIDs to lengths
                 contig_names = dict(zip(
                                         [list(x)[0] for x in h5file.root.meta.contigs.readWhere("cid != ''")],
                                         [list(x)[2] for x in h5file.root.meta.contigs.readWhere("cid != ''")]
                                         )
                                     )
+                
+            num_stoits = self.getNumStoits(dbFileName)
+            mer_col_names = self.getMerColNames(dbFileName)
+            mer_size = self.getMerSize(dbFileName)
+            num_mers = self.getNumMers(dbFileName)
+            num_cons = self.getNumCons(dbFileName)
+            stoit_col_names = self.getStoitColNames(dbFileName)
         except:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
@@ -618,7 +626,7 @@ class GMDataManager:
                     pass
                 # make a new tmp table
                 db_desc = {'bid' : tables.Int32Col(pos=0), 'numMembers' : tables.Int32Col(dflt=0,pos=1) }
-                BIN_table = meta_group.createTable('/', 'tmp_bins', db_desc, "Bin information", expectedrows=len(contig_names))
+                BIN_table = meta_group.createTable('/', 'tmp_bins', db_desc, "Bin information")
                 # rename as the bins table
                 meta_group.renameNode('/', 'bins', 'tmp_bins', overwrite=True)       
 
@@ -633,10 +641,33 @@ class GMDataManager:
                            'bid' : tables.Int32Col(dflt=0,pos=1),
                            'length' : tables.Int32Col(pos=2),
                            'core' : tables.BoolCol(dflt=False, pos=3) }
-                CONTIG_table = meta_group.createTable('/', 'tmp_contigs', db_desc, "Contig information")
+                CONTIG_table = meta_group.createTable('/', 'tmp_contigs', db_desc, "Contig information", expectedrows=len(contig_names))
                 self.initContigs(CONTIG_table, contig_names)
                 # do the rename
                 meta_group.renameNode('/', 'contigs', 'tmp_contigs', overwrite=True)
+                
+                # we need to reset the num_bins region of meta
+                try:
+                    meta_group.removeNode('/', 'tmp_meta')
+                except:
+                    pass
+                # make a new tmp table
+                # Create a new group under "/" (root) for storing profile information
+                db_desc = {'stoitColNames' : tables.StringCol(512, pos=0),
+                           'numStoits' : tables.Int32Col(pos=1),
+                           'merColNames' : tables.StringCol(4096,pos=2),
+                           'merSize' : tables.Int32Col(pos=2),
+                           'numMers' : tables.Int32Col(pos=4),
+                           'numCons' : tables.Int32Col(pos=5),
+                           'numBins' : tables.Int32Col(dflt=0, pos=6),
+                           'clustered' : tables.BoolCol(dflt=False, pos=7),                  # set to true after clustering is complete
+                           'complete' : tables.BoolCol(dflt=False, pos=8)                    # set to true after clustering finishing is complete
+                           }
+
+                META_table = meta_group.createTable('/', 'tmp_meta', db_desc, "Descriptive data", expectedrows=1)
+                self.initMeta(META_table, stoit_col_names, num_stoits, mer_col_names, mer_size, num_mers, num_cons)
+                meta_group.renameNode('/', 'meta', 'tmp_meta', overwrite=True)
+                                
         except:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise

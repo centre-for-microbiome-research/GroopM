@@ -135,18 +135,8 @@ class ClusterEngine:
 # BIN EXPANSION USING SOMS
 
     def expandBins(self, force=False, plot=False):
-        """Expand bins using SOMs"""
-        SM = dataManagers.SOMManager(self.BM, load=True)
-        SM.regionalise(force=True, save=True)
-        SM.findRegionNeighbours(merge=False, printMergers=True)
-        SM.validateRegions()
-        return
-        SM = dataManagers.SOMManager(self.BM, load=True)
-        SM.regionalise(force=True, save=True)
-        SM.findRegionNeighbours(merge=True, printMergers=True)
-        SM.assignmentMerge()
-        SM.validateRegions()
-        return
+        """Expand the bins"""
+        pass
     
 #------------------------------------------------------------------------------
 # CORE CONSTRUCTION AND MANAGEMENT
@@ -170,8 +160,8 @@ class ClusterEngine:
         print "Apply data transformations"
         self.PM.transformCP()
         # plot the transformed space (if we've been asked to...)
-#        if(self.debugPlots):
-#            self.PM.renderTransCPData()
+        if(self.debugPlots):
+            self.PM.renderTransCPData()
         t2 = time.time()
         print "    THIS: [",self.secondsToStr(t2-t1),"]\tTOTAL: [",self.secondsToStr(t2-t0),"]"
         

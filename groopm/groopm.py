@@ -113,9 +113,25 @@ class GroopMOptionsParser():
             print "****************************************************************"
             print " [[GroopM]] Running in core condensing mode..."
             print "****************************************************************"
+            plotter = False
+            chimera_check = False
+            outlier_check = False
+            if(options.mode == 'plot'):
+                plotter = True
+            #elif(options.mode == 'chimera'):
+            #    chimera_check = True
+            elif(options.mode == 'outlier'):
+                outlier_check = True
+            else:
+                print "**Error: unknown mode:",options.mode
+                return
             BM = dataManagers.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
-            BM.condenseWrapper(save=True,manual=False,plotter=True)
+            BM.condenseWrapper(save=True,
+                               chimeraCheck=chimera_check,
+                               outlierCheck=outlier_check,
+                               plotter=plotter
+                               )
 
         elif(options.subparser_name == 'makesoms'):
             # make SOMs
@@ -170,7 +186,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             BM = dataManagers.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
-            BM.split(options.bid, options.parts, mode=options.mode, saveBins=True, test=options.force, auto=False)
+            BM.split(options.bid, options.parts, mode=options.mode, saveBins=True, auto=options.force)
 
         elif(options.subparser_name == 'delete'):
             # make bin cores
