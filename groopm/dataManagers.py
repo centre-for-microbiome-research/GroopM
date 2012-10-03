@@ -161,7 +161,7 @@ class BinManager:
             self.bins[bid] = bin.Bin(np.array(binMembers[bid]), bid, self.PM.scaleFactor-1)
             self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)      
 
-    def saveBins(self, doCores=True, saveBinStats=True, updateBinStats=True):
+    def saveBins(self, doCores=True, saveBinStats=True, updateBinStats=True, unbinned={}):
         """Save binning results"""
         c2b_update = {}
         core_update = {}
@@ -169,9 +169,11 @@ class BinManager:
             (c2b_update, core_update) = self.getCoreBinUpdates()
             self.PM.saveCores(core_update)
         else:
-            c2b_update = self.getBinUpdates()
+            c2b_update = self.getBinUpdates(unbinned)
+            
         self.PM.saveBinIds(c2b_update)
         self.PM.setClustered()
+        
         if saveBinStats:
             self.saveBinStats()
         elif updateBinStats:
@@ -214,19 +216,17 @@ class BinManager:
 
         return (bin_update, core_update)
 
-    def getBinUpdates(self):
+    def getBinUpdates(self, c2b={}):
         """Merge the bids, raw DB indexes and core information so we can save to disk"""
         # we need a mapping from cid (or local index) to binID
         bin_update = {}
-        c2b = {}
+        for row_index in c2b: # load any now-unbinned critters
+            bin_update[self.PM.indicies[row_index]] = c2b[row_index]
+            
         for bid in self.getBids():
             for row_index in self.bins[bid].rowIndicies:
-                c2b[row_index] = bid
-
-        for row_index in range(len(self.PM.indicies)):
-            if row_index in self.PM.binnedRowIndicies and row_index in c2b:
-                bin_update[self.PM.indicies[row_index]] = c2b[row_index]
-
+                bin_update[self.PM.indicies[row_index]] = bid
+            
         return bin_update
 
 
@@ -275,208 +275,22 @@ class BinManager:
         return new_list
 
 #------------------------------------------------------------------------------
-# BIN UTILITIES 
+# BIN REFINEMENT 
 
-    def getBids(self):
-        """Return a sorted list of bin ids"""
-        return sorted(self.bins.keys())
-
-    def getCentroidProfiles(self, mode="mer"):
-        """Return an array containing the centroid stats for each bin"""
-        if(mode == "mer"):
-            ret_vecs = np.zeros((len(self.bins)))
-            outer_index = 0
-            for bid in self.getBids():
-                ret_vecs[outer_index] = self.bins[bid].kValMean
-                outer_index += 1
-            return ret_vecs
-        elif(mode == "cov"):
-            ret_vecs = np.zeros((len(self.bins), len(self.PM.transformedCP[0])))
-            outer_index = 0
-            for bid in self.getBids():
-                ret_vecs[outer_index] = self.bins[bid].covMeans
-                outer_index += 1
-            return ret_vecs
-        else:
-            raise ge.ModeNotAppropriateException("Mode",mode,"unknown")            
-
-    def removeChimeras(self):
-        """identify and remove chimeric bins"""
-        (kill_list, M_cut) = self.measureBinVariance(makeKillList=True, verbose=True)
-        print "    Removing chimeras"
-        removed = 0
-        for bid in kill_list:
-            # make these guys here
-            if(not self.split(bid, 2, M_cut, auto=True, printInstructions=False)):
-                # the bin could not be split, delete the parent
-                print self.bins[bid].rowIndicies
-                self.deleteBins([bid], force=True, freeBinnedRowIndicies=True, saveBins=False)
-                removed += 1
-
-        print "Deleted %d bins" % removed 
-
-    def split(self, bid, n, mode='kmer', MCut=0.0, auto=False, test=False, saveBins=False, verbose=False, printInstructions=True):
-        """split a bin into n parts
-        
-        if auto == True, then just railroad the split
-        if test == True, then test via merging
-        if savebins == True, save the split (if you will do it)
-        if MCut != 0, carry the split through only if both daughter bins have an M
-          less than MCut
-        """
-        # we need to work out which profile to cluster on
-        if(printInstructions):
-            self.printSplitInstructions()
-       
-        bin = self.getBin(bid)
-        obs = np.array([])
-        if(mode=='kmer'):
-            obs = np.array([self.PM.kmerVals[i] for i in bin.rowIndicies])
-        elif(mode=='cov'):
-            obs = np.array([self.PM.covProfiles[i] for i in bin.rowIndicies])
-            obs = np.reshape(obs, (len(bin.rowIndicies),len(self.PM.covProfiles[0])))
-        
-        # do the clustering
-        from scipy.cluster.vq import kmeans,vq
-        try:
-            centroids,_ = kmeans(obs,n)
-        except ValueError:
-            if(verbose):
-                print "Error splitting"
-            return False
-        idx,_ = vq(obs,centroids)
-
-        # build some temp bins        
-        idx_sorted = np.argsort(np.array(idx))
-        current_group = -1
-        bids = [bid]
-        bin_stats = {} # bin id to bin size
-        bin_stats[bid]=0
-        bin_update = {} # row index to bin id
-        holding_array = np.array([])
-        split_bin = None
-        for i in idx_sorted:
-            if(idx[i] != current_group):
-                if(current_group != -1):
-                    # bin is full!
-                    split_bin = self.makeNewBin(holding_array)
-                    for row_index in holding_array:
-                        bin_update[self.PM.indicies[row_index]] = split_bin.id
-                    bin_stats[split_bin.id] = split_bin.binSize  
-                    split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
-                    bids.append(split_bin.id)
-                    holding_array = np.array([])
-                current_group = idx[i]
-            holding_array = np.append(holding_array, bin.rowIndicies[i])
-        # do the last one
-        if(np.size(holding_array) != 0):
-            split_bin = self.makeNewBin(holding_array)
-            for row_index in holding_array:
-                bin_update[self.PM.indicies[row_index]] = split_bin.id  
-            bin_stats[split_bin.id] = split_bin.binSize  
-            split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
-            bids.append(split_bin.id)
-
-        if(auto and saveBins):
-            # charge on through
-            self.updateBinStats(bin_stats)
-            self.PM.saveBinIds(bin_update)
-            return
-        
-        if(test and saveBins):
-            # implementation of autosplitting
-            del bids[0]
-            bin1 = self.getBin(bids[0])
-            bin2 = self.getBin(bids[1])
-            if(not self.shouldMerge(bin1, bin2)):
-                # should not merge the split, so the split can stay
-                print "merge failed"
-                self.updateBinStats(bin_stats)
-                self.PM.saveBinIds(bin_update)
-            else:
-                print "merge passed"
-            return
-        
-        if(MCut != 0):
-            # see if the split bins have a tighted distribution
-            del bids[0]
-            bin1 = self.getBin(bids[0])
-            bin2 = self.getBin(bids[1])
-            (b1_kM, b1_kS, b1_kR)= bin1.getInnerVariance(self.PM.kmerVals)
-            (b2_kM, b2_kS, b2_kR)= bin2.getInnerVariance(self.PM.kmerVals)
-            print "Split", b1_kM,b1_kR,b2_kM,b2_kR
-            if((b1_kM < MCut) and (b2_kM < MCut)):
-                # ok!, delete the parent bin
-                self.deleteBins([bid], force=True, saveBins=False)
-                return True
-            else:
-                # delete the temp bins
-                self.deleteBins(bids, force=True, saveBins=False)
-                return False
-
-        # we will need to confer with the user
-        # plot some stuff
-        self.plotSideBySide(bids)
-        # remove this query from the list so we don't delete him
-        del bids[0]
-        user_option = self.promptOnSplit(n)
-        if(user_option == 'Y'):
-            if(saveBins):
-                # save the temp bins
-                self.updateBinStats(bin_stats)
-                self.PM.saveBinIds(bin_update)
-            return
-        # delete the temp bins
-        self.deleteBins(bids, force=True)
-        
-        # see what the user wants to do
-        if(user_option == 'N'):
-            return
-        elif(user_option == 'C'):
-            if(mode == "cov"):
-                print "Already doing split based on coverage profile"
-            else:
-                self.split(bid, n, mode='cov', auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False)
-        elif(user_option == 'K'):
-            if(mode == "kmer"):
-                print "Already doing split based on kmer profile"
-            else:
-                self.split(bid, n, mode='kmer', auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False)
-        elif(user_option == 'P'):
-            try:
-                parts = int(raw_input("Enter new number of parts:"))
-            except ValueError:
-                print "You need to enter an integer value!"
-                parts = int(raw_input("Enter new number of parts:"))
-            self.split(bid, parts, mode=mode, auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False)   
-        
     def condenseWrapper(self,
                       manual=False,          # do we need to ask permission every time?
                       save=False,
-                      plotter=False
+                      plotter=False,
+                      chimeraCheck=False,
+                      outlierCheck=False
                       ):
         """Iterative wrapper for the condense function"""
         if(plotter):
             self.plotterCondenseBins()
-            return
-        if(manual):
-            self.printMergeInstructions()
-        print "    Calculating preliminary stats"
-        (meanMs, stdMs, medianSs, stdSs) = self.measureBinVariance(verbose=False)
-        total_num_bins_condensed = 0
-        num_bins_condensed = 0
-        while True: # do while loop anyone?
-            (num_bins_condensed,continue_merging) = self.autoCondenseBins(manual=manual,     
-                                                                      save=save,
-                                                                      medianVariance=medianSs
-                                                                      )
-            print "********************************************************************************"
-            print "    End of round:",num_bins_condensed,"condensed"
-            print "********************************************************************************"
-            total_num_bins_condensed += num_bins_condensed 
-            if(num_bins_condensed == 0 or continue_merging == False):
-                break
-        print "    ",total_num_bins_condensed,"bins condensed.",len(self.bins),"bins remain"
+        elif(chimeraCheck):
+            self.identifyChimeras()
+        elif(outlierCheck):
+            self.removeOutliers(saveBins=True, remove=True)
                         
     def plotterCondenseBins(self):
         """combine similar bins using 3d plots"""
@@ -537,7 +351,7 @@ class BinManager:
             else:
                 return
         return
-    
+
     def autoCondenseBins(self, searchSpan):
         """Automagically condense bins"""
         print "Condense cores [begin: %d]" % len(self.bins)
@@ -560,6 +374,217 @@ class BinManager:
                         if condense_map[key] == bin2_id:
                             # bin2 consumed this key, so we'll need to update it
                             condense_map[key] = bin1_id
+
+    def removeOutliers(self, saveBins=False, remove=False):
+        """Identify and remove outlying contigs in each bin"""
+        print "Removing outliers"
+        bins_affected = 0
+        contigs_removed = 0
+        updates = {}
+        bids = self.getBids()
+        for bid in bids:
+            bin = self.getBin(bid)
+            outliers = bin.identifyOutliers(self.PM.averageCoverages, self.PM.kmerVals)
+            original_size = bin.binSize
+            lo = len(outliers)
+            if(remove and lo != 0):
+                # we delete these guys!
+                contigs_removed += lo
+                bins_affected += 1
+                nri = np.array([i for i in bin.rowIndicies if i not in outliers])
+                bin.rowIndicies = nri
+                bin.binSize = original_size - lo
+                for i in outliers:
+                    updates[i] = 0  # this will set the bid to 0 when we save
+                    del self.PM.binnedRowIndicies[i]
+        print "    Removed: %d contigs across %d bins" % (contigs_removed, bins_affected)
+        print "    Saving updated bins"
+        # save what we did
+        self.saveBins(doCores=False, saveBinStats=False, unbinned=updates)
+
+    def identifyChimeras(self, remove=False):
+        """identify and remove chimeric bins"""
+        bids = self.getBids()
+        for bid in bids:
+            self.isChimera(bid, 'kmer')
+            self.isChimera(bid, 'cov')
+
+    def isChimera(self, bid, mode='kmer', saveBins=False):
+        """Is this bin chimeric?
+        
+        Change mode to test for coverage of kmer
+        """
+        (bin_stats, bin_update, bids) = self.getSplitties(bid, 2, mode)
+        del bids[0]
+        bin1 = self.getBin(bids[0])
+        bin2 = self.getBin(bids[1])
+        bins_saved = False
+        if mode == 'kmer':
+            ik = False
+            ic = True
+        else:
+            ik = True
+            ic = False
+        if(self.shouldMerge(bin1, bin2, confidence=0.85, ignoreCov=ic, ignoreMer=ik, verbose=True)):
+            # split means nothing
+            print "OK: %d, %s" % (bid, mode)
+        else:
+            # should not merge the split, so the split can stay
+            print "Chimera: %d, %s" % (bid, mode)
+            if(saveBins):
+                bins_saved = True
+                self.deleteBins([bids[0]], force=True)  # delete the combined bin
+                self.updateBinStats(bin_stats)
+                self.PM.saveBinIds(bin_update)
+        
+        # did we change stuff?
+        if(not bins_saved):
+            # If we're here than we don't need the temp bins        
+            # remove this query from the list so we don't delete him
+            del bids[0]
+            self.deleteBins(bids, force=True)
+            
+        return
+
+#------------------------------------------------------------------------------
+# BIN UTILITIES 
+
+    def getBids(self):
+        """Return a sorted list of bin ids"""
+        return sorted(self.bins.keys())
+
+    def getCentroidProfiles(self, mode="mer"):
+        """Return an array containing the centroid stats for each bin"""
+        if(mode == "mer"):
+            ret_vecs = np.zeros((len(self.bins)))
+            outer_index = 0
+            for bid in self.getBids():
+                ret_vecs[outer_index] = self.bins[bid].kValMean
+                outer_index += 1
+            return ret_vecs
+        elif(mode == "cov"):
+            ret_vecs = np.zeros((len(self.bins), len(self.PM.transformedCP[0])))
+            outer_index = 0
+            for bid in self.getBids():
+                ret_vecs[outer_index] = self.bins[bid].covMeans
+                outer_index += 1
+            return ret_vecs
+        else:
+            raise ge.ModeNotAppropriateException("Mode",mode,"unknown")            
+
+    def split(self, bid, n, mode='kmer', auto=False, saveBins=False, verbose=False, printInstructions=True):
+        """split a bin into n parts
+        
+        if auto == True, then just railroad the split
+        if test == True, then test via merging
+        if savebins == True, save the split (if you will do it)
+        if MCut != 0, carry the split through only if both daughter bins have an M
+          less than MCut
+        """
+        # we need to work out which profile to cluster on
+        if(printInstructions):
+            self.printSplitInstructions()
+
+        # make some split bins
+        (bin_stats, bin_update, bids) = self.getSplitties(bid, n, mode)
+        
+        if(auto and saveBins):
+            # charge on through
+            self.deleteBins([bids[0]], force=True)  # delete the combined bin
+            self.updateBinStats(bin_stats)
+            self.PM.saveBinIds(bin_update)
+            return
+
+        # we will need to confer with the user
+        # plot some stuff
+        self.plotSideBySide(bids)
+        user_option = self.promptOnSplit(n,mode)
+        if(user_option == 'Y'):
+            if(saveBins):
+                # save the temp bins
+                self.deleteBins([bids[0]], force=True)  # delete the combined bin
+                self.updateBinStats(bin_stats)
+                self.PM.saveBinIds(bin_update)
+            return
+
+        # If we're here than we don't need the temp bins        
+        # remove this query from the list so we don't delete him
+        del bids[0]
+        self.deleteBins(bids, force=True)
+        
+        # see what the user wants to do
+        if(user_option == 'N'):
+            return
+        elif(user_option == 'C'):
+            self.split(bid, n, mode='cov', auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False)
+        elif(user_option == 'K'):
+            self.split(bid, n, mode='kmer', auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False)
+        elif(user_option == 'P'):
+            not_got_parts = True
+            parts = 0
+            while(not_got_parts):
+                try:
+                    parts = int(raw_input("Enter new number of parts:"))
+                except ValueError:
+                    print "You need to enter an integer value!"
+                    parts = 0
+                if(1 == parts):
+                    print "Don't be a silly sausage!"
+                elif(0 != parts):
+                    not_got_parts = False
+                    self.split(bid, parts, mode=mode, auto=auto, saveBins=saveBins, verbose=verbose, printInstructions=False)   
+
+    def getSplitties(self, bid, n, mode):
+        """Return a set of split bins"""
+        bin = self.getBin(bid)
+        obs = np.array([])
+        if(mode=='kmer'):
+            obs = np.array([self.PM.kmerVals[i] for i in bin.rowIndicies])
+        elif(mode=='cov'):
+            obs = np.array([self.PM.covProfiles[i] for i in bin.rowIndicies])
+        
+        # do the clustering
+        from scipy.cluster.vq import kmeans,vq
+        try:
+            centroids,_ = kmeans(obs,n)
+        except ValueError:
+            if(verbose):
+                print "Error splitting"
+            return False
+        idx,_ = vq(obs,centroids)
+
+        # build some temp bins 
+        # this way we can show the user what the split will look like       
+        idx_sorted = np.argsort(np.array(idx))
+        current_group = 0
+        bids = [bid]
+        bin_stats = {} # bin id to bin size
+        bin_stats[bid]=0 # this will ensure that the old bin id will be deleted!
+        bin_update = {} # row index to bin id
+        holding_array = np.array([])
+        split_bin = None
+        for i in idx_sorted:
+            if(idx[i] != current_group):
+                # bin is full!
+                split_bin = self.makeNewBin(holding_array)
+                for row_index in holding_array:
+                    bin_update[self.PM.indicies[row_index]] = split_bin.id
+                bin_stats[split_bin.id] = split_bin.binSize  
+                split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
+                bids.append(split_bin.id)
+                holding_array = np.array([])
+                current_group = idx[i]
+            holding_array = np.append(holding_array, bin.rowIndicies[i])
+        # do the last one
+        if(np.size(holding_array) != 0):
+            split_bin = self.makeNewBin(holding_array)
+            for row_index in holding_array:
+                bin_update[self.PM.indicies[row_index]] = split_bin.id  
+            bin_stats[split_bin.id] = split_bin.binSize  
+            split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
+            bids.append(split_bin.id)
+
+        return (bin_stats, bin_update, bids)
             
     def findAllNeighbours(self, maxDist):
         """Create a lookup of all the bins and their nearest neighbours"""
@@ -613,29 +638,37 @@ class BinManager:
 
         return actual_dists
 
-    def shouldMerge(self, bin1, bin2, verbose=False):
+    def shouldMerge(self, bin1, bin2, ignoreCov=False, ignoreMer=False, confidence=0.95, verbose=False):
         """Determine whether its wise to merge two bins
         
         Perfoms a one-way anova to determine if the larger bin would be 
         significantly changed if it consumed the smaller
         """
-        if(bin1.id != bin2.id):         
-            b1_c_dist = bin1.getAverageCoverageDist(self.PM.averageCoverages) 
-            b2_c_dist = bin2.getAverageCoverageDist(self.PM.averageCoverages)
-            b1_k_dist = bin1.getkmerValDist(self.PM.kmerVals) 
-            b2_k_dist = bin2.getkmerValDist(self.PM.kmerVals)
-        
-            if(bin1.binSize < bin2.binSize):
-                k_dist_1 = b2_k_dist
-                c_dist_1 = b2_c_dist
-            else:
-                k_dist_1 = b1_k_dist
+        if(bin1.id != bin2.id):
+            if not ignoreCov: # work out coverage distributions
+                b1_c_dist = bin1.getAverageCoverageDist(self.PM.averageCoverages) 
+                b2_c_dist = bin2.getAverageCoverageDist(self.PM.averageCoverages)
                 c_dist_1 = b1_c_dist
+                if(bin1.binSize < bin2.binSize):
+                    c_dist_1 = b2_c_dist
+                c_dist_2 = np.append(b2_c_dist, b1_c_dist)
+                cov_match = self.isSameVariance(c_dist_1, c_dist_2, confidence=confidence, verbose=verbose) 
+            else:
+                cov_match = True
                 
-            k_dist_2 = np.append(b2_k_dist, b1_k_dist)
-            c_dist_2 = np.append(b2_c_dist, b1_c_dist)
-        
-            return self.isSameVariance(c_dist_1, c_dist_2, verbose=verbose) and self.isSameVariance(k_dist_1, k_dist_2, verbose=verbose)
+            if not ignoreMer: # work out kmer distributions   
+                b1_k_dist = bin1.getkmerValDist(self.PM.kmerVals) 
+                b2_k_dist = bin2.getkmerValDist(self.PM.kmerVals)
+                k_dist_1 = b1_k_dist
+                if(bin1.binSize < bin2.binSize):
+                    k_dist_1 = b2_k_dist
+                k_dist_2 = np.append(b2_k_dist, b1_k_dist)
+                mer_match = self.isSameVariance(k_dist_1, k_dist_2, confidence=confidence, verbose=verbose)
+            else:
+                mer_match = True
+                
+            return cov_match and mer_match
+         
         return False
 
     def isSameVariance(self, dist1, dist2, confidence=0.95, verbose=False):
@@ -643,7 +676,7 @@ class BinManager:
         F_cutoff =  distributions.f.ppf(confidence, 2, len(dist1)+len(dist2)-2)
         F_value = f_oneway(dist1,dist2)[0]
         if verbose:
-           print "[%f, %f]" % (F_value, F_cutoff)
+           print "[V: %f, C: %f]" % (F_value, F_cutoff)
         return F_value < F_cutoff
 
     def merge(self, bids, auto=False, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=True):
@@ -871,7 +904,7 @@ class BinManager:
                 print "Error, unrecognised choice '"+option.upper()+"'"
                 minimal = True
 
-    def promptOnSplit(self, parts, minimal=False):
+    def promptOnSplit(self, parts, mode, minimal=False):
         """Check that the user is ok with this split"""
         input_not_ok = True
         valid_responses = ['Y','N','C','K','P']
@@ -888,8 +921,12 @@ class BinManager:
                                    " k = redo but use kmer profile, p = choose new number of parts\n" \
                                    " Split? ("+vrs+") : ")
             if(option.upper() in valid_responses):
-                print "****************************************************************"
-                return option.upper()
+                if(option.upper() == 'K' and mode.upper() == 'KMER' or option.upper() == 'C' and mode.upper() == 'COV'):
+                    print "Error, you are already using that profile to split!"
+                    minimal=True
+                else:
+                    print "****************************************************************"
+                    return option.upper()
             else:
                 print "Error, unrecognised choice '"+option.upper()+"'"
                 minimal = True
@@ -2182,9 +2219,14 @@ class ProfileManager:
         self.renderTransData(tag+"_front.png",azim = 0, elev = 0)
         self.renderTransData(tag+"_side.png",azim = 90, elev = 0)
 
-    def renderTransCPData(self, fileName="", show=True, elev=45, azim=45, all=False, showAxis=False, primaryWidth=12, primarySpace=3, dpi=300, format='png'):
+    def renderTransCPData(self, fileName="", show=True, elev=45, azim=45, all=False, showAxis=False, primaryWidth=12, primarySpace=3, dpi=300, format='png', fig=None):
         """Plot transformed data in 3D"""
-        fig = plt.figure()
+        del_fig = False
+        if(fig is None):
+            fig = plt.figure()
+            del_fig = True
+        else:
+            plt.clf()
         if(all):
             myAXINFO = {
                 'x': {'i': 0, 'tickdir': 1, 'juggled': (1, 0, 2),
@@ -2278,18 +2320,18 @@ class ProfileManager:
                 else:
                     fig.set_size_inches(primaryWidth,primaryWidth)            
                 plt.savefig(fileName,dpi=dpi,format=format)
-                plt.close(fig)
             except:
                 print "Error saving image",fileName, sys.exc_info()[0]
                 raise
         elif(show):
             try:
                 plt.show()
-                plt.close(fig)
             except:
                 print "Error showing image", sys.exc_info()[0]
                 raise
-        del fig
+        if del_fig:
+            plt.close(fig)
+            del fig
 
 ###############################################################################
 ###############################################################################

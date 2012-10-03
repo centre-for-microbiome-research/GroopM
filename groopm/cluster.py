@@ -160,8 +160,8 @@ class ClusterEngine:
         print "Apply data transformations"
         self.PM.transformCP()
         # plot the transformed space (if we've been asked to...)
-#        if(self.debugPlots):
-#            self.PM.renderTransCPData()
+        if(self.debugPlots):
+            self.PM.renderTransCPData()
         t2 = time.time()
         print "    THIS: [",self.secondsToStr(t2-t1),"]\tTOTAL: [",self.secondsToStr(t2-t0),"]"
         

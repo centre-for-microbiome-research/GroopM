@@ -254,6 +254,7 @@ class BinExplorer:
         current_bid_index = 0
         current_bid = all_bids[current_bid_index]
         
+        fig = plt.figure()
         while(current_frame < total_frames):
             print "Frame",int(current_frame)
             file_name = "%04d" % current_frame +".jpg"
@@ -263,7 +264,8 @@ class BinExplorer:
                                          primaryWidth=6,
                                          dpi=200,
                                          showAxis=True,
-                                         format='jpeg'
+                                         format='jpeg',
+                                         fig=fig
                                          )
             current_frame += 1
             current_azim += azim_increment

@@ -185,6 +185,20 @@ class Bin:
             
         # fix the stats on our bin
         self.makeBinDist(transformedCP, averageCoverages, kmerVals, contigLengths)
+
+    def identifyOutliers(self, averageCoverages, kmerVals):
+        """identify and remove outliers
+        
+        Assume bin dist has been made
+        """
+        outliers = []
+        (c_lower_cut, c_upper_cut, k_lower_cut, k_upper_cut) = self.makeOutlierCutoffs(averageCoverages, kmerVals)
+        for row_index in self.rowIndicies:
+            if(averageCoverages[row_index] > c_upper_cut or averageCoverages[row_index] < c_lower_cut):
+                outliers.append(row_index)
+            elif(kmerVals[row_index] > k_upper_cut or kmerVals[row_index] < k_lower_cut):
+                outliers.append(row_index)
+        return outliers
         
 #------------------------------------------------------------------------------
 # Stats and properties 
@@ -229,6 +243,30 @@ class Bin:
         
         # set the acceptance ranges
         self.makeLimits()
+
+    def makeOutlierCutoffs(self, averageCoverages, kmerVals):
+        """Work out cutoff values for detecting outliers"""
+        g = 2.2
+        kvals = np.array(sorted([kmerVals[i] for i in self.rowIndicies]))
+        k_median = np.median(kvals)
+        k_lower = [kvals[i] for i in range(len(kvals)) if kvals[i] <= k_median]
+        k_upper = [kvals[i] for i in range(len(kvals)) if kvals[i] >= k_median]
+        kq1 = np.median(k_lower)
+        kq3 = np.median(k_upper)
+        k_diff = kq3 - kq1 
+        k_lower_cut = kq1 - (g * k_diff)
+        k_upper_cut = kq3 + (g * k_diff)
+        
+        cvals = np.array(sorted([averageCoverages[i] for i in self.rowIndicies]))
+        c_median = np.median(cvals)
+        c_lower = [cvals[i] for i in range(len(cvals)) if cvals[i] <= c_median]
+        c_upper = [cvals[i] for i in range(len(cvals)) if cvals[i] >= c_median]
+        cq1 = np.median(c_lower)
+        cq3 = np.median(c_upper)
+        c_diff = cq3 - cq1 
+        c_lower_cut = cq1 - (g * c_diff)
+        c_upper_cut = cq3 + (g * c_diff)
+        return (c_lower_cut, c_upper_cut, k_lower_cut, k_upper_cut)
         
     def makeLimits(self, covTol=-1, merTol=-1):
         """Set inclusion limits based on mean, variance and tolerance settings"""

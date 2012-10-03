@@ -95,7 +95,7 @@ if __name__ == '__main__':
 
     #-------------------------------------------------
     # intialise the options parser
-    parser = argparse.ArgumentParser(add_help=False)#formatter_class=argparse.RawDescriptionHelpFormatter,description='')
+    parser = argparse.ArgumentParser(add_help=False)
     subparsers = parser.add_subparsers(help="--", dest='subparser_name')
 
     ##################################################
@@ -134,8 +134,7 @@ if __name__ == '__main__':
                                         help='merge similar bins / split chimeric ones',
                                         description='Merge similar bins and split chimeric ones')
     bin_refiner.add_argument('dbname', help="name of the database to open")
-    #bin_refiner.add_argument('-p', '--plotter', action="store_true", default=False, help="use global 3d plots")
-    #bin_refiner.add_argument('-m', '--manual', action="store_true", default=False, help="handle complex cases manually")
+    bin_refiner.add_argument('-m', '--mode', default='plot', help="refinement mode plot|outlier")
 
     if(False):
         #-------------------------------------------------
