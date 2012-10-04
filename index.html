@@ -70,7 +70,7 @@
             <li>You have sampled your metagenomic community at at least 3 time points / spatial positions</li>
         </ul>
         <p>Still with me? Great!</p>
-        <p>Before you can use GroopM you'll need to assemble and map your reads. The general recipe is to make a co-assembly of ALL of your data using <a href="https://www.ebi.ac.uk/~zerbino/velvet/">Velvet</a> or similar. Take these contigs and map each of your read sets to them using <a href="http://bio-bwa.sourceforge.net/">BWA</a> or similar. If you have N sampling points then your aim is to produce N sorted-indexed BAM files.</p>
+        <p>Before you can use GroopM you'll need to assemble and map your reads. The general recipe is to make a co-assembly of ALL of your data using <a href="https://www.ebi.ac.uk/~zerbino/velvet/">Velvet</a> or similar. Take these contigs and map each of your read sets to them using <a href="http://bio-bwa.sourceforge.net/">BWA</a> or similar. If you have N sampling points then your aim is to produce N sorted-indexed BAM files. <a href="http://samtools.sourceforge.net/">samtools</a> can help with this.</p>
         <p>The typical workflow for GroopM is as follows:</p>
         <ul>
           <li><strong>parse</strong> - Load then contigs and coverage info into pytables</li>
