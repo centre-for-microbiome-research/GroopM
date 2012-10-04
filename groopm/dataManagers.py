@@ -311,6 +311,18 @@ class BinManager:
                 if(not len(merge_bids) == 0):
                     self.merge(merge_bids, auto=False, manual=True, newBid=False, saveBins=True, verbose=False, printInstructions=False)
             
+            elif(user_option == 'K'):
+                # display a subset only!
+                have_range = False
+                krange=0
+                while(not have_range):
+                    try:
+                        krange = int(raw_input(" Enter kmer range (0-9):"))
+                        have_range = True
+                    except ValueError:
+                        print "You need to enter an integer value!"
+                self.plotBinIds(krange=krange)
+                
             elif(user_option == 'B'):
                 # print single bin
                 have_bid = False
@@ -835,7 +847,7 @@ class BinManager:
     def promptOnPlotterCondense(self, minimal=False):
         """Find out what the user wishes to do next when refining bins"""
         input_not_ok = True
-        valid_responses = ['R','P','B','M','S','Q']
+        valid_responses = ['R','P','B','M','S','K','Q']
         vrs = ",".join([str.lower(str(x)) for x in valid_responses])
         while(input_not_ok):
             if(minimal):
@@ -843,7 +855,7 @@ class BinManager:
             else:
                 option = raw_input(" How do you want to continue?\n" \
                                    " r = replot ids, p = replot points, b = plot single bin," \
-                                   " m = merge, s = split, q = quit\n" \
+                                   " m = merge, s = split, k = set kmer range, q = quit\n" \
                                    " What next? ("+vrs+") : ")
             if(option.upper() in valid_responses):
                 return option.upper()
@@ -1001,29 +1013,42 @@ class BinManager:
                     kill_list.append(bid)
             return (kill_list, cutoff)
 
-    def findCoreCentres(self):
+    def findCoreCentres(self, krange=None):
         """Find the point representing the centre of each core"""
         print "    Finding bin centers"
-        bin_centroid_points = np.zeros((len(self.bins),3))
-        bin_centroid_colours = np.zeros((len(self.bins),3))
-        bids = np.zeros((len(self.bins)))    # we need to know which order the info is coming in
-        # remake the cores and populate the centres
-        S = 1       # SAT and VAL remain fixed at 1. Reduce to make
-        V = 1       # Pastels if that's your preference...
-        outer_index = 0
+        bin_centroid_points = np.array([])
+        bin_centroid_colours = np.array([])
+        bids = np.array([])
+        k_low = 0.0
+        k_high = 0.0
+        if krange is not None:
+            # we only want to plot a subset of these guys
+            k_low = float((krange - 2.0)/10.0)
+            k_high = float((krange + 2.0)/10.0)
+        num_added = 0
         for bid in self.getBids():
-            cum_colour = np.array([])
-            for row_index in self.bins[bid].rowIndicies:
-                cum_colour = np.append(cum_colour, self.PM.contigColours[row_index])
-            cum_colour = np.reshape(cum_colour, (self.bins[bid].binSize, 3))
-            ave_colour = np.mean(cum_colour, axis=0)
-
-            bin_centroid_points[outer_index] = self.bins[bid].covMeans
-            bin_centroid_colours[outer_index] = ave_colour
-            bids[outer_index] = bid
-            
-            outer_index += 1
-            
+            add_bin = True
+            if krange is not None:
+                ave_kval = np.mean([self.PM.kmerVals[row_index] for row_index in self.bins[bid].rowIndicies])
+                if ave_kval < k_low or ave_kval > k_high:
+                    add_bin = False
+            if add_bin:
+                bin_centroid_points = np.append(bin_centroid_points,
+                                                self.bins[bid].covMeans)
+                bin_centroid_colours = np.append(bin_centroid_colours, 
+                                                 np.mean([
+                                                          self.PM.contigColours[row_index] for row_index in 
+                                                          self.bins[bid].rowIndicies
+                                                          ],
+                                                         axis=0)
+                                                 )
+                bids = np.append(bids, bid)
+                num_added += 1
+        
+        if num_added != 0:
+            bin_centroid_points = np.reshape(bin_centroid_points, (num_added, 3))
+            bin_centroid_colours = np.reshape(bin_centroid_colours, (num_added, 3))
+        
         return (bin_centroid_points, bin_centroid_colours, bids)
 
     def analyseBinKVariance(self, outlierTrim=0.1, plot=False):
@@ -1180,9 +1205,9 @@ class BinManager:
         plt.close(fig)
         del fig
 
-    def plotBinIds(self):
+    def plotBinIds(self, krange=None):
         """Render 3d image of core ids"""
-        (bin_centroid_points, bin_centroid_colours, bids) = self.findCoreCentres()
+        (bin_centroid_points, bin_centroid_colours, bids) = self.findCoreCentres(krange=krange)
         fig = plt.figure()
         ax = fig.gca(projection='3d')
         outer_index = 0
