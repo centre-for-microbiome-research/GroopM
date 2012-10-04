@@ -1023,8 +1023,8 @@ class BinManager:
         k_high = 0.0
         if krange is not None:
             # we only want to plot a subset of these guys
-            k_low = float((krange - 2.0)/10.0)
-            k_high = float((krange + 2.0)/10.0)
+            k_low = float((krange - 1.5)/10.0)
+            k_high = float((krange + 1.5)/10.0)
         num_added = 0
         for bid in self.getBids():
             add_bin = True
