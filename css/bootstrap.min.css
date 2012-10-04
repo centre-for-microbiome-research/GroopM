@@ -102,7 +102,7 @@ a:hover{color:#97310e;text-decoration:underline;}
 .container-fluid{padding-right:20px;padding-left:20px;*zoom:1;}.container-fluid:before,.container-fluid:after{display:table;content:"";line-height:0;}
 .container-fluid:after{clear:both;}
 p{margin:0 0 10px;}
-.lead{margin-bottom:20px;font-size:21px;font-weight:200;line-height:30px;}
+.lead{margin-bottom:20px;font-size:21px;font-weight:200;line-height:30px;text-align: center;}
 small{font-size:85%;}
 strong{font-weight:bold;}
 em{font-style:italic;}
