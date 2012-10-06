@@ -63,7 +63,7 @@ from pylab import plot,subplot,axis,stem,show,figure
 
 import numpy as np
 import scipy.ndimage as ndi
-import scipy.spatial.distance as ssdist
+from scipy.spatial.distance import cdist
 from scipy.stats import f_oneway, distributions
 
 import tables
@@ -106,11 +106,14 @@ class BinManager:
                  loadKmerSigs=False,
                  loadCovProfiles=True,
                  min=None,
-                 max=None):
+                 max=None,
+                 cutOff=0):
         """Load data and make bin objects"""
         # fix the condition
         condition=""
-        if(len(bids) == 0):
+        if(cutOff != 0):
+            condition="length >= %d" % cutOff
+        elif(len(bids) == 0):
             condition='bid != 0'
         # if we're going to make bins then we'll need kmer sigs
         if(makeBins):
@@ -274,6 +277,65 @@ class BinManager:
                 old_list_index += 1
         return new_list
 
+#------------------------------------------------------------------------------
+# BIN EXPANSION
+
+    def recruitContigs(self, saveBins=False):
+        """Recuit more contigs to the bins"""
+        # pare down each bin
+        
+        # make a list of all the cov and kmer vals
+        num_bins = len(self.bins)
+        bids = self.getBids()
+        cov_centres = np.reshape([self.bins[bid].covMeans for bid in bids], (num_bins,3))
+        k_vals = np.array([self.bins[bid].kValMean for bid in bids])
+        k_stdevs = np.array([self.bins[bid].kValStdev for bid in bids])
+        print cov_centres
+        print k_vals
+        
+        # build them back up again
+        new_recruits = {} # save new recruits here and update bins in one go
+        for row_index in range(len(self.PM.indicies)):
+            if(row_index not in self.PM.binnedRowIndicies):
+                # we can try assign this guy to a bin
+                bid = self.findClosestBin(row_index, cov_centres, k_vals, k_stdevs, bids)
+                if(bid != 0):
+                    # we could bin this guy
+                    if(bid not in new_recruits):
+                        new_recruits[bid] = []
+                    new_recruits[bid].append(row_index)
+                    
+        # now update all the bins
+        for bid in bids:
+            if(bid in new_recruits):
+                self.bins[bid].rowIndicies = np.sort(np.append(self.bins[bid].rowIndicies, np.array(new_recruits[bid])))
+                
+        # now save
+        if(saveBins):
+            self.saveBins(doCores=False, saveBinStats=False, updateBinStats=True)
+    
+    def findClosestBin(self, rowIndex, covCentres, kVals, kStdevs, bids):
+        """Who is the closest match for this row index?"""
+        c_dists = cdist([self.PM.transformedCP[rowIndex]], covCentres)[0]
+        cov_choice = np.argmin(c_dists)
+        mer_choice = np.argmin(np.abs(kVals- self.PM.kmerVals[rowIndex]))
+        
+        # make sure we're not being silly
+        if(c_dists[cov_choice] > 70):
+            return 0
+        
+        if(cov_choice == mer_choice):
+            # if they agree then we won't argue!
+            return bids[cov_choice]
+        else:
+            # always trust coverage first
+            z_dist = (self.PM.kmerVals[rowIndex] - kVals[cov_choice]) / kStdevs[cov_choice]
+            if(z_dist < 4.5):
+                return bids[cov_choice]
+            
+        # better not to include everything
+        return 0
+        
 #------------------------------------------------------------------------------
 # BIN REFINEMENT 
 

@@ -130,13 +130,6 @@ class ClusterEngine:
             print "Overwriting database",self.PM.dbFileName
             self.PM.dataManager.nukeBins(self.PM.dbFileName)
         return True
-
-#------------------------------------------------------------------------------
-# BIN EXPANSION USING SOMS
-
-    def expandBins(self, force=False, plot=False):
-        """Expand the bins"""
-        pass
     
 #------------------------------------------------------------------------------
 # CORE CONSTRUCTION AND MANAGEMENT

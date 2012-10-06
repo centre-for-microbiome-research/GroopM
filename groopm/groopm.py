@@ -143,13 +143,14 @@ class GroopMOptionsParser():
             do_merge = not options.no_merge
             SM.DoSOMPipeline(merge=do_merge, force=options.force, tag=options.tag)
 
-        elif(options.subparser_name == 'expand'):
+        elif(options.subparser_name == 'recruit'):
             # make bin cores
             print "****************************************************************"
             print " [[GroopM]] Running in bin expansion mode..."
             print "****************************************************************"
-            CE = cluster.ClusterEngine(options.dbname)
-            CE.expandBins(force=options.force)
+            BM = dataManagers.BinManager(dbFileName=options.dbname)
+            BM.loadBins(makeBins=True, silent=False, cutOff=options.cutoff)
+            BM.recruitContigs(saveBins=True)
         
         elif(options.subparser_name == 'extract'):
             # Extract data
