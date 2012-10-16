@@ -280,10 +280,40 @@ class BinManager:
 #------------------------------------------------------------------------------
 # BIN EXPANSION
 
+    def findBinNeighbours(self, thresholdDist=50.0):
+        """Construct a network of all bins and their closest neighbours"""
+        num_bins = len(self.bins)
+        bids = self.getBids()
+        cov_centres = np.reshape([self.bins[bid].covMeans for bid in bids], (num_bins,3))
+        
+        # get an all vs all distance matrix
+        c_dists = cdist(cov_centres, cov_centres)
+        
+        # reduce this to only close neighbours
+        neigbour_dists = np.where(c_dists < thresholdDist, c_dists, 0.0)
+        
+        # now make the network
+        network = {}
+        outer_index = 0
+        for i in range(num_bins):
+            # make a structure to hold the info
+            network[bids[i]] = [[bids[i]],[0.0]]
+            for j in range(num_bins):
+                if(neigbour_dists[i,j] != 0.0):
+                    # this is a legit guy!
+                    network[bids[i]][0].append(bids[j])
+                    network[bids[i]][1].append(neigbour_dists[i,j])
+        
+        return network
+
     def recruitContigs(self, saveBins=False):
         """Recuit more contigs to the bins"""
         # pare down each bin
-        
+        node_network = self.findBinNeighbours()
+        for bid in self.getBids():
+            print node_network[bid] 
+        return
+    
         # make a list of all the cov and kmer vals
         num_bins = len(self.bins)
         bids = self.getBids()
