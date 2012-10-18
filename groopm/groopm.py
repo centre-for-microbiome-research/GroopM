@@ -3,7 +3,7 @@
 #                                                                             #
 #    groopm.py                                                                #
 #                                                                             #
-#    Implements groopm shell and wraps coarse workflows                       #
+#    Wraps coarse workflows                                                   #
 #                                                                             #
 #    Copyright (C) Michael Imelfort                                           #
 #                                                                             #
@@ -77,8 +77,7 @@ import groopmUtils
 ###############################################################################
 
 class GroopMOptionsParser():
-    def __init__(self):
-        return
+    def __init__(self): pass
     
     def parseOptions(self, options ):
 

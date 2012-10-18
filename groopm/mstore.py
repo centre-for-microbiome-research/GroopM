@@ -145,7 +145,6 @@ class GMDataManager:
     table = 'merWeights[1,2,3]'                     # 3 SOMS for mers too
     'col1' : tables.FloatCol(pos=1)
     'col2' : tables.FloatCol(pos=2)
-    'col3' : tables.FloatCol(pos=3)
     ...
     
     ** Regions **                                   # maps points in the map to bin ids
@@ -1149,35 +1148,19 @@ class BamParser:
         table: a table in an open h5 file like "CID,COV_1,...,COV_n,length"
         stoitColNames: names of the COV_x columns
         """
-        # parse the BAMs
-        # we need to have some type of entry for each contig
-        # so start by putting 0's here
-        tmp_storage = {}
-        num_bams = len(stoitColNames)
-        for cid in contigNames.keys():
-            tmp_storage[cid] = np.zeros((num_bams))
-
-        bam_count = 0
-        for bf in bamFiles:
-            bam_file = None
-            try:
-                bam_file = pysam.Samfile(bf, 'rb')
-                print "Parsing",stoitColNames[bam_count],"(",(bam_count+1),"of",num_bams,")"
-                self.parseBam(bam_file, bam_count, tmp_storage, contigNames)                
-                bam_count += 1
-            except:
-                print "Unable to open BAM file",bf,"-- did you supply a SAM file instead?"
-                raise
+        from bamtyper.utilities import BamParser as BTBP
+        BP = BTBP()
+        (filtered_links, ref_lengths, total_coverages) = BP.getLinks(bamFiles, full=False, doCoverage=True)
 
         # go through all the contigs sorted by name and write to the DB
         rows_created = 0
         try:
-            for cid in sorted(tmp_storage.keys()):
+            for cid in sorted(contigNames.keys()):
                 # make a new row
                 cov_row = table.row
                 # punch in the data
                 for i in range(0,len(stoitColNames)):
-                    cov_row[stoitColNames[i]] = tmp_storage[cid][i]
+                    cov_row[stoitColNames[i]] = total_coverages[i][cid]
                 cov_row.append()
                 rows_created += 1
             table.flush()
@@ -1185,28 +1168,6 @@ class BamParser:
             print "Error saving results to DB"
             raise
         return rows_created
-
-    def parseBam(self, bamFile, bamCount, storage, contigNames):
-        """Parse a bam file (handle) and store the number of reads mapped"""
-        for reference, length in zip(bamFile.references, bamFile.lengths):
-            if(reference in contigNames): # we only care about contigs we have seen IN
-                c = Counter()             # the fasta file during contig parsing
-                try:
-                    bamFile.fetch(reference, 0, length, callback = c )
-                    num_reads = c.counts
-                except ValueError as e:
-                    print "Could not calculate num reads for:",reference,"in",bf,"\t",e
-                    raise
-                except:
-                    print "Could not calculate num reads for:",reference,"in",bf, sys.exc_info()[0]
-                    raise
-                
-                # we have already made storage for this guy above so we can gaurantee
-                # there is space to save it!
-    
-                # we need to divide the count by the length if we are going
-                # to use a normalised coverage
-                storage[reference][bamCount] = float(num_reads)/float(length)
         
     def dumpCovTable(self, table, stoitColNames):
         """Dump the guts of the coverage table"""
