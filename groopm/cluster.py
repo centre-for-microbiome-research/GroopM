@@ -144,7 +144,7 @@ class ClusterEngine:
 
         # get some data
         timer = gtime.TimeKeeper()
-        self.PM.loadData(condition="length >= "+str(coreCut))
+        self.PM.loadData(condition="length >= "+str(coreCut), loadLinks=True)
         print "    %s" % timer.getTimeStamp()
         
         # transform the data

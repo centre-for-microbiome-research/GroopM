@@ -59,6 +59,7 @@ import pysam
 
 # GroopM imports
 import groopmExceptions as ge
+import groopmTimekeeper as gtime
 
 np.seterr(all='raise')     
 
@@ -92,6 +93,18 @@ class GMDataManager:
     'stoit2' : tables.FloatCol(pos=2)
     'stoit3' : tables.FloatCol(pos=3)
     ...
+
+    ------------------------
+     LINKS
+    group = '/links'
+    ------------------------
+    ** Links **
+    table = 'links'
+    'contig1'    : tables.Int32Col(pos=0)            # reference to index in meta/contigs
+    'contig2'    : tables.Int32Col(pos=1)            # reference to index in meta/contigs
+    'numReads'   : tables.Int32Col(pos=2)            # number of reads supporting this link 
+    'linkType'   : tables.Int32Col(pos=3)            # the type of the link (SS, SE, ES, EE)
+    'gap'        : tables.Int32Col(pos=4)            # the estimated gap between the contigs
     
     ------------------------
      METADATA
@@ -154,11 +167,13 @@ class GMDataManager:
             print "Creating new database", dbFileName
         
         # create the db
+        timer = gtime.TimeKeeper()
         try:        
             with tables.openFile(dbFileName, mode = "w", title = "GroopM") as h5file:
                 # Create groups under "/" (root) for storing profile information and metadata
                 profile_group = h5file.createGroup("/", 'profile', 'Assembly profiles')
                 meta_group = h5file.createGroup("/", 'meta', 'Associated metadata')
+                links_group = h5file.createGroup("/", 'links', 'Paired read link information')
                 #------------------------
                 # parse contigs and make kmer sigs
                 #
@@ -169,23 +184,31 @@ class GMDataManager:
                 #------------------------
                 db_desc = {}
                 ppos = 0
+                ksig_data = None
                 for mer in kse.kmerCols:
                      db_desc[mer] = tables.FloatCol(pos=ppos)
                      ppos += 1
                 try:
-                    KMER_table = h5file.createTable(profile_group, 'kms', db_desc, "Kmer signature")
-                except:
-                    print "Error creating KMERSIG table:", sys.exc_info()[0]
-                    raise
-                try:
                     f = open(contigsFile, "r")
                     # keep all the contig names so we can check other tables
                     # contigNames is a dict of type ID -> Length
-                    contigNames = conParser.parse(f, kse, KMER_table)
+                    (ksig_data, contigNames) = conParser.parse(f, kse)
                     f.close()
                 except:
                     print "Could not parse contig file:",contigsFile,sys.exc_info()[0]
                     raise
+
+                try:
+                    KMER_table = h5file.createTable(profile_group, 'kms', db_desc, "Kmer signature", expectedrows=len(contigNames))
+                except:
+                    print "Error creating KMERSIG table:", sys.exc_info()[0]
+                    raise
+                try:
+                    conParser.storeSigs(ksig_data, KMER_table)
+                except:
+                    print "Could not load kmer sigs:",contigsFile,sys.exc_info()[0]
+                    raise
+
                 #------------------------
                 # Add a table for the contigs
                 #------------------------
@@ -194,11 +217,12 @@ class GMDataManager:
                            'length' : tables.Int32Col(pos=2),
                            'core' : tables.BoolCol(dflt=False, pos=3) }
                 try:
-                    CONTIG_table = h5file.createTable(meta_group, 'contigs', db_desc, "Contig information")
+                    CONTIG_table = h5file.createTable(meta_group, 'contigs', db_desc, "Contig information", expectedrows=len(contigNames))
                     cid_2_indices = self.initContigs(CONTIG_table, contigNames)
                 except:
                     print "Error creating CONTIG table:", sys.exc_info()[0]
                     raise
+
                 #------------------------
                 # Add a table for the bins
                 #------------------------
@@ -210,12 +234,15 @@ class GMDataManager:
                 except:
                     print "Error creating BIN table:", sys.exc_info()[0]
                     raise
+                print "    %s" % timer.getTimeStamp()
+
                 #------------------------
                 # parse bam files
                 #------------------------
                 # build a table template based on the number of bamfiles we have
                 db_desc = {}
                 ppos = 0
+                links = {}
                 for bf in bamFiles:
                     # assume the file is called something like "fred.bam"
                     # we want to rip off the ".bam" part
@@ -224,11 +251,30 @@ class GMDataManager:
                     stoitColNames.append(bam_desc)
                     ppos += 1
                 try:
-                    COV_table = h5file.createTable(profile_group, 'coverage', db_desc, "Bam based coverage")
-                    bamParser.parse(bamFiles, stoitColNames, COV_table, None, contigNames, cid_2_indices)
+                    COV_table = h5file.createTable(profile_group, 'coverage', db_desc, "Bam based coverage", expectedrows=len(contigNames))
+                    rowwise_links = bamParser.parse(bamFiles, stoitColNames, COV_table, contigNames, cid_2_indices)
                 except:
                     print "Error creating coverage table:", sys.exc_info()[0]
                     raise
+                
+                #------------------------
+                # contig links
+                #------------------------
+                # set table size according to the number of links returned from
+                # the previous call
+                db_desc = {'contig1' : tables.Int32Col(pos=0),
+                           'contig2' : tables.Int32Col(pos=1),
+                           'numReads' : tables.Int32Col(pos=2),
+                           'linkType' : tables.Int32Col(pos=3),
+                           'gap' : tables.Int32Col(pos=4) }
+                try:
+                    LINKS_table = h5file.createTable(links_group, 'links', db_desc, "ContigLinks", expectedrows=len(rowwise_links))
+                    bamParser.initLinks(rowwise_links, LINKS_table)
+                except:
+                    print "Error creating links table:", sys.exc_info()[0]
+                    raise
+                print "    %s" % timer.getTimeStamp()
+                
                 #------------------------
                 # Add metadata
                 #------------------------
@@ -244,7 +290,7 @@ class GMDataManager:
                            'complete' : tables.BoolCol(dflt=False, pos=8)                    # set to true after clustering finishing is complete
                            }
                 try:
-                    META_table = h5file.createTable(meta_group, 'meta', db_desc, "Descriptive data")
+                    META_table = h5file.createTable(meta_group, 'meta', db_desc, "Descriptive data", expectedrows=1)
                     self.initMeta(META_table, str.join(',',stoitColNames), len(stoitColNames), str.join(',',kse.kmerCols), kmerSize, len(kse.kmerCols), len(contigNames))
                 except:
                     print "Error creating META table:", sys.exc_info()[0]
@@ -259,6 +305,7 @@ class GMDataManager:
         print " ->",len(stoitColNames),"BAM files"
         print "Written to: '"+dbFileName+"'"
         print "****************************************************************"
+        print "    %s" % timer.getTimeStamp()
 
         if(dumpAll):
             self.dumpAll(dbFileName)
@@ -315,7 +362,34 @@ class GMDataManager:
             else:
                 print "Error, unrecognised choice '"+option.upper()+"'"
                 minimal = True
-                
+
+#------------------------------------------------------------------------------
+# GET LINKS 
+
+    def restoreLinks(self, dbFileName, indices=[]):
+        """Restore the links hash for a given set of indicies"""
+        full_record = []
+        try:
+            with tables.openFile(dbFileName, mode='r') as h5file:
+                full_record = [list(x) for x in h5file.root.links.links.readWhere("contig1 >= 0")]
+        except:
+            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            raise
+        
+        if indices == []:
+            # get all!
+            indices = self.getConditionalIndicies(dbFileName)
+        
+        links_hash = {}
+        if full_record != []:
+            for record in full_record:
+                # make sure we have storage
+                if record[0] in indices and record[1] in indices:
+                    if record[0] not in links_hash:
+                        links_hash[record[0]] = []
+                    links_hash[record[0]].append(record[1:])
+        return links_hash
+    
 #------------------------------------------------------------------------------
 # GET / SET DATA TABLES - PROFILES 
 
@@ -777,28 +851,29 @@ class ContigParser:
                     yield name, seq, None # yield a fasta record instead
                     break
                 
-    def parse(self, contigFile, kse, table):
+    def parse(self, contigFile, kse):
         """Do the heavy lifting of parsing"""
         print "Parsing contigs"        
         tmp_storage = {} # save everything here first so we can sort accordingly
-        #breakout = 0
         for cid,seq,qual in self.readfq(contigFile):
-            #breakout+=1
             tmp_storage[cid] = (kse.getKSig(seq.upper()), len(seq))
-            #if breakout > 100:
-            #    break  
-        
+
+        # get a list of contig names
+        # This array is used like everywhere dude...
         con_names = {}
         for cid in sorted(tmp_storage.keys()):     
             con_names[cid] = tmp_storage[cid][1]
+        return (tmp_storage, con_names)
+        
+    def storeSigs(self, data, table):
+        for cid in sorted(data.keys()):     
             # make a new row
             KMER_row = table.row
             # punch in the data
-            for mer in tmp_storage[cid][0].keys():
-                KMER_row[mer] = tmp_storage[cid][0][mer]
+            for mer in data[cid][0].keys():
+                KMER_row[mer] = data[cid][0][mer]
             KMER_row.append()
         table.flush()
-        return con_names
 
     def getWantedSeqs(self, contigFile, wanted, storage={}):
         """Do the heavy lifting of parsing"""
@@ -897,7 +972,7 @@ class BamParser:
 
     def __init__(self): pass
     
-    def parse(self, bamFiles, stoitColNames, covTable, linksTable, contigNames, cid2Indices):
+    def parse(self, bamFiles, stoitColNames, covTable, contigNames, cid2Indicies):
         """Parse multiple bam files and store the results in the main DB
         
         table: a table in an open h5 file like "CID,COV_1,...,COV_n,length"
@@ -906,10 +981,9 @@ class BamParser:
         print "Importing BAM files"
         from bamtyper.utilities import BamParser as BTBP
         BP = BTBP()
-        (links, ref_lengths, coverages) = BP.getLinks(bamFiles, full=False, verbose=True, doCoverage=True)
+        (links, ref_lengths, coverages) = BP.getLinks(bamFiles, full=False, verbose=True, doCoverage=True, minJoin=5)
 
         # go through all the contigs sorted by name and write to the DB
-        rows_created = 0
         try:
             for cid in sorted(contigNames.keys()):
                 # make a new row
@@ -918,13 +992,23 @@ class BamParser:
                 for i in range(0,len(stoitColNames)):
                     cov_row[stoitColNames[i]] = coverages[i][cid]
                 cov_row.append()
-                rows_created += 1
             covTable.flush()
         except:
             print "Error saving results to DB"
             raise
-        return rows_created
         
+        # transform the links into something a little easier to parse later
+        rowwise_links = []
+        for cid in links:
+            for link in links[cid]: 
+                rowwise_links.append([cid2Indicies[cid],          # contig 1 
+                                      cid2Indicies[link[0]],      # contig 2
+                                      int(link[1]),               # numReads
+                                      int(link[2]),               # linkType
+                                      int(link[3])                # gap
+                                      ])
+        return rowwise_links
+    
     def dumpCovTable(self, table, stoitColNames):
         """Dump the guts of the coverage table"""
         print "-----------------------------------"
@@ -934,6 +1018,24 @@ class BamParser:
             for colName in stoitColNames:
                 print ",",row[colName],
             print ""
+
+    def initLinks(self, rowwiseLinks, linksTable):
+        # go through all the contigs sorted by name and write to the DB
+        try:
+            for link in rowwiseLinks:
+                # make a new row
+                link_row = linksTable.row
+                # punch in the data
+                link_row['contig1'] = link[0]
+                link_row['contig2'] = link[1]
+                link_row['numReads'] = link[2]
+                link_row['linkType'] = link[3]
+                link_row['gap'] = link[4]
+                link_row.append()
+            linksTable.flush()
+        except:
+            print "Error saving results to DB"
+            raise
 
 class Counter:
     """AUX: Call back for counting aligned reads

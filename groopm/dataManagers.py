@@ -1375,6 +1375,9 @@ class ProfileManager:
         self.numContigs = 0                 # this depends on the condition given
         self.numStoits = 0                  # this depends on the data which was parsed
 
+        # contig links
+        self.links = {}
+        
         # misc
         self.forceWriting = force           # overwrite existng values silently?
         self.scaleFactor = scaleFactor      # scale every thing in the transformed data to this dimension
@@ -1390,7 +1393,8 @@ class ProfileManager:
                  loadContigNames=True,
                  loadContigLengths=True,
                  loadBins=False,
-                 loadCores=False):
+                 loadCores=False,
+                 loadLinks=False):
         """Load pre-parsed data"""
         if(verbose):
             print "Loading data from:", self.dbFileName
@@ -1468,6 +1472,9 @@ class ProfileManager:
                 if(verbose):
                     print "    Loading core info"
                 self.isCore = self.dataManager.getCores(self.dbFileName, indices=self.indices)
+                
+            if(loadLinks):
+                self.links = self.getLinks()
             
         except:
             print "Error loading DB:", self.dbFileName, sys.exc_info()[0]
@@ -1593,6 +1600,10 @@ class ProfileManager:
         # finally , save
         self.saveValidBinIds(existing_bin_stats)
 
+    def getLinks(self):
+        """Get contig links"""
+        return self.dataManager.restoreLinks(self.dbFileName, self.indices)
+    
 #------------------------------------------------------------------------------
 # DATA TRANSFORMATIONS 
 
