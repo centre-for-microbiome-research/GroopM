@@ -66,6 +66,7 @@ from scipy.spatial.distance import cdist
 import PCA
 import dataManagers
 import bin
+import groopmTimekeeper as gtime
 
 np.seterr(all='raise')      
 
@@ -142,10 +143,9 @@ class ClusterEngine:
         self.minSize = minSize
 
         # get some data
-        t0 = time.time()
+        timer = gtime.TimeKeeper()
         self.PM.loadData(condition="length >= "+str(coreCut))
-        t1 = time.time()
-        print "    THIS: [",self.secondsToStr(t1-t0),"]\tTOTAL: [",self.secondsToStr(t1-t0),"]"
+        print "    %s" % timer.getTimeStamp()
         
         # transform the data
         print "Apply data transformations"
@@ -153,20 +153,17 @@ class ClusterEngine:
         # plot the transformed space (if we've been asked to...)
         if(self.debugPlots):
             self.PM.renderTransCPData()
-        t2 = time.time()
-        print "    THIS: [",self.secondsToStr(t2-t1),"]\tTOTAL: [",self.secondsToStr(t2-t0),"]"
+        print "    %s" % timer.getTimeStamp()
         
         # cluster and bin!
         print "Create cores"
         cum_contigs_used_good = self.initialiseCores()
-        t3 = time.time()
-        print "    THIS: [",self.secondsToStr(t3-t2),"]\tTOTAL: [",self.secondsToStr(t3-t0),"]"
+        print "    %s" % timer.getTimeStamp()
 
         # Now save all the stuff to disk!
         print "Saving bins"
         self.BM.saveBins(doCores=True, saveBinStats=True)
-        t4 = time.time()
-        print "    THIS: [",self.secondsToStr(t4-t3),"]\tTOTAL: [",self.secondsToStr(t4-t0),"]"
+        print "    %s" % timer.getTimeStamp()
 
     def initialiseCores(self):
         """Process contigs and form CORE bins"""
@@ -1005,13 +1002,6 @@ class ClusterEngine:
                 self.PM.restrictedRowIndicies[row_index] = True
                 # now update the image map, decrement
                 self.decrementViaRowIndex(row_index)
-        
-#------------------------------------------------------------------------------
-# MISC 
-
-    def secondsToStr(self, t):
-        rediv = lambda ll,b : list(divmod(ll[0],b)) + ll[1:]
-        return "%d:%02d:%02d.%03d" % tuple(reduce(rediv,[[t*1000,],1000,60,60]))
     
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
