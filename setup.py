@@ -18,6 +18,6 @@ setup(
         "tables >= 2.3",
         "pysam >= 0.6",
         "PIL >= 1.1.7",
-	"BamTyper >= 0.1.0"
+	    "BamTyper >= 0.1.1"
     ],
 )

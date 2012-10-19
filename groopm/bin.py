@@ -85,7 +85,7 @@ class Bin:
     """
     def __init__(self, rowIndicies, id, upperCov, covtol=2, mertol=2):
         self.id = id
-        self.rowIndicies = rowIndicies             # all the indicies belonging to this bin
+        self.rowIndicies = rowIndicies             # all the indices belonging to this bin
         self.binSize = self.rowIndicies.shape[0]
         self.upperCov = upperCov
         self.totalBP = 0
@@ -337,7 +337,7 @@ class Bin:
         return np.linalg.norm(Csig-centroid)
     
     def findOutliers(self, transformedCP, kmerVals, percent=0.1, mode="kmer"):
-        """Return the list of row indicies which least match the profile of the bin"""
+        """Return the list of row indices which least match the profile of the bin"""
 
         # check we're not trying to do something stupid
         num_to_purge = int(self.binSize * percent)

@@ -73,7 +73,6 @@ import PCA
 import mstore
 import bin
 import groopmExceptions as ge
-import som
 
 np.seterr(all='raise')     
 
@@ -147,7 +146,7 @@ class BinManager:
             bin_members[bid] = []
         
         # fill them up
-        for row_index in range(0, np.size(self.PM.indicies)):
+        for row_index in range(0, np.size(self.PM.indices)):
             bin_members[self.PM.binIds[row_index]].append(row_index)
             bin_sizes[self.PM.binIds[row_index]] += self.PM.contigLengths[row_index]
 
@@ -211,9 +210,9 @@ class BinManager:
         """Merge the bids, raw DB indexes and core information so we can save to disk"""
         # at this stage, all bins are cores
         core_update = {}
-        for row_index in range(len(self.PM.indicies)):
+        for row_index in range(len(self.PM.indices)):
             if row_index in self.PM.binnedRowIndicies:
-                core_update[self.PM.indicies[row_index]] = True
+                core_update[self.PM.indices[row_index]] = True
 
         bin_update = self.getBinUpdates()
 
@@ -224,23 +223,23 @@ class BinManager:
         # we need a mapping from cid (or local index) to binID
         bin_update = {}
         for row_index in c2b: # load any now-unbinned critters
-            bin_update[self.PM.indicies[row_index]] = c2b[row_index]
+            bin_update[self.PM.indices[row_index]] = c2b[row_index]
             
         for bid in self.getBids():
             for row_index in self.bins[bid].rowIndicies:
-                bin_update[self.PM.indicies[row_index]] = bid
+                bin_update[self.PM.indices[row_index]] = bid
             
         return bin_update
 
 
     def removeBinAndIndicies(self, bid):
-        """Remove indicies from the PM based on bin identity
+        """Remove indices from the PM based on bin identity
         
         "unload" some data
         """
         # get some info
         rem_bin = self.getBin(bid)
-        original_length = len(self.PM.indicies)
+        original_length = len(self.PM.indices)
         rem_list = np.sort(rem_bin.rowIndicies)
         
         # affect the raw data in the PM
@@ -259,10 +258,10 @@ class BinManager:
         """Fix up row index lists which reference into the
         data structure after a call to reduceIndicies
         
-        originalLength is the length of all possible row indicies
-        before the removal (ie self.indicies)
-        oldList is the old list of row indicies
-        remList is the list of indicies to be removed
+        originalLength is the length of all possible row indices
+        before the removal (ie self.indices)
+        oldList is the old list of row indices
+        remList is the list of indices to be removed
         
         BOTH OLD AND REM LIST MUST BE SORTED ASCENDING!
         """
@@ -325,7 +324,7 @@ class BinManager:
         
         # build them back up again
         new_recruits = {} # save new recruits here and update bins in one go
-        for row_index in range(len(self.PM.indicies)):
+        for row_index in range(len(self.PM.indices)):
             if(row_index not in self.PM.binnedRowIndicies):
                 # we can try assign this guy to a bin
                 bid = self.findClosestBin(row_index, cov_centres, k_vals, k_stdevs, bids)
@@ -672,7 +671,7 @@ class BinManager:
                 # bin is full!
                 split_bin = self.makeNewBin(holding_array)
                 for row_index in holding_array:
-                    bin_update[self.PM.indicies[row_index]] = split_bin.id
+                    bin_update[self.PM.indices[row_index]] = split_bin.id
                 bin_stats[split_bin.id] = split_bin.binSize  
                 split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
                 bids.append(split_bin.id)
@@ -683,7 +682,7 @@ class BinManager:
         if(np.size(holding_array) != 0):
             split_bin = self.makeNewBin(holding_array)
             for row_index in holding_array:
-                bin_update[self.PM.indicies[row_index]] = split_bin.id  
+                bin_update[self.PM.indices[row_index]] = split_bin.id  
             bin_stats[split_bin.id] = split_bin.binSize  
             split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
             bids.append(split_bin.id)
@@ -877,7 +876,7 @@ class BinManager:
                             del self.PM.binnedRowIndicies[row_index]
                         else:
                             print bid, row_index, "FUNG"
-                        bin_update[self.PM.indicies[row_index]] = 0 
+                        bin_update[self.PM.indices[row_index]] = 0 
                 bin_stats[bid] = 0
                 del self.bins[bid]
             else:
@@ -1146,7 +1145,7 @@ class BinManager:
     def analyseBinKVariance(self, outlierTrim=0.1, plot=False):
         """Measure within and between bin variance of kmer sigs
         
-        return a list of potentially confounding kmer indicies
+        return a list of potentially confounding kmer indices
         """
         print "    Measuring kmer type variances"        
         means = np.array([])
@@ -1173,27 +1172,27 @@ class BinManager:
         B = np.arange(0, np.size(self.PM.kmerSigs[0]), 1)
         names = self.PM.getMerColNames().split(',')
         
-        # we'd like to find the indicies of the worst 10% for each type so we can ignore them
+        # we'd like to find the indices of the worst 10% for each type so we can ignore them
         # specifically, we'd like to remove the least variable between core kms and the 
         # most variable within core kms.
-        sort_between_indicies = np.argsort(between)
-        sort_within_indicies = np.argsort(within)[::-1]
+        sort_between_indices = np.argsort(between)
+        sort_within_indices = np.argsort(within)[::-1]
         number_to_trim = int(outlierTrim* float(np.size(self.PM.kmerSigs[0])))
         
-        return_indicies =[]
+        return_indices =[]
         for i in range(0,number_to_trim):
-            if(sort_between_indicies[i] not in return_indicies):
-                return_indicies.append(sort_between_indicies[i])
-            if(sort_within_indicies[i] not in return_indicies):
-                return_indicies.append(sort_within_indicies[i]) 
+            if(sort_between_indices[i] not in return_indices):
+                return_indices.append(sort_between_indices[i])
+            if(sort_within_indices[i] not in return_indices):
+                return_indices.append(sort_within_indices[i]) 
         
         if(plot):
             print "BETWEEN"
             for i in range(0,number_to_trim):
-                print names[sort_between_indicies[i]]
+                print names[sort_between_indices[i]]
             print "WITHIN" 
             for i in range(0,number_to_trim):
-                print names[sort_within_indicies[i]] 
+                print names[sort_within_indices[i]] 
 
             plt.figure(1)
             plt.subplot(211)
@@ -1207,7 +1206,7 @@ class BinManager:
             plt.grid()
             plt.show()
 
-        return return_indicies
+        return return_indices
 
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
@@ -1341,590 +1340,7 @@ class BinManager:
 ###############################################################################
 ###############################################################################
 ###############################################################################
-class SOMManager:
-    """Manage multiple SOMs"""
-    def __init__(self,
-                 binManager,
-                 numSoms=3,
-                 somSide=0,
-                 somIterations=1000,
-                 makeBins=True,
-                 load=False
-                 ):
-        # raw data storage
-        self.BM = binManager
-        self.BM.loadBins(makeBins=makeBins,silent=False)
-        self.PM = self.BM.PM
-        self.DM = self.PM.dataManager
 
-        # pointers to various torus maps
-        self.covSoms = {}
-        self.merSoms = {}
-
-        # normalisation / training vectors
-        self.cVecs = None
-        self.cMeans = None
-        self.cStdevs = None
-        self.cMins = None
-        self.cMaxs = None
-
-        self.kVecs = None
-        self.kMeans = None
-        self.kStdevs = None
-        self.kMins = None
-        self.kMaxs = None
-
-        # used for automerged bins
-        self.collapsedMappings = {}
-
-        # misc
-        self.numSoms = 3
-        self.somIterations = somIterations
-        self.covDim = 0
-        self.merDim = 0
-        
-        if(load):
-            # load metadata
-            meta = self.DM.getSOMMetaFields(self.PM.dbFileName)
-            self.somSide = meta['side']
-            self.covDim = meta['covDimension']
-            self.merDim = meta['merDimension']            
-            
-            # load the actual data
-            self.loadSoms(self.DM.getSOMDataInfo(self.PM.dbFileName), meta=meta)
-            
-        else:
-            if(somSide == 0):
-                self.somSide = somSide
-            else:
-                self.somSide = int(np.sqrt(75*len(self.BM.bins)))
-            self.covDim = len(self.PM.transformedCP[0])
-            self.merDim = len(self.PM.kmerSigs[0])
-            
-#------------------------------------------------------------------------------
-# SAVING LOADING
-
-    def loadSoms(self, idsInUse, meta=None):
-        """load a bunch of SOM data in one go"""
-        print "Loading saved SOM data"
-        if(meta is None):
-            meta = getSOMMetaFields(self.PM.dbFileName)
-            self.covDim = meta['covDimension']
-            self.merDim = meta['merDimension']
-        for flavour in ["mer","cov"]:
-            for type in ["weights","regions"]:
-                for index in idsInUse[type][flavour]:
-                    self.loadSomData(index, type=type, flavour=flavour, meta=meta)
-
-    def loadSomData(self, index, type="weights", flavour="mer", meta=None):
-        """Load a saved SOM"""
-        if(meta is None):
-            meta = self.DM.getSOMMetaFields(self.PM.dbFileName)
-            self.covDim = meta['covDimension']
-            self.merDim = meta['merDimension']
-
-        print "    Loading",flavour,type,index
-        data = self.DM.getSOMData(self.PM.dbFileName, index, type, flavour)
-        map = None
-        if(flavour == "mer"):
-            if(index not in self.merSoms):  # make the map if it's not already in the hash
-                map = som.SOM(self.somSide,self.merDim)
-                self.merSoms[index] = map
-            map = self.merSoms[index] 
-        elif(flavour == "cov"):
-            if(index not in self.covSoms):
-                map = som.SOM(self.somSide,self.covDim)
-                self.covSoms[index] = map
-            map = self.covSoms[index]
-            
-        else:
-            raise ge.SOMFlavourException("Unknown SOM flavour: "+flavour)
-        
-        if(type=="weights"):    # make sure we store the data in the right place
-            map.loadWeights(data)
-        elif(type=="regions"):
-            map.loadRegions(data)
-        else:
-            raise ge.SOMTypeException("Unknown SOM type: "+type)      
-
-    def promptOnOverwrite(self, minimal=False):
-        """Check that the user is ok with overwriting the db"""
-        input_not_ok = True
-        valid_responses = ['Y','N']
-        vrs = ",".join([str.lower(str(x)) for x in valid_responses])
-        while(input_not_ok):
-            if(minimal):
-                option = raw_input(" Overwrite? ("+vrs+") : ")
-            else: 
-                
-                option = raw_input(" ****WARNING**** SOMS for database: '"+self.PM.dbFileName+"' exist.\n" \
-                                   " If you continue you *WILL* delete any previous matricies!\n" \
-                                   " Overwrite? ("+vrs+") : ")
-            if(option.upper() in valid_responses):
-                print "****************************************************************"
-                return option.upper()
-            else:
-                print "Error, unrecognised choice '"+option.upper()+"'"
-                minimal = True
-
-    def saveCovWeights(self, index):
-        """Save some coverage weights"""
-        self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
-                                            self.somSide,
-                                            self.covDim,
-                                            self.merDim,
-                                            covWeights={index:self.covSoms[index].getWeights()})
-        
-    def saveMerWeights(self, index):
-        """Save some kmer weights"""
-        self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
-                                            self.somSide,
-                                            self.covDim,
-                                            self.merDim,
-                                            merWeights={index:self.merSoms[index].getWeights()})
-        
-    def saveCovRegions(self, index):
-        """Save some coverage regions"""
-        self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
-                                            self.somSide,
-                                            self.covDim,
-                                            self.merDim,
-                                            covRegions={index:self.covSoms[index].getRegions()})
-        
-    def saveMerRegions(self, index):
-        """Save some coverage regions"""
-        self.PM.dataManager.updateSOMTables(self.PM.dbFileName,
-                                            self.somSide,
-                                            self.covDim,
-                                            self.merDim,
-                                            merRegions={index:self.merSoms[index].getRegions()})
-
-    def loadTrainingVectors(self):
-        """Load and whiten training vectors"""
-        (self.cVecs, self.cMeans, self.cStdevs, self.cMins, self.cMaxs) = self.whiten(self.BM.getCentroidProfiles(mode="cov"))
-        (self.kVecs, self.kMeans, self.kStdevs, self.kMins, self.kMaxs) = self.whiten(self.BM.getCentroidProfiles(mode="mer"))
-
-#------------------------------------------------------------------------------
-# PIPELINING
-    
-    def DoSOMPipeline(self, merge=True, force=False, tag=""):
-        """Wrap the various tasks needed to produce SOMs"""
-        if(not self.buildSomWeights(force=force)):
-            return
-        self.regionalise(force=True)
-        self.findRegionNeighbours(merge=merge)
-        self.validateRegions()
-        if(tag != ""):
-            self.renderWeights(tag)
-            self.renderRegions(tag)
-
-
-#------------------------------------------------------------------------------
-# CLASSIFICATION
-
-    def remapCollapsed(self, bid):
-        """Replace this bid with it's match in the collaped mappings"""
-        while(bid in self.collapsedMappings):
-            bid = self.collapsedMappings[bid]
-        return bid
-
-    def classify(self, rowIndex):
-        """Classify a contig (rowIndex) against the SOMS et al
-        
-        If the soms retuen a clear majority for both profiles 
-        then we just go with that. If there are any problems at all
-        we check the bin stats of all the regions hit by the soms and
-        all of the neighbouring regions. 
-        """
-        # mers first!
-        mc_bids = [{}, {}]
-        choices = [0,0]
-        whiteVectors = [self.whitenKVector(self.PM.kmerSigs[rowIndex]),
-                        self.whitenCVector(self.PM.transformedCP[rowIndex])]
-        soms = (self.merSoms, self.covSoms)
-        for i in range(2):
-            for j in soms[i]:
-                tmp_bid = self.remapCollapsed(soms[i][j].classify(whiteVectors[i]))
-                if(tmp_bid not in mc_bids[i]):
-                    mc_bids[i][tmp_bid] = 1
-                else:
-                    mc_bids[i][tmp_bid] += 1
-            for bid in mc_bids[i]:
-                if(mc_bids[i][bid] > 1):    # choose based on consensus of mer classifications (assumes 3 soms)
-                    choices[i] = self.remapCollapsed(bid)
-                    break
-
-        # if they agree, we are done        
-        if(choices[0] == choices[1] and choices[0] != 0):
-            return (choices[0], "=")
-        
-        # m_choice and c_choice disagree
-        # we will need to make
-        n_query_bids =  []
-        n_query_bids.extend([self.remapCollapsed(i) for i in mc_bids[0].keys() if i not in n_query_bids])
-        n_query_bids.extend([self.remapCollapsed(i) for i in mc_bids[1].keys() if i not in n_query_bids])
-        
-        (classification, info) = self.BM.classify(rowIndex, self.getNeighbours(n_query_bids))
-        classification = self.remapCollapsed(classification)
-        return (classification, "@@"+info)
-
-#------------------------------------------------------------------------------
-# REGIONS
-
-    def regionalise(self, force=False, save=True):
-        """Create regions within the SOMs"""
-        print "    Creating classification regions"
-        if(not force):
-            # first check to see that the
-            ids_in_use = self.DM.getSOMDataInfo(self.PM.dbFileName)
-            soms_done = []
-            for b in ["mer","cov"]:
-                for a in ["weights","regions"]:
-                    soms_done.append(len(ids_in_use[a][b]))
-            if (sum(soms_done) > 0):
-                # something's been done!
-                if(self.promptOnOverwrite() != 'Y'):
-                    print "Operation cancelled"
-                    return False
-                else:
-                    print "Overwriting SOM regions in db:", self.PM.dbFileName
-
-        bids = self.BM.getBids()
-        self.loadTrainingVectors()
-        
-        # build mer regions
-        for i in self.merSoms:
-            self.merSoms[i].regionalise(bids, self.kVecs)
-            if(save):
-                self.saveMerRegions(i)
-            
-        # build coverage regions
-        for i in self.covSoms:
-            self.covSoms[i].regionalise(bids, self.cVecs)
-            if(save):
-                self.saveCovRegions(i)
-
-    def findRegionNeighbours(self, merge=False, printMergers=False):
-        """Find out which regions neighbour which other regions"""
-        print "    Finding region neighbours"
-        mer_Ns = {}
-        cov_Ns = {}
-        self.collapsedMappings = {}
-        # first find out who is next to whom
-        for i in self.merSoms:
-            for N in self.merSoms[i].findRegionNeighbours():
-                if(N in mer_Ns):
-                    mer_Ns[N] += 1
-                else:
-                    mer_Ns[N] = 1
-        for i in self.covSoms:
-            for N in self.covSoms[i].findRegionNeighbours():
-                if(N in cov_Ns):
-                    cov_Ns[N] += 1
-                else:
-                    cov_Ns[N] = 1
-        
-        # now find out who is consistently next to whom
-        combined_Ns = {}
-        for N in mer_Ns:
-            combined_Ns[N] = mer_Ns[N]
-        for N in cov_Ns:
-            if(N in combined_Ns):
-                combined_Ns[N] += cov_Ns[N]
-                
-        # now refine tis search further
-        filtered_Ns = {}
-        for N in combined_Ns:
-            if(combined_Ns[N] >= 4):
-                filtered_Ns[N] = combined_Ns[N]
-
-        
-        # now back it up with some stats
-        for N in filtered_Ns:
-            #print "FN", N, filtered_Ns[N],
-            bin1 = self.BM.getBin(N[0])
-            bin2 = self.BM.getBin(N[1])
-            if(self.BM.shouldMerge(bin1, bin2)):
-            #if(bin1.isSimilar(bin2)): # this test is symmetrical
-                # always map down to the smaller
-                self.collapsedMappings[N[1]] = N[0]
-            #    print True
-            #else:
-            #    print False
-
-        if(printMergers and not merge):
-            ml = self.makeMergeLists(verbose=True)
-            #for mml in ml:
-            #    print mml
-        elif(merge):
-            self.merge()
-
-    def getNeighbours(self, bids=[]):
-        """Return a list of neighbours based on regions"""
-        if(bids == []): return []
-        ret_list = list(bids)
-        for i in self.merSoms:
-            ret_list.extend([i for i in self.merSoms[i].getNeighbours(bids) if i not in ret_list])
-        for i in self.covSoms:
-            ret_list.extend([i for i in self.covSoms[i].getNeighbours(bids) if i not in ret_list])
-        return ret_list
-
-    def validateRegions(self):
-        """Basic validation of regions
-        
-        Classify each contig fromeach bin and see if the classification is
-        correct
-        """
-        print "Validating regions"
-        
-        adds = {}
-        removes = {}
-        
-        self.loadTrainingVectors()
-        bids = self.BM.getBids()
-        for bid in bids:
-            adds[bid] = []
-            removes[bid] = {}
-            bin = self.BM.getBin(bid)
-            tmp_bid = self.remapCollapsed(bid)
-            print "    BID:",bid," (",tmp_bid,"):",
-            total = 0
-            correct = 0
-            incorrect = 0
-            unassigned = 0
-            for row_index in bin.rowIndicies:
-                total += 1
-                (class_bid, info) = self.classify(row_index)
-                print "{",class_bid,
-                if(class_bid == 0):
-                    unassigned += 1
-                elif(class_bid != tmp_bid):
-                    incorrect += 1
-                    print info
-                    removes[bid][row_index] = True
-                    if(class_bid not in adds):
-                        adds[class_bid] = []  
-                    adds[class_bid].append(row_index)
-                else:
-                    correct += 1
-                print "}",
-            print "\nTotal %d, correct: %d, incorrect %d, unassigned %d" % (total,correct,incorrect,unassigned)
-        #print adds
-        #print removes
-        for bid in bids:
-            bin = self.BM.getBin(bid)
-            bin.shuffleMembers(adds[bid], removes[bid])
-        self.BM.saveBins()
-
-    def assignmentMerge(self):
-        """Determine which regions should be merged
-        
-        Classify each contig from each bin and see if the classification is
-        correct. Keep tabs on where it's wrong and use that to choose
-        which regions to merge
-        """
-        self.loadTrainingVectors()
-        bids = self.BM.getBids()
-        total_bids = len (self.BM.getBids())
-        done_bids = 0
-        joins = {}
-        for bid in bids:
-            incorrect_assignments = {}
-            bin = self.BM.getBin(bid)
-            done_bids += 1
-            print "    classifying %d (%d) of %d" % (done_bids, len(bin.rowIndicies), total_bids)
-            for row_index in bin.rowIndicies:
-                (class_bid, info) = self.classify(row_index)
-                if(class_bid != bid):
-                    # incorrect assignment, make note of which bin it was
-                    if(class_bid not in incorrect_assignments):
-                        incorrect_assignments[class_bid] = 1
-                    else:
-                        incorrect_assignments[class_bid] += 1
-            # make tuples of all the incorrect matches,
-            # this way we can find the worst offenders
-            for i in incorrect_assignments:
-                if(incorrect_assignments[i] > 1):
-                    join_key = self.makeNTuple(bid, i)
-                    if(join_key not in joins):
-                        joins[join_key] = incorrect_assignments[i]
-                    else:
-                        joins[join_key] += incorrect_assignments[i]
-                    
-        # sort the possible joins in descending order of number of instances
-        # those with the highest number *should* be the best...
-        import operator
-        sorted_joins = sorted(joins.iteritems(), key=operator.itemgetter(1), reverse=True)
-        for join in sorted_joins:
-            if(join[1] > 2):    # don't take anything too spurious
-                bid1 = self.remapCollapsed(join[0][0])
-                bid2 = self.remapCollapsed(join[0][1])
-                # stop circular mergers
-                if(bid1 != bid2):
-                    bin1 = self.BM.getBin(bid1)
-                    bin2 = self.BM.getBin(bid2)
-                    should_merge = self.BM.shouldMerge(bin1, bin2)
-                    if(should_merge):
-                        print bid1, bid2, join[1], should_merge
-                        rv = self.BM.merge([bid1, bid2], saveBins=True, printInstructions=False)
-                        if(rv == 2):
-                            # merge happened
-                            self.collapsedMappings[bid2] = bid1
-                            
-    def makeNTuple(self, bid1, bid2):
-        """A way for making standard tuples from bids"""
-        if(bid1 < bid2): return (bid1, bid2)
-        return (bid2, bid1)
-            
-#------------------------------------------------------------------------------
-# WEIGHTS 
-
-    def buildSomWeights(self, force=False, save=True, plot=False):
-        """Construct and save the weights matrix""" 
-        if(not force):
-            # first check to see that the
-            ids_in_use = self.DM.getSOMDataInfo(self.PM.dbFileName)
-            soms_done = []
-            for b in ["mer","cov"]:
-                for a in ["weights","regions"]:
-                    soms_done.append(len(ids_in_use[a][b]))
-            if (sum(soms_done) > 0):
-                # something's been done!
-                if(self.promptOnOverwrite() != 'Y'):
-                    print "Operation cancelled"
-                    return False
-                else:
-                    print "Overwriting SOM weights in db:", self.PM.dbFileName
-        
-        # now we can start
-        print "Building %d SOMs of each type (coverage + kmer) with grid side %d," % (self.numSoms, self.somSide) 
-        
-        # get training data
-        self.loadTrainingVectors()
-        
-        # build kmer SOMS
-        for i in range(self.numSoms):
-            print "\n    Training kmer SOM #%d" % i
-            map = som.SOM(self.somSide,self.merDim)
-            self.merSoms[i] = map
-            if(i == 0 and plot):
-                map.train(self.kVecs, iterations=self.somIterations, weightImgFileName="mer")
-            else:
-                map.train(self.kVecs, iterations=self.somIterations)
-            if(save):
-                self.saveMerWeights(i)
-
-        # build coverage SOMS
-        for i in range(self.numSoms):
-            print "\n    Training coverage SOM #%d" % i
-            map = som.SOM(self.somSide,self.covDim)
-            self.covSoms[i] = map
-            if(i == 0 and plot):
-                map.train(self.cVecs, iterations=self.somIterations, weightImgFileName="cov")
-            else:
-                map.train(self.cVecs, iterations=self.somIterations)
-            if(save):
-                self.saveCovWeights(i)
-        print "--"
-        return True
-    
-    def whiten(self, profile):
-        """Z normalize and scale profile columns"""
-        v_mean = np.mean(profile, axis=0)
-        v_std = np.std(profile, axis=0)
-        profile = (profile-v_mean)/v_std
-        v_mins = np.min(profile, axis=0)
-        profile -= v_mins
-        v_maxs = np.max(profile, axis=0)
-        profile /= v_maxs
-        return (profile, v_mean, v_std, v_mins, v_maxs)
-
-    def whitenKVector(self, vector):
-        """Z normalize and scale individual vectors"""
-        vector = (vector-self.kMeans)/self.kStdevs
-        vector = (vector - self.kMins)/self.kMaxs
-        return np.clip(vector,0,1)
-
-    def whitenCVector(self, vector):
-        """Z normalize and scale individual vectors"""
-        vector = (vector-self.cMeans)/self.cStdevs
-        vector = (vector - self.cMins)/self.cMaxs
-        return np.clip(vector,0,1)
-
-#------------------------------------------------------------------------------
-# MERGE BINS
-
-    def makeMergeLists(self, verbose=False):
-        """Use the collapsed mappings to build a set of merging lists"""
-        working_lists = {}
-        for bid in self.collapsedMappings:
-            if(self.collapsedMappings[bid] not in working_lists and bid not in working_lists):
-                # both new!
-                tmp = [self.collapsedMappings[bid], bid]
-                working_lists[self.collapsedMappings[bid]] = tmp
-                working_lists[bid] = tmp
-            elif(self.collapsedMappings[bid] not in working_lists):
-                working_lists[self.collapsedMappings[bid]] = working_lists[bid]
-                working_lists[self.collapsedMappings[bid]].append(self.collapsedMappings[bid])
-            elif(bid not in working_lists):                 
-                working_lists[bid] = working_lists[self.collapsedMappings[bid]]
-                working_lists[bid].append(bid)
-            # else both in already
-        
-        merge_lists = []
-        used_ids = {}
-        for bid in working_lists:
-            if(bid not in used_ids):
-                merge_lists.append(working_lists[bid])
-                for inner_id in working_lists[bid]:
-                    used_ids[inner_id] = True
-        if(verbose):
-            num_reduced = 0
-            for ml in merge_lists:
-                print ml
-                num_reduced += (len(ml) - 1)
-            print "    Merging %d into %d bins, leaving %d bins" % (num_reduced,len(merge_lists),(len(self.BM.bins.keys())-num_reduced))
-        return merge_lists
-
-    def merge(self):
-        """Merge bins, keeping the soms informed of changes"""
-        # self.collapsedMappings is a tree of values where key must be merged with value
-        print "    Merging globally adjacent regions"
-        merge_lists = self.makeMergeLists(verbose=True)
-        for ml in merge_lists:
-            self.BM.merge(ml, auto=True, saveBins=True, printInstructions=False)
-        
-        # remake the regions
-        self.regionalise(force=True)
-        self.findRegionNeighbours(merge=False, printMergers=False)
-
-#------------------------------------------------------------------------------
-# IO and IMAGE RENDERING 
-
-    def renderWeights(self, tag):
-        """Render all the weights for all the SOMS"""
-        for key in self.covSoms.keys():
-            self.covSoms[key].renderWeights(tag+"_covWeights_"+str(key))
-        for key in self.merSoms.keys():
-            self.merSoms[key].renderWeights(tag+"_merWeights_"+str(key))
-
-    def renderRegions(self, tag):
-        """Render all the weights for all the SOMS"""
-        # make the palette
-        palette = self.BM.makeCentroidPalette()
-        for key in self.covSoms.keys():
-            self.covSoms[key].renderRegions(tag+"_covRegions_"+str(key), palette)
-        for key in self.merSoms.keys():
-            self.merSoms[key].renderRegions(tag+"_merRegions_"+str(key), palette)
-    
-    def renderMulti(self, tag):
-        """Render large image including regions bids etc"""
-        pass
-    
-###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
 class ProfileManager:
     """Interacts with the groopm DataManager and local data fields
     
@@ -1937,7 +1353,7 @@ class ProfileManager:
         self.condition = ""                 # condition will be supplied at loading time
         # --> NOTE: ALL of the arrays in this section are in sync
         # --> each one holds information for an individual contig 
-        self.indicies = np.array([])        # indicies into the data structure based on condition
+        self.indices = np.array([])        # indices into the data structure based on condition
         self.covProfiles = np.array([])     # coverage based coordinates
         self.transformedCP = np.array([])   # the munged data points
         self.averageCoverages = np.array([]) # average coverage across all stoits
@@ -1954,8 +1370,8 @@ class ProfileManager:
 
         # meta                
         self.validBinIds = {}               # valid bin ids -> numMembers
-        self.binnedRowIndicies = {}         # dictionary of those indicies which belong to some bin
-        self.restrictedRowIndicies = {}     # dictionary of those indicies which can not be binned yet
+        self.binnedRowIndicies = {}         # dictionary of those indices which belong to some bin
+        self.restrictedRowIndicies = {}     # dictionary of those indices which can not be binned yet
         self.numContigs = 0                 # this depends on the condition given
         self.numStoits = 0                  # this depends on the data which was parsed
 
@@ -1991,9 +1407,9 @@ class ProfileManager:
             self.numStoits = self.getNumStoits()
             self.condition = condition
             if(verbose):
-                print "    Loading indicies (", condition,")"
-            self.indicies = self.dataManager.getConditionalIndicies(self.dbFileName, condition=condition)
-            self.numContigs = len(self.indicies)
+                print "    Loading indices (", condition,")"
+            self.indices = self.dataManager.getConditionalIndicies(self.dbFileName, condition=condition)
+            self.numContigs = len(self.indices)
             
             if(not silent):
                 print "    Working with: %d contigs" % self.numContigs
@@ -2001,7 +1417,7 @@ class ProfileManager:
             if(loadCovProfiles):
                 if(verbose):
                     print "    Loading coverage profiles"
-                self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indicies=self.indicies)
+                self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indices=self.indices)
 
                 # work out average coverages
                 self.averageCoverages = np.array([sum(i)/self.numStoits for i in self.covProfiles])
@@ -2009,7 +1425,7 @@ class ProfileManager:
             if(loadKmerSigs):
                 if(verbose):
                     print "    Loading kmer sigs"
-                self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indicies=self.indicies)
+                self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indices=self.indices)
 
                 if(makeColours):
                     if(verbose):
@@ -2023,18 +1439,18 @@ class ProfileManager:
             if(loadContigNames):
                 if(verbose):
                     print "    Loading contig names"
-                self.contigNames = self.dataManager.getContigNames(self.dbFileName, indicies=self.indicies)
+                self.contigNames = self.dataManager.getContigNames(self.dbFileName, indices=self.indices)
             
             if(loadContigLengths):
                 if(verbose):
                     print "    Loading contig lengths"
-                self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indicies=self.indicies)
+                self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indices=self.indices)
                 print "    Contigs contain %d BP" % ( sum(self.contigLengths) )
             
             if(loadBins):
                 if(verbose):
                     print "    Loading bins"
-                self.binIds = self.dataManager.getBins(self.dbFileName, indicies=self.indicies)
+                self.binIds = self.dataManager.getBins(self.dbFileName, indices=self.indices)
                 if(len(bids) != 0): # need to make sure we're not restricted in terms of bins
                     tmp_bids = self.getBinStats()
                     for bid in bids:
@@ -2042,28 +1458,28 @@ class ProfileManager:
                 else:
                     self.validBinIds = self.getBinStats()
 
-                # fix the binned indicies
+                # fix the binned indices
                 self.binnedRowIndicies = {}
-                for i in range(len(self.indicies)):
+                for i in range(len(self.indices)):
                     if(self.binIds[i] != 0):
                         self.binnedRowIndicies[i] = True 
 
             if(loadCores):
                 if(verbose):
                     print "    Loading core info"
-                self.isCore = self.dataManager.getCores(self.dbFileName, indicies=self.indicies)
+                self.isCore = self.dataManager.getCores(self.dbFileName, indices=self.indices)
             
         except:
             print "Error loading DB:", self.dbFileName, sys.exc_info()[0]
             raise
 
     def reduceIndicies(self, deadRowIndicies):
-        """purge indicies from the data structures
+        """purge indices from the data structures
         
         Be sure that deadRowIndicies are sorted ascending
         """
         # strip out the other values        
-        self.indicies = np.delete(self.indicies, deadRowIndicies, axis=0)
+        self.indices = np.delete(self.indices, deadRowIndicies, axis=0)
         self.covProfiles = np.delete(self.covProfiles, deadRowIndicies, axis=0)
         self.transformedCP = np.delete(self.transformedCP, deadRowIndicies, axis=0)
         self.contigNames = np.delete(self.contigNames, deadRowIndicies, axis=0)
@@ -2198,7 +1614,7 @@ class ProfileManager:
 
         # get the median distance from the origin
         unit_vectors = [(np.cos(i*2*np.pi/self.numStoits),np.sin(i*2*np.pi/self.numStoits)) for i in range(self.numStoits)]
-        for i in range(len(self.indicies)):
+        for i in range(len(self.indices)):
             norm = np.linalg.norm(self.covProfiles[i])
             if(norm != 0):
                 radial = shrinkFn(norm)

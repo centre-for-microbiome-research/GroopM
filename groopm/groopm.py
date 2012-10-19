@@ -63,6 +63,7 @@ import cluster
 import bin
 import dataManagers
 import groopmUtils
+
 ###############################################################################
 ###############################################################################
 ###############################################################################
@@ -117,8 +118,6 @@ class GroopMOptionsParser():
             outlier_check = False
             if(options.mode == 'plot'):
                 plotter = True
-            #elif(options.mode == 'chimera'):
-            #    chimera_check = True
             elif(options.mode == 'outlier'):
                 outlier_check = True
             else:
@@ -131,16 +130,6 @@ class GroopMOptionsParser():
                                outlierCheck=outlier_check,
                                plotter=plotter
                                )
-
-        elif(options.subparser_name == 'makesoms'):
-            # make SOMs
-            print "****************************************************************"
-            print " [[GroopM]] Running in SOM training mode..."
-            print "****************************************************************"
-            BM = dataManagers.BinManager(dbFileName=options.dbname)
-            SM = dataManagers.SOMManager(BM, somSide=options.side, somIterations=options.iterations)
-            do_merge = not options.no_merge
-            SM.DoSOMPipeline(merge=do_merge, force=options.force, tag=options.tag)
 
         elif(options.subparser_name == 'recruit'):
             # make bin cores

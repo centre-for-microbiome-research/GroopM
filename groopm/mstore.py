@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Development"
@@ -121,45 +121,6 @@ class GMDataManager:
     'bid'        : tables.Int32Col(pos=0)
     'numMembers' : tables.Int32Col(pos=1)
 
-    ------------------------
-     SOM
-    group = '/som'
-    ------------------------
-    ** Metadata **
-    table = 'meta'
-    'side'            : tables.Int32Col(pos=1)      # number of rows in the som
-    'covDimension'    : tables.Int32Col(pos=2)      # number of stoits
-    'merDimension'    : tables.Int32Col(pos=3)      # number of mers being used
-    'covWeightIds'    : tables.StringCol(64,pos=4)
-    'merWeightIds'    : tables.StringCol(64,pos=5)
-    'covRegionIds'    : tables.StringCol(64,pos=6)
-    'merRegionIds'    : tables.StringCol(64,pos=7)
-    
-    ** Weights **                                   # raw weights formed from training
-    table = 'covWeights[1,2,3]'                     # 3 SOMS for coverage
-    'col1' : tables.FloatCol(pos=1)
-    'col2' : tables.FloatCol(pos=2)
-    'col3' : tables.FloatCol(pos=3)
-    ...
-    
-    table = 'merWeights[1,2,3]'                     # 3 SOMS for mers too
-    'col1' : tables.FloatCol(pos=1)
-    'col2' : tables.FloatCol(pos=2)
-    ...
-    
-    ** Regions **                                   # maps points in the map to bin ids
-    table = 'covRegions[1,2,3]'
-    'col1' : tables.Int32Col(pos=1)
-    'col2' : tables.Int32Col(pos=2)
-    'col3' : tables.Int32Col(pos=3)
-    ...
-    
-    table = 'merRegions[1,2,3]'
-    'col1' : tables.Int32Col(pos=1)
-    'col2' : tables.Int32Col(pos=2)
-    'col3' : tables.Int32Col(pos=3)
-    ...
-
     """
     def __init__(self): pass
 
@@ -177,6 +138,8 @@ class GMDataManager:
         conParser = ContigParser()
         bamParser = BamParser()
 
+        cid_2_indices ={}
+        
         # make sure we're only overwriting existing DBs with the users consent
         try:
             with open(dbFileName) as f:
@@ -232,7 +195,7 @@ class GMDataManager:
                            'core' : tables.BoolCol(dflt=False, pos=3) }
                 try:
                     CONTIG_table = h5file.createTable(meta_group, 'contigs', db_desc, "Contig information")
-                    self.initContigs(CONTIG_table, contigNames)
+                    cid_2_indices = self.initContigs(CONTIG_table, contigNames)
                 except:
                     print "Error creating CONTIG table:", sys.exc_info()[0]
                     raise
@@ -262,7 +225,7 @@ class GMDataManager:
                     ppos += 1
                 try:
                     COV_table = h5file.createTable(profile_group, 'coverage', db_desc, "Bam based coverage")
-                    bamParser.parse(bamFiles, stoitColNames, COV_table, contigNames)
+                    bamParser.parse(bamFiles, stoitColNames, COV_table, None, contigNames, cid_2_indices)
                 except:
                     print "Error creating coverage table:", sys.exc_info()[0]
                     raise
@@ -308,12 +271,18 @@ class GMDataManager:
         
         set to 0 for no bin assignment
         """
+        cid_2_indices = {}
+        outer_index = 0
         for cid in sorted(contigNames):
             CONTIG_row = table.row
             CONTIG_row['cid'] = cid
             CONTIG_row['length'] = contigNames[cid]
             CONTIG_row.append()
+            
+            cid_2_indices[cid] = outer_index
+            outer_index += 1
         table.flush()
+        return cid_2_indices 
     
     def initMeta(self, table, stoitColNames, numStoits, merColNames, merSize, numMers, numCons):
         """Initialise the meta-data table"""
@@ -346,230 +315,12 @@ class GMDataManager:
             else:
                 print "Error, unrecognised choice '"+option.upper()+"'"
                 minimal = True
-
-#------------------------------------------------------------------------------
-# DB CREATION / INITIALISATION  - SOMS
-
-    def updateSOMTables(self,
-                        dbFileName,
-                        side,
-                        covDim,
-                        merDim,
-                        covWeights={},          # use these to do updates
-                        merWeights={},
-                        covRegions={},
-                        merRegions={}
-                        ):
-        try:
-            # first, make sure we've got a som group`
-            ids_in_use = self.getSOMDataInfo(dbFileName)
-            
-            # now we need to fix the ids_in_use structure to suit our updates
-            for i in covWeights.keys():
-                if i not in ids_in_use["weights"]["cov"]:
-                     ids_in_use["weights"]["cov"].append(i)
-            for i in merWeights.keys():
-                if i not in ids_in_use["weights"]["mer"]:
-                     ids_in_use["weights"]["mer"].append(i)
-            for i in covRegions.keys():
-                if i not in ids_in_use["regions"]["cov"]:
-                     ids_in_use["regions"]["cov"].append(i)
-            for i in merRegions.keys():
-                if i not in ids_in_use["regions"]["mer"]:
-                     ids_in_use["regions"]["mer"].append(i)
-            
-            with tables.openFile(dbFileName, mode='a', rootUEP="/som") as som_group:
-                #------------------------
-                # Metadata
-                #------------------------
-                db_desc = {'side'            : tables.Int32Col(pos=1),
-                           'covDimension'    : tables.Int32Col(pos=2),
-                           'merDimension'    : tables.Int32Col(pos=3),
-                           'covWeightIds'    : tables.StringCol(64,pos=4),
-                           'merWeightIds'    : tables.StringCol(64,pos=5),
-                           'covRegionIds'    : tables.StringCol(64,pos=6),
-                           'merRegionIds'    : tables.StringCol(64,pos=7)
-                           }
-
-                # clear previous metadata
-                # try remove any older failed attempts
-                try:
-                    som_group.removeNode('/', 'tmp_meta')
-                except:
-                    pass
-
-                # make a new tmp table
-                try:
-                    META_table = som_group.createTable('/', 'tmp_meta', db_desc, "SOM metadata")
-                    self.initSOMMeta(META_table, side, covDim, merDim, ids_in_use)
-                except:
-                    print "Error creating META table:", sys.exc_info()[0]
-                    raise
-                # rename as the meta table
-                som_group.renameNode('/', 'meta', 'tmp_meta', overwrite=True)
                 
-                #------------------------
-                # Weights matricies
-                #------------------------
-                for i in covWeights.keys():
-                    self.updateSOMData(som_group, "covWeights"+str(i), covDim, "COVERAGE SOM weights", covWeights[i], type="float")
-                for i in merWeights.keys():
-                    self.updateSOMData(som_group, "merWeights"+str(i), merDim, "KMER SOM weights", merWeights[i], type="float")
-                    
-                #------------------------
-                # Regions
-                #------------------------
-                for i in covRegions.keys():
-                    self.updateSOMData(som_group, "covRegions"+str(i), 1, "COVERAGE SOM regions", covRegions[i], type="int")
-                for i in merRegions.keys():
-                    self.updateSOMData(som_group, "merRegions"+str(i), 1, "KMER SOM regions", merRegions[i], type="int")
-                    
-        except:
-            print "Error creating SOM database:", dbFileName, sys.exc_info()[0]
-            raise
-        
-    def initSOMMeta(self, table, side, covDim, merDim, idsInUse):
-        """Initialise the meta-data table"""
-        META_row = table.row
-        META_row['side'] = side
-        META_row['covDimension'] = covDim
-        META_row['merDimension'] = merDim
-        
-        if(len(idsInUse["weights"]["cov"]) != 0):
-            META_row['covWeightIds'] = ",".join([str(x) for x in idsInUse["weights"]["cov"]])
-        else:
-            META_row['covWeightIds'] = ""
-        
-        if(len(idsInUse["weights"]["mer"]) != 0):
-            META_row['merWeightIds'] = ",".join([str(x) for x in idsInUse["weights"]["mer"]])
-        else:
-            META_row['merWeightIds'] = ""
-        
-        if(len(idsInUse["regions"]["cov"]) != 0):
-            META_row['covRegionIds'] = ",".join([str(x) for x in idsInUse["regions"]["cov"]])
-        else:
-            META_row['covRegionIds'] = ""
-        
-        if(len(idsInUse["regions"]["mer"]) != 0):
-            META_row['merRegionIds'] = ",".join([str(x) for x in idsInUse["regions"]["mer"]])
-        else:
-            META_row['merRegionIds'] = ""
-            
-        META_row.append()
-        table.flush()
-
-    def updateSOMData(self, group, tableName, dimension, description, data, type):
-        """Make a table and update data"""
-        db_desc = {}                # make the db desc dynamically
-        for j in range(dimension):
-            if(type == "float"):
-                db_desc["dim"+str(j)] = tables.FloatCol(pos=j)
-            else:
-                db_desc["dim"+str(j)] = tables.Int32Col(pos=j)
-        try:
-            group.removeNode('/', 'tmp_'+tableName)
-        except:
-            pass
-        try:
-            NEW_table = group.createTable('/', 'tmp_'+tableName, db_desc, description)
-            self.injectSOMData(NEW_table, data, dimension)
-        except:
-            print "Error creating table:", sys.exc_info()[0]
-            raise
-        group.renameNode('/', tableName, 'tmp_'+tableName, overwrite=True)
-
-    def injectSOMData(self, table, data, dimension):
-        """Load SOM data into the database"""
-        for row in data:
-            for val in row:
-                DATA_row = table.row
-                for i in range(dimension):
-                    DATA_row["dim"+str(i)] = val[i]
-                DATA_row.append()
-        table.flush()
-
-#------------------------------------------------------------------------------
-# GET / SET DATA TABLES - PROFILES 
-
-    def getSOMDataInfo(self, dbFileName):
-        """Return the numbers and types of soms stored in the database"""
-        ids_in_use = { "weights" : { "mer":[], "cov":[] }, "regions": { "mer" : [], "cov": [] } }
-        # open the database
-        try:
-            with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
-                # open the som table                  
-                try:
-                    som_group = h5file.createGroup("/", 'som', 'SOM data')
-                except:
-                    # we already have a group, so we should assume that there is 
-                    # a meta table associated with this group. Read that to get the
-                    # Ids currently in use
-                    try:
-                        tmp_table = h5file.root.som._f_getChild('meta')
-                        meta_row = h5file.root.som.meta.read(start=0, stop=1, step=1)[0]
-                        if(len(meta_row[3]) > 0):
-                            ids_in_use["weights"]["cov"] = [int(x) for x in meta_row[3].split(",")]
-                        if(len(meta_row[4]) > 0):
-                            ids_in_use["weights"]["mer"] = [int(x) for x in meta_row[4].split(",")]
-                        if(len(meta_row[5]) > 0):
-                            ids_in_use["regions"]["cov"] = [int(x) for x in meta_row[5].split(",")]
-                        if(len(meta_row[6]) > 0):
-                            ids_in_use["regions"]["mer"] = [int(x) for x in meta_row[6].split(",")]
-                    except: pass
-        except:
-            print "Error creating SOM database:", dbFileName, sys.exc_info()[0]
-            raise
-        return ids_in_use
-
-    def getSOMMetaFields(self, dbFileName):
-        """return the value of fieldName in the SOM metadata tables"""
-        ret_hash = {'side': -1,
-                    'covDimension' : -1,
-                    'merDimension' : -1
-                    }
-        try:
-            with tables.openFile(dbFileName, mode='r') as h5file:
-                # theres only one value
-                meta_row = h5file.root.som.meta.read(start=0, stop=1, step=1)[0]
-                ret_hash['side'] = meta_row[0]
-                ret_hash['covDimension'] = meta_row[1]
-                ret_hash['merDimension'] = meta_row[2]
-        except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
-            raise
-        return ret_hash
-        
-    def getSOMData(self, dbFileName, index, type="weights", flavour="mer"):
-        """Load SOM data from the database"""
-        # make sure that this table exists
-        ids_in_use = self.getSOMDataInfo(dbFileName)
-        if index not in ids_in_use[type][flavour]:
-            raise ge.SOMDataNotFoundException("No such fish:",flavour,type,index)
-
-        # work out the dimensions of the data
-        meta_fields = self.getSOMMetaFields(dbFileName)
-        dimension = meta_fields['merDimension']
-        if(flavour == "cov"):
-             dimension = meta_fields['covDimension']
-        
-        # now get the data
-        table_name = flavour+type.title()+str(index) 
-        with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
-            table = h5file.root.som._f_getChild(table_name)
-            if(type=="weights"):
-                data = np.reshape(np.array([list(x) for x in table.read()]), (meta_fields['side'],meta_fields['side'],dimension))
-            elif(type == "regions"):
-                data = np.reshape(np.array([list(x) for x in table.read()]), (meta_fields['side'],meta_fields['side'],1))
-            else:
-                raise ge.SOMTypeException("Unknown SOM type: "+type)
-            return data
-        return np.array([])
-    
 #------------------------------------------------------------------------------
 # GET / SET DATA TABLES - PROFILES 
 
     def getConditionalIndicies(self, dbFileName, condition=''):
-        """return the indicies into the db which meet the condition"""
+        """return the indices into the db which meet the condition"""
         if('' == condition):
             condition = "cid != ''" # no condition breaks everything!
         try:
@@ -579,12 +330,12 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
 
-    def getCoverageProfiles(self, dbFileName, condition='', indicies=np.array([])):
+    def getCoverageProfiles(self, dbFileName, condition='', indices=np.array([])):
         """Load coverage profiles"""
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
-                if(np.size(indicies) != 0):
-                    return np.array([list(h5file.root.profile.coverage[x]) for x in indicies])
+                if(np.size(indices) != 0):
+                    return np.array([list(h5file.root.profile.coverage[x]) for x in indices])
                 else:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
@@ -641,7 +392,7 @@ class GMDataManager:
                            'length' : tables.Int32Col(pos=2),
                            'core' : tables.BoolCol(dflt=False, pos=3) }
                 CONTIG_table = meta_group.createTable('/', 'tmp_contigs', db_desc, "Contig information", expectedrows=len(contig_names))
-                self.initContigs(CONTIG_table, contig_names)
+                cid_2_indices = self.initContigs(CONTIG_table, contig_names)
                 # do the rename
                 meta_group.renameNode('/', 'contigs', 'tmp_contigs', overwrite=True)
                 
@@ -724,12 +475,12 @@ class GMDataManager:
         return {}
         
                 
-    def getBins(self, dbFileName, condition='', indicies=np.array([])):
+    def getBins(self, dbFileName, condition='', indices=np.array([])):
         """Load per-contig bins"""
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
-                if(np.size(indicies) != 0):
-                    return np.array([h5file.root.meta.contigs[x][1] for x in indicies]).ravel()
+                if(np.size(indices) != 0):
+                    return np.array([h5file.root.meta.contigs[x][1] for x in indices]).ravel()
                 else:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
@@ -757,12 +508,12 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
 
-    def getCores(self, dbFileName, condition='', indicies=np.array([])):
+    def getCores(self, dbFileName, condition='', indices=np.array([])):
         """Load bin core info"""
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
-                if(np.size(indicies) != 0):
-                    return np.array([h5file.root.meta.contigs[x][3] for x in indicies]).ravel()
+                if(np.size(indices) != 0):
+                    return np.array([h5file.root.meta.contigs[x][3] for x in indices]).ravel()
                 else:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
@@ -790,12 +541,12 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
 
-    def getContigNames(self, dbFileName, condition='', indicies=np.array([])):
+    def getContigNames(self, dbFileName, condition='', indices=np.array([])):
         """Load contig names"""
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
-                if(np.size(indicies) != 0):
-                    return np.array([h5file.root.meta.contigs[x][0] for x in indicies]).ravel()
+                if(np.size(indices) != 0):
+                    return np.array([h5file.root.meta.contigs[x][0] for x in indices]).ravel()
                 else:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
@@ -804,12 +555,12 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
 
-    def getContigLengths(self, dbFileName, condition='', indicies=np.array([])):
+    def getContigLengths(self, dbFileName, condition='', indices=np.array([])):
         """Load contig lengths"""
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
-                if(np.size(indicies) != 0):
-                    return np.array([h5file.root.meta.contigs[x][2] for x in indicies]).ravel()
+                if(np.size(indices) != 0):
+                    return np.array([h5file.root.meta.contigs[x][2] for x in indices]).ravel()
                 else:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
@@ -818,12 +569,12 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, sys.exc_info()[0]
             raise
 
-    def getKmerSigs(self, dbFileName, condition='', indicies=np.array([])):
+    def getKmerSigs(self, dbFileName, condition='', indices=np.array([])):
         """Load kmer sigs"""
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
-                if(np.size(indicies) != 0):
-                    return np.array([list(h5file.root.profile.kms[x]) for x in indicies])
+                if(np.size(indices) != 0):
+                    return np.array([list(h5file.root.profile.kms[x]) for x in indices])
                 else:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
@@ -1030,8 +781,12 @@ class ContigParser:
         """Do the heavy lifting of parsing"""
         print "Parsing contigs"        
         tmp_storage = {} # save everything here first so we can sort accordingly
+        #breakout = 0
         for cid,seq,qual in self.readfq(contigFile):
-            tmp_storage[cid] = (kse.getKSig(seq.upper()), len(seq)) 
+            #breakout+=1
+            tmp_storage[cid] = (kse.getKSig(seq.upper()), len(seq))
+            #if breakout > 100:
+            #    break  
         
         con_names = {}
         for cid in sorted(tmp_storage.keys()):     
@@ -1142,28 +897,29 @@ class BamParser:
 
     def __init__(self): pass
     
-    def parse(self, bamFiles, stoitColNames, table, contigNames):
+    def parse(self, bamFiles, stoitColNames, covTable, linksTable, contigNames, cid2Indices):
         """Parse multiple bam files and store the results in the main DB
         
         table: a table in an open h5 file like "CID,COV_1,...,COV_n,length"
         stoitColNames: names of the COV_x columns
         """
+        print "Importing BAM files"
         from bamtyper.utilities import BamParser as BTBP
         BP = BTBP()
-        (filtered_links, ref_lengths, total_coverages) = BP.getLinks(bamFiles, full=False, doCoverage=True)
+        (links, ref_lengths, coverages) = BP.getLinks(bamFiles, full=False, verbose=True, doCoverage=True)
 
         # go through all the contigs sorted by name and write to the DB
         rows_created = 0
         try:
             for cid in sorted(contigNames.keys()):
                 # make a new row
-                cov_row = table.row
+                cov_row = covTable.row
                 # punch in the data
                 for i in range(0,len(stoitColNames)):
-                    cov_row[stoitColNames[i]] = total_coverages[i][cid]
+                    cov_row[stoitColNames[i]] = coverages[i][cid]
                 cov_row.append()
                 rows_created += 1
-            table.flush()
+            covTable.flush()
         except:
             print "Error saving results to DB"
             raise
