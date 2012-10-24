@@ -206,7 +206,7 @@ class ClusterEngine:
                     if self.isGoodBin(total_BP, num_contigs, ms=5):   # Can we trust very small bins?.
 
                         # time to make a bin
-                        bin = self.BM.makeNewBin(rowIndicies=center_row_indices)
+                        bin = self.BM.makeNewBin(rowIndices=center_row_indices)
                         #MM__print "NEW:", total_BP, len(center_row_indices)
                         # work out the distribution in points in this bin
                         bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)     
@@ -237,13 +237,13 @@ class ClusterEngine:
                             if(True):#self.debugPlots):          
                                 bin.plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName="P_BIN_%d"%(bin.id))
 
-                            # append this bins list of mapped rowIndicies to the main list
+                            # append this bins list of mapped rowIndices to the main list
                             self.updatePostBin(bin)
                             num_below_cutoff = 0
                             print "%04d"%bin_size,
                         else:
                             # we just throw these indices away for now
-                            self.restrictRowIndicies(bin.rowIndicies)
+                            self.restrictRowIndicies(bin.rowIndices)
                             self.BM.deleteBins([bin.id], force=True)
                             num_below_cutoff += 1
                             print str(bin_size).rjust(4,'X'),
@@ -971,7 +971,7 @@ class ClusterEngine:
     
     def updatePostBin(self, bin):
         """Update data structures after assigning contigs to a new bin"""
-        for row_index in bin.rowIndicies:
+        for row_index in bin.rowIndices:
             self.setRowIndexAssigned(row_index)
             
     def setRowIndexAssigned(self, rowIndex):

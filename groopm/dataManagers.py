@@ -93,6 +93,9 @@ class BinManager:
         # all about bins
         self.nextFreeBinId = 0                      # increment before use!
         self.bins = {}                              # bid -> Bin
+        
+        # linking row indices to bids
+        self.r2b = {}
 
 #------------------------------------------------------------------------------
 # LOADING / SAVING
@@ -193,7 +196,7 @@ class BinManager:
         """
         bin_updates = {}
         for bid in self.getBids():
-            bin_updates[bid] = np.size(self.bins[bid].rowIndicies)
+            bin_updates[bid] = np.size(self.bins[bid].rowIndices)
         self.PM.saveValidBinIds(bin_updates)
 
     def updateBinStats(self, updates):
@@ -218,6 +221,20 @@ class BinManager:
 
         return (bin_update, core_update)
 
+    def makeR2BLookup(self):
+        """Get a list of row indicies to bin ids"""
+        self.r2b = {}
+        bids = self.getBids()
+        for bid in bids:
+            bin = self.getBin(bid)
+            for row_index in bin.rowIndices:
+                self.r2b[row_index] = bid
+                
+        # do the unbinned guys too
+        for i in range(len(self.PM.indices)):
+            if i not in self.r2b:
+                self.r2b[i] = 0
+
     def getBinUpdates(self, c2b={}):
         """Merge the bids, raw DB indexes and core information so we can save to disk"""
         # we need a mapping from cid (or local index) to binID
@@ -226,7 +243,7 @@ class BinManager:
             bin_update[self.PM.indices[row_index]] = c2b[row_index]
             
         for bid in self.getBids():
-            for row_index in self.bins[bid].rowIndicies:
+            for row_index in self.bins[bid].rowIndices:
                 bin_update[self.PM.indices[row_index]] = bid
             
         return bin_update
@@ -240,7 +257,7 @@ class BinManager:
         # get some info
         rem_bin = self.getBin(bid)
         original_length = len(self.PM.indices)
-        rem_list = np.sort(rem_bin.rowIndicies)
+        rem_list = np.sort(rem_bin.rowIndices)
         
         # affect the raw data in the PM
         self.PM.reduceIndicies(rem_list)
@@ -249,9 +266,9 @@ class BinManager:
         # remove the bin here
         del self.bins[bid]
         
-        # now fix all the rowIndicies in all the other bins
+        # now fix all the rowIndices in all the other bins
         for bid in self.getBids():
-            self.bins[bid].rowIndicies = self.fixRowIndexLists(original_length, np.sort(self.bins[bid].rowIndicies), rem_list)
+            self.bins[bid].rowIndices = self.fixRowIndexLists(original_length, np.sort(self.bins[bid].rowIndices), rem_list)
 
 
     def fixRowIndexLists(self, originalLength, oldList, remList):
@@ -276,6 +293,42 @@ class BinManager:
                 old_list_index += 1
         return new_list
 
+#------------------------------------------------------------------------------
+# LINKS
+
+    def getLinkingContigs(self, bid):
+        """Get all contigs and their bin IDs which link to contigs in this bin"""
+        condition = ""
+        bin = self.getBin(bid)
+        bin2count = {}
+        for row_index in bin.rowIndices:
+            if row_index in self.PM.links: 
+                for link in self.PM.links[row_index]:
+                    link_bid = self.r2b[link[0]] 
+                    if link_bid != bid and link_bid != 0:
+                        if link_bid in bin2count: 
+                            bin2count[link_bid] += 1
+                        else:
+                            bin2count[link_bid] = 1
+        return bin2count
+    
+    def getAllLinks(self):
+        """Return a sorted array of all links between all bins"""
+        bids = self.getBids()
+        # first, work out who links with whom...       
+        all_links = {}
+        for bid in bids:
+            links = self.getLinkingContigs(bid)
+            # links is a hash of type bid : num_links
+            for link in links:
+                key = self.makeBidKey(bid, link)
+                if key not in all_links:
+                    all_links[key] = links[link]
+    
+        # sort and return
+        import operator                 
+        return sorted(all_links.iteritems(), key=operator.itemgetter(1), reverse=True)
+       
 #------------------------------------------------------------------------------
 # BIN EXPANSION
 
@@ -302,7 +355,6 @@ class BinManager:
                     # this is a legit guy!
                     network[bids[i]][0].append(bids[j])
                     network[bids[i]][1].append(neigbour_dists[i,j])
-        
         return network
 
     def recruitContigs(self, saveBins=False):
@@ -337,7 +389,7 @@ class BinManager:
         # now update all the bins
         for bid in bids:
             if(bid in new_recruits):
-                self.bins[bid].rowIndicies = np.sort(np.append(self.bins[bid].rowIndicies, np.array(new_recruits[bid])))
+                self.bins[bid].rowIndices = np.sort(np.append(self.bins[bid].rowIndices, np.array(new_recruits[bid])))
                 
         # now save
         if(saveBins):
@@ -458,25 +510,82 @@ class BinManager:
     def autoCondenseBins(self, searchSpan):
         """Automagically condense bins"""
         print "Condense cores [begin: %d]" % len(self.bins)
-        all_dists = self.findAllNeighbours(searchSpan)
         condense_map = {}   # keep track of where bin ids go to
-        for key in all_dists.keys():
-            bin1_id = key[0]
-            bin2_id = key[1]
-            if(bin1_id in condense_map):
-                bin1_id = condense_map[bin1_id]
-            if(bin2_id in condense_map):
-                bin2_id = condense_map[bin2_id]
+        self.makeR2BLookup()
+        sorted_links = self.getAllLinks()
+        for link in sorted_links:
+            bid1 = link[0][0]
+            bid2 = link[0][1]
+            if(bid1 in condense_map):
+                bid1 = condense_map[bid1]
+            if(bid2 in condense_map):
+                bid2 = condense_map[bid2]
 
-            if(bin1_id != bin2_id):
-                if(self.shouldMerge(self.getBin(bin1_id), self.getBin(bin2_id))):
-                    # merge!
-                    self.merge([bin1_id,bin2_id], auto=True, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=False)
-                    condense_map[bin2_id] = bin1_id # add this one in so we know how to map it next time
-                    for key in condense_map:
-                        if condense_map[key] == bin2_id:
-                            # bin2 consumed this key, so we'll need to update it
-                            condense_map[key] = bin1_id
+            # check that everything still makes sense
+            if(bid1 != bid2):
+                if bid1 in self.bins and bid2 in self.bins:
+                    num_links = link[1]
+                    print "[", bid1, ",", self.bins[bid1].binSize, "] [", bid2, ",", self.bins[bid2].binSize, "]", link[1], "::", link, "::"
+                    self.bins[bid1].printBin(self.PM.contigNames, self.PM.contigLengths)
+                    self.bins[bid2].printBin(self.PM.contigNames, self.PM.contigLengths)
+                    merTol = 0
+                    if self.getBin(bid1).binSize > self.getBin(bid2).binSize:
+                        big_bin = self.getBin(bid1)
+                        small_bin = self.getBin(bid2)
+                    else:
+                        big_bin = self.getBin(bid2)
+                        small_bin = self.getBin(bid1)
+                    
+                    # if there are a significant number of linking contigs then 
+                    # we can do a kmer tolerance based merge test
+                    if 2 * num_links > small_bin.binSize:
+                        mer_tol = 4
+                    else:
+                        # otherwise, we need to be a bit more strict
+                        mer_tol = 0
+                    
+                    if self.shouldMerge(big_bin, small_bin, merTol=mer_tol, verbose=True):
+                        print "MERGE"
+                        # merge!
+                        self.merge([bid1,bid2], auto=True, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=False)
+                        condense_map[bid2] = bid1 # add this one in so we know how to map it next time
+                        for key in condense_map:
+                            if condense_map[key] == bid2:
+                                # bin2 consumed this key, so we'll need to update it
+                                condense_map[key] = bid1
+                    print "===="
+            
+        return
+        all_dists = self.findAllNeighbours(searchSpan)
+        for key in all_dists.keys():
+            bid1 = key[0]
+            bid2 = key[1]
+            if(bid1 in condense_map):
+                bid1 = condense_map[bid1]
+            if(bid2 in condense_map):
+                bid2 = condense_map[bid2]
+
+            if(bid1 != bid2):
+                links = {}
+                if bid1 in self.bins and bid2 in self.bins:
+                    print key, all_dists[key] 
+                    links = self.getLinkingContigs(bid1)
+                    self.bins[bid1].printBin(self.PM.contigNames, self.PM.contigLengths)
+                    self.bins[bid2].printBin(self.PM.contigNames, self.PM.contigLengths)
+                    for link in links:
+                        print bid1, link, links[link]
+    
+                    if self.shouldMerge(self.getBin(bid1), self.getBin(bid2), verbose=True):
+                        print "MERGE"
+                        # merge!
+                        self.merge([bid1,bid2], auto=True, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=False)
+                        condense_map[bid2] = bid1 # add this one in so we know how to map it next time
+                        for key in condense_map:
+                            if condense_map[key] == bid2:
+                                # bin2 consumed this key, so we'll need to update it
+                                condense_map[key] = bid1
+    
+                    print "----"
 
     def removeOutliers(self, saveBins=False, remove=False):
         """Identify and remove outlying contigs in each bin"""
@@ -494,8 +603,8 @@ class BinManager:
                 # we delete these guys!
                 contigs_removed += lo
                 bins_affected += 1
-                nri = np.array([i for i in bin.rowIndicies if i not in outliers])
-                bin.rowIndicies = nri
+                nri = np.array([i for i in bin.rowIndices if i not in outliers])
+                bin.rowIndices = nri
                 bin.binSize = original_size - lo
                 for i in outliers:
                     updates[i] = 0  # this will set the bid to 0 when we save
@@ -642,9 +751,9 @@ class BinManager:
         bin = self.getBin(bid)
         obs = np.array([])
         if(mode=='kmer'):
-            obs = np.array([self.PM.kmerVals[i] for i in bin.rowIndicies])
+            obs = np.array([self.PM.kmerVals[i] for i in bin.rowIndices])
         elif(mode=='cov'):
-            obs = np.array([self.PM.covProfiles[i] for i in bin.rowIndicies])
+            obs = np.array([self.PM.covProfiles[i] for i in bin.rowIndices])
         
         # do the clustering
         from scipy.cluster.vq import kmeans,vq
@@ -677,7 +786,7 @@ class BinManager:
                 bids.append(split_bin.id)
                 holding_array = np.array([])
                 current_group = idx[i]
-            holding_array = np.append(holding_array, bin.rowIndicies[i])
+            holding_array = np.append(holding_array, bin.rowIndices[i])
         # do the last one
         if(np.size(holding_array) != 0):
             split_bin = self.makeNewBin(holding_array)
@@ -741,11 +850,13 @@ class BinManager:
 
         return actual_dists
 
-    def shouldMerge(self, bin1, bin2, ignoreCov=False, ignoreMer=False, confidence=0.95, verbose=False):
+    def shouldMerge(self, bin1, bin2, ignoreCov=False, ignoreMer=False, merTol=0, confidence=0.95, verbose=False):
         """Determine whether its wise to merge two bins
         
         Perfoms a one-way anova to determine if the larger bin would be 
         significantly changed if it consumed the smaller
+        
+        OR does a tolerance test on kmervals. We assume that bin1 is larger than bin2
         """
         if(bin1.id != bin2.id):
             if not ignoreCov: # work out coverage distributions
@@ -755,18 +866,38 @@ class BinManager:
                 if(bin1.binSize < bin2.binSize):
                     c_dist_1 = b2_c_dist
                 c_dist_2 = np.append(b2_c_dist, b1_c_dist)
-                cov_match = self.isSameVariance(c_dist_1, c_dist_2, confidence=confidence, verbose=verbose) 
+                if verbose:
+                    tag = "COV:"
+                else:
+                    tag = "" 
+                cov_match = self.isSameVariance(c_dist_1, c_dist_2, confidence=confidence, tag=tag) 
             else:
                 cov_match = True
                 
-            if not ignoreMer: # work out kmer distributions   
-                b1_k_dist = bin1.getkmerValDist(self.PM.kmerVals) 
-                b2_k_dist = bin2.getkmerValDist(self.PM.kmerVals)
-                k_dist_1 = b1_k_dist
-                if(bin1.binSize < bin2.binSize):
-                    k_dist_1 = b2_k_dist
-                k_dist_2 = np.append(b2_k_dist, b1_k_dist)
-                mer_match = self.isSameVariance(k_dist_1, k_dist_2, confidence=confidence, verbose=verbose)
+            if not ignoreMer: # work out kmer distributions
+                if not cov_match:
+                    return False
+                if merTol != 0:
+                    # Tolerance based testing
+                    upper_k_val_cut = bin1.kValMean + merTol * bin1.kValStdev
+                    lower_k_val_cut = bin1.kValMean - merTol * bin1.kValStdev
+                
+                    if bin2.kValMean >= lower_k_val_cut and bin2.kValMean <= upper_k_val_cut:
+                        mer_match = True
+                    else:
+                        mer_match = False
+                else:                   
+                    b1_k_dist = bin1.getkmerValDist(self.PM.kmerVals) 
+                    b2_k_dist = bin2.getkmerValDist(self.PM.kmerVals)
+                    k_dist_1 = b1_k_dist
+                    if(bin1.binSize < bin2.binSize):
+                        k_dist_1 = b2_k_dist
+                    k_dist_2 = np.append(b2_k_dist, b1_k_dist)
+                    if verbose:
+                        tag = "MER: %0.4f %0.4f" % (np.mean(k_dist_2), np.std(k_dist_2))
+                    else:
+                        tag = "" 
+                    mer_match = self.isSameVariance(k_dist_1, k_dist_2, confidence=confidence, tag=tag)
             else:
                 mer_match = True
                 
@@ -774,12 +905,12 @@ class BinManager:
          
         return False
 
-    def isSameVariance(self, dist1, dist2, confidence=0.95, verbose=False):
+    def isSameVariance(self, dist1, dist2, confidence=0.95, tag=""):
         """Test to see if the kmerValues for two bins are the same"""
         F_cutoff =  distributions.f.ppf(confidence, 2, len(dist1)+len(dist2)-2)
         F_value = f_oneway(dist1,dist2)[0]
-        if verbose:
-           print "[V: %f, C: %f]" % (F_value, F_cutoff)
+        if tag != "":
+           print "%s [V: %f, C: %f]" % (tag, F_value, F_cutoff)
         return F_value < F_cutoff
 
     def merge(self, bids, auto=False, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=True):
@@ -819,7 +950,7 @@ class BinManager:
                 ret_val = 2
                 continue_merge = True
             else:
-                tmp_bin = self.makeNewBin(np.concatenate([parent_bin.rowIndicies,dead_bin.rowIndicies]))
+                tmp_bin = self.makeNewBin(np.concatenate([parent_bin.rowIndices,dead_bin.rowIndices]))
                 tmp_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
                 self.plotSideBySide([parent_bin.id,dead_bin.id,tmp_bin.id])
                 self.deleteBins([tmp_bin.id], force=True)
@@ -845,6 +976,12 @@ class BinManager:
             self.updateBinStats(bin_stats)
             self.saveBins(doCores=False, saveBinStats=False)
             
+        # now fix up the r2b indices
+        if self.r2b != {}:
+            parent_bid = parent_bin.id
+            for row_index in self.r2b:
+                if self.r2b[row_index] in bids:
+                    self.r2b[row_index] = parent_bid 
         return ret_val
 
     def makeBidKey(self, bid1, bid2):
@@ -871,7 +1008,7 @@ class BinManager:
         for bid in bids:
             if bid in self.bins:
                 if(freeBinnedRowIndicies):
-                    for row_index in self.bins[bid].rowIndicies:
+                    for row_index in self.bins[bid].rowIndices:
                         if row_index in self.PM.binnedRowIndicies:
                             del self.PM.binnedRowIndicies[row_index]
                         else:
@@ -887,12 +1024,12 @@ class BinManager:
             self.PM.saveBinIds(bin_update)
         return True
         
-    def makeNewBin(self, rowIndicies=np.array([]), bid=None):
+    def makeNewBin(self, rowIndices=np.array([]), bid=None):
         """Make a new bin and add to the list of existing bins"""
         if bid is None:
             self.nextFreeBinId +=1
             bid = self.nextFreeBinId
-        self.bins[bid] = bin.Bin(rowIndicies, bid, self.PM.scaleFactor-1)        
+        self.bins[bid] = bin.Bin(rowIndices, bid, self.PM.scaleFactor-1)        
         return self.bins[bid]
 
 #------------------------------------------------------------------------------
@@ -1120,7 +1257,7 @@ class BinManager:
         for bid in self.getBids():
             add_bin = True
             if krange is not None:
-                ave_kval = np.mean([self.PM.kmerVals[row_index] for row_index in self.bins[bid].rowIndicies])
+                ave_kval = np.mean([self.PM.kmerVals[row_index] for row_index in self.bins[bid].rowIndices])
                 if ave_kval < k_low or ave_kval > k_high:
                     add_bin = False
             if add_bin:
@@ -1129,7 +1266,7 @@ class BinManager:
                 bin_centroid_colours = np.append(bin_centroid_colours, 
                                                  np.mean([
                                                           self.PM.contigColours[row_index] for row_index in 
-                                                          self.bins[bid].rowIndicies
+                                                          self.bins[bid].rowIndices
                                                           ],
                                                          axis=0)
                                                  )
@@ -1155,7 +1292,7 @@ class BinManager:
         # work out the mean and stdev for the kmer sigs for each bin
         for bid in self.getBids():
             bkworking = np.array([])
-            for row_index in self.bins[bid].rowIndicies:
+            for row_index in self.bins[bid].rowIndices:
                 bkworking = np.append(bkworking, self.PM.kmerSigs[row_index])
             bkworking = np.reshape(bkworking, (self.bins[bid].binSize, np.size(self.PM.kmerSigs[0])))
             bids = np.append(bids, [bid])
@@ -1240,7 +1377,7 @@ class BinManager:
         # handle the headers first
         separator = "\t"
         if(outFormat == 'summary'):
-            print separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"kMean\"","\"kStdev\""]) 
+            print separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"cMean\"","\"cStdev\"","\"kMean\"","\"kStdev\""]) 
         elif(outFormat == 'minimal'):
             print separator.join(["#\"bid\"","\"cid\"","\"length\""])            
         elif(outFormat == 'full'):
@@ -1602,8 +1739,23 @@ class ProfileManager:
 
     def getLinks(self):
         """Get contig links"""
-        return self.dataManager.restoreLinks(self.dbFileName, self.indices)
-    
+        # first we get the absolute links
+        absolute_links = self.dataManager.restoreLinks(self.dbFileName, self.indices)
+        # now convert this into plain old row_indices
+        reverse_index_lookup = {} 
+        for i in range(len(self.indices)):
+            reverse_index_lookup[self.indices[i]] = i
+
+        # now convert the absolute links to local ones
+        relative_links = {}
+        for cid in absolute_links:
+            local_cid = reverse_index_lookup[cid]
+            relative_links[local_cid] = []
+            for link in absolute_links[cid]:
+                relative_links[local_cid].append([reverse_index_lookup[link[0]], link[1], link[2], link[3]])
+
+        return relative_links
+                 
 #------------------------------------------------------------------------------
 # DATA TRANSFORMATIONS 
 
