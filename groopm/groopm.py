@@ -3,7 +3,7 @@
 #                                                                             #
 #    groopm.py                                                                #
 #                                                                             #
-#    Implements groopm shell and wraps coarse workflows                       #
+#    Wraps coarse workflows                                                   #
 #                                                                             #
 #    Copyright (C) Michael Imelfort                                           #
 #                                                                             #
@@ -63,6 +63,7 @@ import cluster
 import bin
 import dataManagers
 import groopmUtils
+
 ###############################################################################
 ###############################################################################
 ###############################################################################
@@ -77,8 +78,7 @@ import groopmUtils
 ###############################################################################
 
 class GroopMOptionsParser():
-    def __init__(self):
-        return
+    def __init__(self): pass
     
     def parseOptions(self, options ):
 
@@ -118,8 +118,6 @@ class GroopMOptionsParser():
             outlier_check = False
             if(options.mode == 'plot'):
                 plotter = True
-            #elif(options.mode == 'chimera'):
-            #    chimera_check = True
             elif(options.mode == 'outlier'):
                 outlier_check = True
             else:
@@ -133,23 +131,14 @@ class GroopMOptionsParser():
                                plotter=plotter
                                )
 
-        elif(options.subparser_name == 'makesoms'):
-            # make SOMs
-            print "****************************************************************"
-            print " [[GroopM]] Running in SOM training mode..."
-            print "****************************************************************"
-            BM = dataManagers.BinManager(dbFileName=options.dbname)
-            SM = dataManagers.SOMManager(BM, somSide=options.side, somIterations=options.iterations)
-            do_merge = not options.no_merge
-            SM.DoSOMPipeline(merge=do_merge, force=options.force, tag=options.tag)
-
-        elif(options.subparser_name == 'expand'):
+        elif(options.subparser_name == 'recruit'):
             # make bin cores
             print "****************************************************************"
             print " [[GroopM]] Running in bin expansion mode..."
             print "****************************************************************"
-            CE = cluster.ClusterEngine(options.dbname)
-            CE.expandBins(force=options.force)
+            BM = dataManagers.BinManager(dbFileName=options.dbname)
+            BM.loadBins(makeBins=True, silent=False, cutOff=options.cutoff)
+            BM.recruitContigs(saveBins=True)
         
         elif(options.subparser_name == 'extract'):
             # Extract data

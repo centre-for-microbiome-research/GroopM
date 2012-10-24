@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 ###############################################################################
 #                                                                             #
+#    groopmTimekeeper.py                                                      #
+#                                                                             #
+#    Class for creating time stamps                                           #
+#                                                                             #
+#    Copyright (C) Michael Imelfort                                           #
+#                                                                             #
+###############################################################################
+#                                                                             #
 #          .d8888b.                                    888b     d888          #
 #         d88P  Y88b                                   8888b   d8888          #
 #         888    888                                   88888b.d88888          #
@@ -30,34 +38,45 @@
 #                                                                             #
 ###############################################################################
 
-from unittest import TestCase, main
-import numpy as np
-from groopm import torusMesh
+__author__ = "Michael Imelfort"
+__copyright__ = "Copyright 2012"
+__credits__ = ["Michael Imelfort"]
+__license__ = "GPL3"
+__version__ = "0.0.1"
+__maintainer__ = "Michael Imelfort"
+__email__ = "mike@mikeimelfort.com"
+__status__ = "Development"
 
-class MyTests(TestCase):
+###############################################################################
+import time
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
+class TimeKeeper:
+    def __init__(self):
+        self.startTime = time.time()
+        self.lastLogTime = self.startTime 
     
-    def test_euclidean_dist(self):
-        """Test euclidean distance"""
-        tm = torusMesh.TorusMesh(49, columns=99)
-        self.assertEqual(tm.dist((1,0),(1,1)),1.0,"dist error 1")
-        self.assertEqual(tm.dist((1,0),(2,1)),np.sqrt(2),"dist error 2")
-        self.assertEqual(tm.dist((0,0),(25,25)),np.sqrt(24**2+25**2),"dist error 3")
-        self.assertEqual(tm.dist((0,0),(24,24)),np.sqrt(2*24**2),"dist error 4")
-        self.assertEqual(tm.dist((0,0),(25,50)),np.sqrt(24**2+49**2),"dist error 5")
+    def startTimer(self):
+        """Restart the timer"""
+        self.startTime = time.time()
+        self.lastLogTime = self.startTime 
+
+    def getTimeStamp(self):
+        """Make a time stamp"""
+        now = time.time()
+        ret_str = "THIS: [ %s ]\tTOTAL: [ %s ]" % (self.secondsToStr(now - self.lastLogTime), self.secondsToStr(now - self.startTime))
+        self.lastLogTime = now
+        return ret_str  
         
-    def test_manhattan_dist(self):
-        """Test manhattan distance"""
-        tm = torusMesh.TorusMesh(49, columns=99)
-        self.assertEqual(tm.dist((1,0),(1,1),type="man"),1.0,"dist error 1")
-        self.assertEqual(tm.dist((1,0),(2,1),type="man"),2.0,"dist error 2")
-        self.assertEqual(tm.dist((0,0),(25,25),type="man"),24.0+25.0,"dist error 3")
-        self.assertEqual(tm.dist((0,0),(24,24),type="man"),48.0,"dist error 4")
-        self.assertEqual(tm.dist((0,0),(25,50),type="man"),24.0+49.0,"dist error 5")
-        
-    def test_findNeighborhood(self):
-        tm = torusMesh.TorusMesh(49, columns=99)
-        fred = tm.findNeighborhood((5,5), 15)
-        self.assertEqual(len(fred),749)
-        
-if __name__ == '__main__':
-    main()
+    def secondsToStr(self, t):
+        rediv = lambda ll,b : list(divmod(ll[0],b)) + ll[1:]
+        return "%d:%02d:%02d.%03d" % tuple(reduce(rediv,[[t*1000,],1000,60,60]))
+    
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################

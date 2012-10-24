@@ -130,7 +130,7 @@ class GMExtractor:
                 b_dists = np.array([])
                 b_sigs = np.array([])
                 b_names = np.array([])
-                for row_index in bin.rowIndicies:
+                for row_index in bin.rowIndices:
                     dist = np.linalg.norm(self.PM.covProfiles[row_index])
                     b_dists = np.append(b_dists, dist)
                     b_GCs = np.append(b_GCs, kse.getGC(contigs[self.PM.contigNames[row_index]]))
@@ -188,7 +188,7 @@ class GMExtractor:
             file_name = os.path.join(self.outDir, "BIN_%d.fa" % bid)
             try:
                 with open(file_name, 'w') as f: 
-                    for row_index in self.BM.getBin(bid).rowIndicies:
+                    for row_index in self.BM.getBin(bid).rowIndices:
                         cid = self.PM.contigNames[row_index]
                         if(cid in contigs):
                             f.write(">%s\n%s\n" % (cid, contigs[cid]))
