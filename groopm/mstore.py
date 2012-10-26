@@ -957,8 +957,10 @@ class KmerSigEngine:
         ll = len(seq)
         for i in range(0,ll-self.kLen+1):
             this_mer = self.shiftLowLexi(seq[i:i+self.kLen])
-            if this_mer in sig:
+            try:
                 sig[this_mer] += 1
+            except KeyError:
+                pass
         # normalise by length and return
         return dict(zip(self.kmerCols, [ X / ll for X in sig.values()]))
 
