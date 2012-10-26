@@ -385,9 +385,10 @@ class GMDataManager:
             for record in full_record:
                 # make sure we have storage
                 if record[0] in indices and record[1] in indices:
-                    if record[0] not in links_hash:
-                        links_hash[record[0]] = []
-                    links_hash[record[0]].append(record[1:])
+                    try:
+                        links_hash[record[0]].append(record[1:])
+                    except KeyError:
+                        links_hash[record[0]] = [record[1:]]
         return links_hash
     
 #------------------------------------------------------------------------------
