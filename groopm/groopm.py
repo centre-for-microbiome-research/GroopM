@@ -137,7 +137,12 @@ class GroopMOptionsParser():
             print " [[GroopM]] Running in bin expansion mode..."
             print "****************************************************************"
             BM = dataManagers.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True, silent=False, cutOff=options.cutoff)
+            BM.loadBins(makeBins=True,
+                        silent=False,
+                        loadLinks=True,
+                        getUnbinned=True,
+                        cutOff=options.cutoff
+                        )
             BM.recruitContigs(saveBins=True)
         
         elif(options.subparser_name == 'extract'):

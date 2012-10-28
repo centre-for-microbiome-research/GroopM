@@ -234,7 +234,7 @@ class ClusterEngine:
                             # Plot?
                             bids_made.append(bin.id)
                             num_bins += 1
-                            if(True):#self.debugPlots):          
+                            if(self.debugPlots):          
                                 bin.plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName="P_BIN_%d"%(bin.id))
 
                             # append this bins list of mapped rowIndices to the main list
@@ -295,7 +295,7 @@ class ClusterEngine:
         
         num_binned = len(self.PM.binnedRowIndicies.keys())
         perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
-        print "\n   ",num_binned,"contigs are distributed across",len(self.BM.bins.keys()),"cores (",perc,"% )"
+        print "   ",num_binned,"contigs across",len(self.BM.bins.keys()),"cores (",perc,"% )"
 
     def isGoodBin(self, totalBP, binSize, ms=0):
         """Does this bin meet my exacting requirements?"""
