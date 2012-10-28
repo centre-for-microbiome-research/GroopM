@@ -385,9 +385,10 @@ class GMDataManager:
             for record in full_record:
                 # make sure we have storage
                 if record[0] in indices and record[1] in indices:
-                    if record[0] not in links_hash:
-                        links_hash[record[0]] = []
-                    links_hash[record[0]].append(record[1:])
+                    try:
+                        links_hash[record[0]].append(record[1:])
+                    except KeyError:
+                        links_hash[record[0]] = [record[1:]]
         return links_hash
     
 #------------------------------------------------------------------------------
@@ -902,10 +903,10 @@ class KmerSigEngine:
     def __init__(self, kLen=4):
         self.kLen = kLen
         self.compl = string.maketrans('ACGT', 'TGCA')
-        self.kmerCols = self.makeKmerColNames()
+        (self.kmerCols, self.llDict) = self.makeKmerColNames(makeLL=True)
         self.numMers = len(self.kmerCols)
         
-    def makeKmerColNames(self):
+    def makeKmerColNames(self, makeLL=False):
         """Work out the range of kmers required based on kmer length"""
         # build up the big list
         base_words = ("A","C","G","T")
@@ -919,11 +920,16 @@ class KmerSigEngine:
         
         # pare it down based on lexicographical ordering
         ret_list = []
+        ll_dict = {}
         for mer in out_list:
             lmer = self.shiftLowLexi(mer)
+            ll_dict[mer] = lmer 
             if lmer not in ret_list:
                 ret_list.append(lmer)
-        return ret_list
+        if makeLL:
+            return (ret_list, ll_dict)
+        else:
+            return ret_list
 
     def getKmerSigWeights(self):
         """Return a hash of index into kmer sig -> GC %"""
@@ -946,9 +952,17 @@ class KmerSigEngine:
         if(seq < rseq):
             return seq
         return rseq
+
+    def shiftLowLexiMer(self, seq):
+        """Return the lexicographically lowest form of this kmer"""
+        try:
+            return self.llDict[seq]
+        except KeyError:
+            return seq
         
     def revComp(self, seq):
         """Return the reverse complement of a sequence"""
+        # build a dictionary to know what letter to switch to
         return seq.translate(self.compl)[::-1]
     
     def getKSig(self, seq):
@@ -956,11 +970,15 @@ class KmerSigEngine:
         sig = dict(zip(self.kmerCols, [0.0] * self.numMers))
         ll = len(seq)
         for i in range(0,ll-self.kLen+1):
-            this_mer = self.shiftLowLexi(seq[i:i+self.kLen])
             try:
-                sig[this_mer] += 1
+                this_mer = self.llDict[seq[i:i+self.kLen]]
+                try:
+                    sig[this_mer] += 1
+                except KeyError:
+                    pass
             except KeyError:
                 pass
+
         # normalise by length and return
         return dict(zip(self.kmerCols, [ X / ll for X in sig.values()]))
 
