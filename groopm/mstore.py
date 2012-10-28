@@ -887,7 +887,7 @@ class ContigParser:
     def dumpTnTable(self, table, kmerCols):
         """Dump the guts of the TN table"""
         print "-----------------------------------"
-        print "TNuclSig table"
+        print "KmerSig table"
         print "-----------------------------------"
         for row in table:
             for mer in kmerCols:
@@ -973,9 +973,9 @@ class KmerSigEngine:
             try:
                 this_mer = self.llDict[seq[i:i+self.kLen]]
                 try:
-                    sig[this_mer] += 1
+                    sig[this_mer] += 1.0
                 except KeyError:
-                    pass
+                    sig[this_mer] = 1.0
             except KeyError:
                 pass
 
@@ -1010,7 +1010,11 @@ class BamParser:
                 cov_row = covTable.row
                 # punch in the data
                 for i in range(0,len(stoitColNames)):
-                    cov_row[stoitColNames[i]] = coverages[i][cid]
+                    try:
+                        cov_row[stoitColNames[i]] = coverages[i][cid]
+                    except KeyError:
+                        # may be no coverage for this contig
+                        cov_row[stoitColNames[i]] = 0.0
                 cov_row.append()
             covTable.flush()
         except:
@@ -1056,15 +1060,6 @@ class BamParser:
         except:
             print "Error saving results to DB"
             raise
-
-class Counter:
-    """AUX: Call back for counting aligned reads
-    
-    Used in conjunction with pysam.fetch 
-    """
-    counts = 0
-    def __call__(self, alignment):
-        self.counts += 1
 
 def getBamDescriptor(fullPath):
     """AUX: Reduce a full path to just the file name minus extension"""
