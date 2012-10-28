@@ -252,10 +252,12 @@ class GMDataManager:
                     ppos += 1
                 try:
                     COV_table = h5file.createTable(profile_group, 'coverage', db_desc, "Bam based coverage", expectedrows=len(contigNames))
-                    rowwise_links = bamParser.parse(bamFiles, stoitColNames, COV_table, contigNames, cid_2_indices)
                 except:
                     print "Error creating coverage table:", sys.exc_info()[0]
                     raise
+
+                # now fill in coverage details
+                rowwise_links = bamParser.parse(bamFiles, stoitColNames, COV_table, contigNames, cid_2_indices)
                 
                 #------------------------
                 # contig links
@@ -1009,12 +1011,13 @@ class BamParser:
                 # make a new row
                 cov_row = covTable.row
                 # punch in the data
-                for i in range(0,len(stoitColNames)):
+                for i in range(len(stoitColNames)):
                     try:
-                        cov_row[stoitColNames[i]] = coverages[i][cid]
+                        cov = coverages[i][cid]
                     except KeyError:
                         # may be no coverage for this contig
-                        cov_row[stoitColNames[i]] = 0.0
+                        cov = 0.0
+                    cov_row[stoitColNames[i]] = cov 
                 cov_row.append()
             covTable.flush()
         except:
