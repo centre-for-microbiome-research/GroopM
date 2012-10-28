@@ -107,6 +107,7 @@ class BinManager:
                  silent=True,
                  loadKmerSigs=False,
                  loadCovProfiles=True,
+                 loadLinks=False,
                  min=None,
                  max=None,
                  cutOff=0):
@@ -131,7 +132,8 @@ class BinManager:
                          loadContigNames=True,
                          loadContigLengths=True,
                          loadBins=True,
-                         loadCores=False
+                         loadCores=False,
+                         loadLinks=loadLinks
                         )
         
         bin_members = self.initialiseContainers()
@@ -302,15 +304,29 @@ class BinManager:
         bin = self.getBin(bid)
         bin2count = {}
         for row_index in bin.rowIndices:
-            if row_index in self.PM.links: 
+            try: 
                 for link in self.PM.links[row_index]:
                     link_bid = self.r2b[link[0]] 
                     if link_bid != bid and link_bid != 0:
-                        if link_bid in bin2count: 
-                            bin2count[link_bid] += 1
-                        else:
-                            bin2count[link_bid] = 1
+                        try: 
+                            bin2count[link_bid] += 1.0
+                        except KeyError:
+                            bin2count[link_bid] = 1.0
+            except KeyError:
+                pass
         return bin2count
+    
+    def getConnectedBins(self, rowIndex, c2b):
+        """Get a  list of bins connected to this contig"""
+        ret_links = []
+        for link in self.PM.links[rowIndex]:
+            cid = link[0]
+            try:
+                bid = c2b[cid]
+            except KeyError:
+                bid = 0
+            ret_links.append((cid, bid, link[1])) 
+        return ret_links
     
     def getAllLinks(self):
         """Return a sorted array of all links between all bins"""
@@ -329,6 +345,32 @@ class BinManager:
         import operator                 
         return sorted(all_links.iteritems(), key=operator.itemgetter(1), reverse=True)
        
+    def getWithinLinkProfiles(self):
+        """Determine the average number of links between contigs for all bins"""
+        self.makeR2BLookup()
+        bids = self.getBids()
+        link_profiles = {}
+        for bid in bids:
+            link_profiles[bid] = self.getWithinBinLinkProfile(bid)
+        return link_profiles
+        
+    def getWithinBinLinkProfile(self, bid):
+        """Determine the average number of links between contigs in a bin"""
+        bin = self.getBin(bid)
+        links = []
+        min_links = 1000000000
+        for row_index in bin.rowIndices:
+            try: 
+                for link in self.PM.links[row_index]:
+                    link_bid = self.r2b[link[0]] 
+                    if link_bid == bid:
+                        links.append(link[1])
+                        if link[1] < min_links:
+                            min_links = link[1] 
+            except KeyError:
+                pass
+        return (np.mean(links), np.std(links), min_links)
+    
 #------------------------------------------------------------------------------
 # BIN EXPANSION
 
@@ -359,38 +401,119 @@ class BinManager:
 
     def recruitContigs(self, saveBins=False):
         """Recuit more contigs to the bins"""
+        print "Recruiting unbinned contigs"
         # pare down each bin
-        node_network = self.findBinNeighbours()
-        for bid in self.getBids():
-            print node_network[bid] 
-        return
     
         # make a list of all the cov and kmer vals
         num_bins = len(self.bins)
         bids = self.getBids()
-        cov_centres = np.reshape([self.bins[bid].covMeans for bid in bids], (num_bins,3))
-        k_vals = np.array([self.bins[bid].kValMean for bid in bids])
-        k_stdevs = np.array([self.bins[bid].kValStdev for bid in bids])
-        print cov_centres
-        print k_vals
+        num_expanded = 1
+        total_expanded = -1.0
+        total_unbinned = 0
+        total_binned = 0
+        total_contigs = len(self.PM.indices)
+
+        # work out what the average linking consistency is for 
+        # contigs in the same bin
+        wlp = self.getWithinLinkProfiles()
+        # work out bare minimum number of links to be able to include
+        wlp_mins = {}
+        for bid in wlp:
+            min = wlp[bid][0] - 3 * wlp[bid][1]
+            if min < 0:
+                min = 0
+            wlp_mins[bid] = min
         
-        # build them back up again
-        new_recruits = {} # save new recruits here and update bins in one go
+        # for stats, work out number binned and unbinned
         for row_index in range(len(self.PM.indices)):
             if(row_index not in self.PM.binnedRowIndicies):
-                # we can try assign this guy to a bin
-                bid = self.findClosestBin(row_index, cov_centres, k_vals, k_stdevs, bids)
-                if(bid != 0):
-                    # we could bin this guy
-                    if(bid not in new_recruits):
-                        new_recruits[bid] = []
-                    new_recruits[bid].append(row_index)
-                    
-        # now update all the bins
-        for bid in bids:
-            if(bid in new_recruits):
-                self.bins[bid].rowIndices = np.sort(np.append(self.bins[bid].rowIndices, np.array(new_recruits[bid])))
-                
+                total_unbinned += 1
+            else:
+                total_binned += 1
+        perc_binned = float(total_binned)/float(total_contigs)
+        print "    BEGIN: %0.4f" % perc_binned +"%"+" of %d requested contigs in bins" % total_contigs
+        
+        round = 0
+        while num_expanded > 0:
+            total_expanded += float(num_expanded) 
+            num_expanded = 0
+            # get bin stats        
+            k_vals = dict(zip(bids, np.array([self.bins[bid].kValMean for bid in bids])))
+            k_stdevs = dict(zip(bids, np.array([self.bins[bid].kValStdev for bid in bids])))
+            c_vals = dict(zip(bids, np.array([self.bins[bid].cValMean for bid in bids])))
+            c_stdevs = dict(zip(bids, np.array([self.bins[bid].cValStdev for bid in bids])))
+            
+            # get a dict of contig Ids to bins
+            c2b = self.getBinUpdates()
+            
+            # build them back up again
+            new_recruits = {} # save new recruits here and update bins in one go
+            for row_index in range(len(self.PM.indices)):
+                if(row_index not in self.PM.binnedRowIndicies):
+                    # get information about contigs this guy is linked to
+                    # and which bins they belong to
+                    linking_bins = self.getConnectedBins(row_index, c2b)
+                    # summarise this info, look for a consensus bin...
+                    bin2counts = {}
+                    for link in linking_bins:
+                        if link[1] != 0:
+                            try:
+                                bin2counts[link[1]] += link[2]
+                            except KeyError:
+                                bin2counts[link[1]] = link[2]
+                    bid = 0
+                    if len(bin2counts) > 0:
+                        #print row_index, self.PM.contigLengths[row_index], bin2counts
+                        # we only want completely unambiguous link information
+                        if len(bin2counts) == 1:
+                            # choose the putative bid
+                            bid = bin2counts.keys()[0]
+                            num_links = bin2counts.values()[0]
+                            
+                            # check that there are a suitable number of links here
+                            if num_links < wlp_mins[bid]:
+                                bid = 0
+                            else:
+                                # work out the z-score for these guys coverage and kmer vals
+                                cZ = np.abs((self.PM.averageCoverages[row_index] - c_vals[bid])/c_stdevs[bid])
+                                kZ = np.abs((self.PM.kmerVals[row_index] - k_vals[bid])/k_stdevs[bid])
+                                #print self.PM.averageCoverages[row_index], c_vals[bid], c_stdevs[bid]
+                                #print self.PM.kmerVals[row_index], k_vals[bid], k_stdevs[bid]
+                                #print cZ, kZ ,"{", wlp[bid][0], "}"
+    
+                                # we have unambiguous links so we can relax
+                                # tolerance thresholds, kmer ore so than coverage 
+                                if not ((cZ < 4 and kZ < 5) or (num_links >= wlp[bid][0])):
+                                    bid = 0
+                    if(bid != 0):
+                        # we could bin this guy
+                        try:
+                            new_recruits[bid].append(row_index)
+                        except KeyError:
+                            new_recruits[bid] = [row_index]
+
+                        # mark this guy as binned
+                        self.PM.binnedRowIndicies[row_index] = True
+                                                    
+                        # we did at least some work
+                        num_expanded += 1 
+
+            # now update all the bins
+            for bid in bids:
+                if(bid in new_recruits):
+                    self.bins[bid].rowIndices = np.sort(np.append(self.bins[bid].rowIndices, np.array(new_recruits[bid])))
+
+            # talk to the user
+            round += 1
+            print "    Recruit round %d: recruited: %d contigs" % (round, num_expanded)
+            break
+        
+        # talk to the user
+        perc_recruited = total_expanded/float(total_unbinned)
+        perc_binned = (total_expanded + total_binned)/float(total_contigs)
+        print "    Recruited %0.4f" % perc_recruited +"%"+" of %d unbinned contigs" % total_unbinned
+        print "    END: %0.4f" % perc_binned +"%"+" of %d requested contigs in bins" % total_contigs
+         
         # now save
         if(saveBins):
             self.saveBins(doCores=False, saveBinStats=False, updateBinStats=True)
@@ -525,9 +648,6 @@ class BinManager:
             if(bid1 != bid2):
                 if bid1 in self.bins and bid2 in self.bins:
                     num_links = link[1]
-                    print "[", bid1, ",", self.bins[bid1].binSize, "] [", bid2, ",", self.bins[bid2].binSize, "]", link[1], "::", link, "::"
-                    self.bins[bid1].printBin(self.PM.contigNames, self.PM.contigLengths)
-                    self.bins[bid2].printBin(self.PM.contigNames, self.PM.contigLengths)
                     merTol = 0
                     if self.getBin(bid1).binSize > self.getBin(bid2).binSize:
                         big_bin = self.getBin(bid1)
@@ -544,8 +664,7 @@ class BinManager:
                         # otherwise, we need to be a bit more strict
                         mer_tol = 0
                     
-                    if self.shouldMerge(big_bin, small_bin, merTol=mer_tol, verbose=True):
-                        print "MERGE"
+                    if self.shouldMerge(big_bin, small_bin, merTol=mer_tol, verbose=False):
                         # merge!
                         self.merge([bid1,bid2], auto=True, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=False)
                         condense_map[bid2] = bid1 # add this one in so we know how to map it next time
@@ -553,39 +672,6 @@ class BinManager:
                             if condense_map[key] == bid2:
                                 # bin2 consumed this key, so we'll need to update it
                                 condense_map[key] = bid1
-                    print "===="
-            
-        return
-        all_dists = self.findAllNeighbours(searchSpan)
-        for key in all_dists.keys():
-            bid1 = key[0]
-            bid2 = key[1]
-            if(bid1 in condense_map):
-                bid1 = condense_map[bid1]
-            if(bid2 in condense_map):
-                bid2 = condense_map[bid2]
-
-            if(bid1 != bid2):
-                links = {}
-                if bid1 in self.bins and bid2 in self.bins:
-                    print key, all_dists[key] 
-                    links = self.getLinkingContigs(bid1)
-                    self.bins[bid1].printBin(self.PM.contigNames, self.PM.contigLengths)
-                    self.bins[bid2].printBin(self.PM.contigNames, self.PM.contigLengths)
-                    for link in links:
-                        print bid1, link, links[link]
-    
-                    if self.shouldMerge(self.getBin(bid1), self.getBin(bid2), verbose=True):
-                        print "MERGE"
-                        # merge!
-                        self.merge([bid1,bid2], auto=True, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=False)
-                        condense_map[bid2] = bid1 # add this one in so we know how to map it next time
-                        for key in condense_map:
-                            if condense_map[key] == bid2:
-                                # bin2 consumed this key, so we'll need to update it
-                                condense_map[key] = bid1
-    
-                    print "----"
 
     def removeOutliers(self, saveBins=False, remove=False):
         """Identify and remove outlying contigs in each bin"""
@@ -980,8 +1066,10 @@ class BinManager:
         if self.r2b != {}:
             parent_bid = parent_bin.id
             for row_index in self.r2b:
-                if self.r2b[row_index] in bids:
-                    self.r2b[row_index] = parent_bid 
+                try:
+                    self.r2b[row_index] = parent_bid
+                except KeyError:
+                    pass 
         return ret_val
 
     def makeBidKey(self, bid1, bid2):
@@ -1748,11 +1836,14 @@ class ProfileManager:
 
         # now convert the absolute links to local ones
         relative_links = {}
-        for cid in absolute_links:
+        for cid in self.indices:
             local_cid = reverse_index_lookup[cid]
             relative_links[local_cid] = []
-            for link in absolute_links[cid]:
-                relative_links[local_cid].append([reverse_index_lookup[link[0]], link[1], link[2], link[3]])
+            try:
+                for link in absolute_links[cid]:
+                    relative_links[local_cid].append([reverse_index_lookup[link[0]], link[1], link[2], link[3]])
+            except KeyError: # not everyone is linked
+                pass
 
         return relative_links
                  
