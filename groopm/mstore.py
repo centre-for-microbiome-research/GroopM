@@ -1027,13 +1027,16 @@ class BamParser:
         # transform the links into something a little easier to parse later
         rowwise_links = []
         for cid in links:
-            for link in links[cid]: 
-                rowwise_links.append([cid2Indicies[cid],          # contig 1 
-                                      cid2Indicies[link[0]],      # contig 2
-                                      int(link[1]),               # numReads
-                                      int(link[2]),               # linkType
-                                      int(link[3])                # gap
-                                      ])
+            for link in links[cid]:
+                try:
+                    rowwise_links.append([cid2Indicies[cid],          # contig 1 
+                                          cid2Indicies[link[0]],      # contig 2
+                                          int(link[1]),               # numReads
+                                          int(link[2]),               # linkType
+                                          int(link[3])                # gap
+                                          ])
+                except KeyError:
+                    pass
         return rowwise_links
     
     def dumpCovTable(self, table, stoitColNames):
