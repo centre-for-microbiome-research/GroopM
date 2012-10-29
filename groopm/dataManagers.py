@@ -477,14 +477,16 @@ class BinManager:
                                 # work out the z-score for these guys coverage and kmer vals
                                 cZ = np.abs((self.PM.averageCoverages[row_index] - c_vals[bid])/c_stdevs[bid])
                                 kZ = np.abs((self.PM.kmerVals[row_index] - k_vals[bid])/k_stdevs[bid])
-                                #print self.PM.averageCoverages[row_index], c_vals[bid], c_stdevs[bid]
-                                #print self.PM.kmerVals[row_index], k_vals[bid], k_stdevs[bid]
-                                #print cZ, kZ ,"{", wlp[bid][0], "}"
     
                                 # we have unambiguous links so we can relax
                                 # tolerance thresholds, kmer ore so than coverage 
-                                if not ((cZ < 4 and kZ < 5) or (num_links >= wlp[bid][0])):
+                                if (cZ > 3 or kZ > 3) and num_links < wlp[bid][0]:
                                     bid = 0
+                                else:
+                                    print self.PM.averageCoverages[row_index], c_vals[bid], c_stdevs[bid]
+                                    print self.PM.kmerVals[row_index], k_vals[bid], k_stdevs[bid]
+                                    print cZ, kZ ,"{", num_links, wlp[bid][0], "}"
+                                    
                     if(bid != 0):
                         # we could bin this guy
                         try:
