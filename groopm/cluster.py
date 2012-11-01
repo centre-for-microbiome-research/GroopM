@@ -160,6 +160,14 @@ class ClusterEngine:
         cum_contigs_used_good = self.initialiseCores()
         print "    %s" % timer.getTimeStamp()
 
+        # condense cores
+        print "Condense cores [begin: %d]" % len(self.BM.bins)
+        self.BM.autoCondenseBins(2*self.span)
+        num_binned = len(self.PM.binnedRowIndicies.keys())
+        perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
+        print "   ",num_binned,"contigs across",len(self.BM.bins.keys()),"cores (",perc,"% )"
+        print "    %s" % timer.getTimeStamp()
+
         # Now save all the stuff to disk!
         print "Saving bins"
         self.BM.saveBins(doCores=True, saveBinStats=True)
@@ -174,8 +182,8 @@ class ClusterEngine:
         # We can make a heat map and look for hot spots
         self.populateImageMaps()
         sub_counter = 0
-        print "    .... .... .... .... .... .... .... .... .... ...."
-        print "%03d" % sub_counter,
+        print "     .... .... .... .... .... .... .... .... .... ...."
+        print "%4d" % sub_counter,
         new_line_counter = 0
         num_bins = 0
         ss=0
@@ -240,7 +248,7 @@ class ClusterEngine:
                             # append this bins list of mapped rowIndices to the main list
                             self.updatePostBin(bin)
                             num_below_cutoff = 0
-                            print "%04d"%bin_size,
+                            print "% 4d"%bin_size,
                         else:
                             # we just throw these indices away for now
                             self.restrictRowIndicies(bin.rowIndices)
@@ -253,7 +261,7 @@ class ClusterEngine:
                         if(new_line_counter > 9):
                             new_line_counter = 0
                             sub_counter += 10
-                            print "\n%03d" % sub_counter,
+                            print "\n%4d" % sub_counter,
                     else:
                         # this partition was too small, restrict these guys we don't run across them again
                         self.restrictRowIndicies(center_row_indices)
@@ -285,17 +293,7 @@ class ClusterEngine:
                                             base_bin.plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName="C_BIN_%d"%(bin.id))
 #MM__                                    else:
 #MM__                                        print "NOPE"
-        print "\n    .... .... .... .... .... .... .... .... .... ...."
-
-        # condense bins
-        self.BM.autoCondenseBins(2*self.span)
-
-        # neaten up the bins
-        #self.removeOutliersWrapper()
-        
-        num_binned = len(self.PM.binnedRowIndicies.keys())
-        perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
-        print "   ",num_binned,"contigs across",len(self.BM.bins.keys()),"cores (",perc,"% )"
+        print "\n     .... .... .... .... .... .... .... .... .... ...."
 
     def isGoodBin(self, totalBP, binSize, ms=0):
         """Does this bin meet my exacting requirements?"""
