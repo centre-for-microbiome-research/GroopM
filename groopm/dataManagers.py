@@ -54,6 +54,7 @@ import math
 import random
 import os
 import string
+import operator                 
 
 import colorsys
 import matplotlib as mpl
@@ -64,6 +65,7 @@ from pylab import plot,subplot,axis,stem,show,figure
 import numpy as np
 import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist
+from scipy.spatial import KDTree as kdt
 from scipy.stats import f_oneway, distributions
 
 import tables
@@ -110,7 +112,8 @@ class BinManager:
                  loadLinks=False,
                  min=None,
                  max=None,
-                 cutOff=0):
+                 cutOff=0,
+                 transform=True):
         """Load data and make bin objects"""
         # fix the condition
         condition=""
@@ -138,7 +141,14 @@ class BinManager:
         
         bin_members = self.initialiseContainers()
         if(makeBins):
-            self.PM.transformCP(silent=silent, min=min, max=max)
+            if transform:
+                self.PM.transformCP(silent=silent, min=min, max=max)
+            else:
+                if self.PM.numStoits == 3:
+                    self.PM.transformedCP = self.PM.covProfiles
+                else:
+                    print "Number of stoits != 3. You need to transform"
+                    self.PM.transformCP(silent=silent, min=min, max=max)
             self.makeBins(bin_members)
 
     def initialiseContainers(self):
@@ -250,6 +260,16 @@ class BinManager:
             
         return bin_update
 
+    def contig2bids(self):
+        """Map contigIDs (row indices) to bins"""
+        c2b = {}
+        for bid in self.getBids():
+            bin = self.bins[bid]
+            for row_index in bin.rowIndices:
+                c2b[row_index] = bid
+            
+        return c2b
+        
 
     def removeBinAndIndicies(self, bid):
         """Remove indices from the PM based on bin identity
@@ -294,6 +314,116 @@ class BinManager:
                 new_list = np.append(new_list, oldList[old_list_index]-shift_down)
                 old_list_index += 1
         return new_list
+
+#------------------------------------------------------------------------------
+# NEIGHBOURS AND DISTANCES
+
+    def findBinNeighbours(self, thresholdDist=50.0):
+        """Construct a network of all bins and their closest neighbours"""
+        num_bins = len(self.bins)
+        bids = self.getBids()
+        cov_centres = np.reshape([self.bins[bid].covMeans for bid in bids], (num_bins,3))
+        
+        # get an all vs all distance matrix
+        c_dists = cdist(cov_centres, cov_centres)
+        
+        # reduce this to only close neighbours
+        neigbour_dists = np.where(c_dists < thresholdDist, c_dists, 0.0)
+        
+        # now make the network
+        network = {}
+        outer_index = 0
+        for i in range(num_bins):
+            # make a structure to hold the info
+            network[bids[i]] = [[bids[i]],[0.0]]
+            for j in range(num_bins):
+                if(neigbour_dists[i,j] != 0.0):
+                    # this is a legit guy!
+                    network[bids[i]][0].append(bids[j])
+                    network[bids[i]][1].append(neigbour_dists[i,j])
+        return network
+
+    def getAllContigTrueDistances(self, binNetwork={}, c2b={}):
+        """work out the "true" distance between all closely situated contigs"""
+        # work out which bins lie nearby
+        if binNetwork == {}:
+            binNetwork = self.findBinNeighbours()
+        
+        # work out which contigs are in which bins
+        if c2b == {}:
+            c2b = self.contig2bids()
+        
+        all_distances = {} # hash of type cid -> [(cid, dist), (cid,dist), ... ]
+        for row_index in range(len(self.PM.indices)):
+            self.getContigTrueDistances(row_index, binNetwork, c2b, all_distances)
+        return all_distances 
+
+    def getContigTrueDistances(self, rowIndex, binNetwork, c2b, distances):
+        """work out the "true" distance between this contig and all closely situated contigs"""
+        try:
+            this_bid = c2b[rowIndex]
+        except KeyError:
+            this_bid = 0
+            pass
+        if this_bid != 0:
+            pass
+        else:
+            # we will need to generate a list of close bins 
+            # using some other method
+            pass
+
+    def findAllNeighbours(self, maxDist):
+        """Create a lookup of all the bins and their nearest neighbours"""
+        # first we make three sorted lists for X, Y and Z
+        # this will save us an all Vs all comparison
+        bids = self.getBids()
+        max_index = len(bids)
+        Xs = []
+        Ys = []
+        Zs = []
+        for bid in bids:
+            CM = self.getBin(bid).covMeans
+            Xs.append(CM[0])
+            Ys.append(CM[1])
+            Zs.append(CM[2])
+        sorted_Xs = np.argsort(Xs)
+        sorted_Ys = np.argsort(Ys)
+        sorted_Zs = np.argsort(Zs)
+
+        x_dists = {}
+        for i in range(max_index):
+            for j in range(i + 1, max_index):
+                dist = np.abs(Xs[sorted_Xs[i]] - Xs[sorted_Xs[j]])
+                if(dist <= maxDist):
+                    key = self.makeBidKey(bids[sorted_Xs[i]], bids[sorted_Xs[j]])
+                    x_dists[key] = dist
+                else:
+                    break 
+        y_dists = {}
+        for i in range(max_index):
+            for j in range(i + 1, max_index):
+                dist = np.abs(Ys[sorted_Ys[i]] - Ys[sorted_Ys[j]])
+                if(dist <= maxDist):
+                    key = self.makeBidKey(bids[sorted_Ys[i]], bids[sorted_Ys[j]])
+                    if(key in x_dists):
+                        y_dists[key] = dist
+                else:
+                    break 
+        actual_dists = {}
+        for i in range(max_index):
+            for j in range(i + 1, max_index):
+                dist = np.abs(Zs[sorted_Zs[i]] - Zs[sorted_Zs[j]])
+                if(dist <= maxDist):
+                    key = self.makeBidKey(bids[sorted_Zs[i]], bids[sorted_Zs[j]])
+                    if(key in y_dists):
+                        dist = np.sqrt(y_dists[key]**2 + x_dists[key]**2 + dist**2)
+                        if(dist <= maxDist):
+                            actual_dists[key] = dist
+                else:
+                    break 
+
+        return actual_dists
+
 
 #------------------------------------------------------------------------------
 # LINKS
@@ -342,7 +472,6 @@ class BinManager:
                     all_links[key] = links[link]
     
         # sort and return
-        import operator                 
         return sorted(all_links.iteritems(), key=operator.itemgetter(1), reverse=True)
        
     def getWithinLinkProfiles(self):
@@ -373,31 +502,6 @@ class BinManager:
     
 #------------------------------------------------------------------------------
 # BIN EXPANSION
-
-    def findBinNeighbours(self, thresholdDist=50.0):
-        """Construct a network of all bins and their closest neighbours"""
-        num_bins = len(self.bins)
-        bids = self.getBids()
-        cov_centres = np.reshape([self.bins[bid].covMeans for bid in bids], (num_bins,3))
-        
-        # get an all vs all distance matrix
-        c_dists = cdist(cov_centres, cov_centres)
-        
-        # reduce this to only close neighbours
-        neigbour_dists = np.where(c_dists < thresholdDist, c_dists, 0.0)
-        
-        # now make the network
-        network = {}
-        outer_index = 0
-        for i in range(num_bins):
-            # make a structure to hold the info
-            network[bids[i]] = [[bids[i]],[0.0]]
-            for j in range(num_bins):
-                if(neigbour_dists[i,j] != 0.0):
-                    # this is a legit guy!
-                    network[bids[i]][0].append(bids[j])
-                    network[bids[i]][1].append(neigbour_dists[i,j])
-        return network
 
     def recruitContigs(self, saveBins=False):
         """Recuit more contigs to the bins"""
@@ -444,7 +548,7 @@ class BinManager:
             c_stdevs = dict(zip(bids, np.array([self.bins[bid].cValStdev for bid in bids])))
             
             # get a dict of contig Ids to bins
-            c2b = self.getBinUpdates()
+            c2b = self.contig2bids()
             
             # build them back up again
             new_recruits = {} # save new recruits here and update bins in one go
@@ -545,28 +649,26 @@ class BinManager:
 #------------------------------------------------------------------------------
 # BIN REFINEMENT 
 
-    def condenseWrapper(self,
+    def refineWrapper(self,
                       manual=False,          # do we need to ask permission every time?
                       save=False,
                       plotter=False,
-                      chimeraCheck=False,
-                      outlierCheck=False
+                      shuffle=False,
                       ):
-        """Iterative wrapper for the condense function"""
+        """Iterative wrapper for the refine function"""
         if(plotter):
-            self.plotterCondenseBins()
-        elif(chimeraCheck):
-            self.identifyChimeras()
-        elif(outlierCheck):
-            self.removeOutliers(saveBins=True, remove=True)
+            self.plotterRefineBins()
+        if(shuffle):
+            self.autoRefineBins()
+            self.saveBins(doCores=False, saveBinStats=True, updateBinStats=True)
                         
-    def plotterCondenseBins(self):
+    def plotterRefineBins(self):
         """combine similar bins using 3d plots"""
-        self.printCondensePlotterInstructions()
+        self.printRefinePlotterInstructions()
         self.plotBinIds()
         continue_merge = True
         while(continue_merge):
-            user_option = self.promptOnPlotterCondense()
+            user_option = self.promptOnPlotterRefine()
             if(user_option == 'R'):
                 self.plotBinIds()
             
@@ -632,48 +734,80 @@ class BinManager:
                 return
         return
 
-    def autoCondenseBins(self, searchSpan):
-        """Automagically condense bins"""
-        print "Condense cores [begin: %d]" % len(self.bins)
-        condense_map = {}   # keep track of where bin ids go to
-        self.makeR2BLookup()
-        sorted_links = self.getAllLinks()
-        for link in sorted_links:
-            bid1 = link[0][0]
-            bid2 = link[0][1]
-            if(bid1 in condense_map):
-                bid1 = condense_map[bid1]
-            if(bid2 in condense_map):
-                bid2 = condense_map[bid2]
+    def getClosestBID(self, rowIndex, searchTree, tdm, c2b, k=101, verbose=False):
+        """Find the bin ID which would best describe the placement of the contig"""
+        # find the k nearest neighbours for the query contig
+        t_list = searchTree.query(tdm[rowIndex],k=k)[1]
+        # calculate the distribution of neighbouring bins
+        refined_t_list = {}
+        for row_index in t_list:
+            try:
+                cbid = c2b[row_index]
+                try:
+                    refined_t_list[cbid] += 1
+                except KeyError:
+                    refined_t_list[cbid] = 1
+            except KeyError:
+                pass
+        # work out the most prominent BID
+        max_bid = 0
+        max_count = 0
+        for cbid in refined_t_list:
+            if refined_t_list[cbid] > max_count:
+                max_count = refined_t_list[cbid]
+                max_bid = cbid
+        if verbose:
+            print rowIndex, "**",max_bid,"**"                        
+            for cbid in refined_t_list:
+                print "[", cbid, ",", refined_t_list[cbid], "]",
+            print
+        # we're done!
+        return max_bid
 
-            # check that everything still makes sense
-            if(bid1 != bid2):
-                if bid1 in self.bins and bid2 in self.bins:
-                    num_links = link[1]
-                    merTol = 0
-                    if self.getBin(bid1).binSize > self.getBin(bid2).binSize:
-                        big_bin = self.getBin(bid1)
-                        small_bin = self.getBin(bid2)
-                    else:
-                        big_bin = self.getBin(bid2)
-                        small_bin = self.getBin(bid1)
-                    
-                    # if there are a significant number of linking contigs then 
-                    # we can do a kmer tolerance based merge test
-                    if 2 * num_links > small_bin.binSize:
-                        mer_tol = 4
-                    else:
-                        # otherwise, we need to be a bit more strict
-                        mer_tol = 0
-                    
-                    if self.shouldMerge(big_bin, small_bin, merTol=mer_tol, verbose=False):
-                        # merge!
-                        self.merge([bid1,bid2], auto=True, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=False)
-                        condense_map[bid2] = bid1 # add this one in so we know how to map it next time
-                        for key in condense_map:
-                            if condense_map[key] == bid2:
-                                # bin2 consumed this key, so we'll need to update it
-                                condense_map[key] = bid1
+    def autoRefineBins(self):
+        """Automagically refine bins"""
+        num_reassigned = -1
+        round = 0
+        stable_bids = {} # once a bin is stable it's stable!
+        while num_reassigned != 0:
+            num_reassigned = 0
+            reassignment_map = {}
+            c2b = self.contig2bids()
+            tdm = np.append(self.PM.transformedCP, 1000*np.reshape(self.PM.kmerVals,(len(self.PM.kmerVals),1)),1)
+            search_tree = kdt(tdm)
+            bids = self.getBids()
+            for bid in bids:
+                if bid not in stable_bids:
+                    stable = True
+                    bin = self.getBin(bid)
+                    #print "BID:", bid, bin.binSize 
+                    for row_index in bin.rowIndices:
+                        assigned_bid = self.getClosestBID(row_index, search_tree, tdm, c2b, k=bin.binSize)                        
+                        if assigned_bid != bid:
+                            stable = False
+                            num_reassigned += 1
+                        
+                        # keep track of where this guy lives
+                        try:
+                            reassignment_map[assigned_bid].append(row_index)
+                        except KeyError:
+                            reassignment_map[assigned_bid] = [row_index]
+                    if stable: # no changes this round, mark bin as stable
+                        stable_bids[bid] = True
+            
+            # now fix the bins
+            bins_removed = 0
+            for bid in bids:
+                if bid in reassignment_map:
+                    self.bins[bid].rowIndices = np.array(reassignment_map[bid])
+                    self.bins[bid].binSize = len(reassignment_map[bid])
+                else:
+                    # empty bin
+                    bins_removed += 1
+                    self.deleteBins([bid], force=True, freeBinnedRowIndicies=False, saveBins=False)
+            
+            round += 1
+            print "    Refine round %d: reassigned %d contigs, removed %d cores" % (round, num_reassigned, bins_removed)
 
     def removeOutliers(self, saveBins=False, remove=False):
         """Identify and remove outlying contigs in each bin"""
@@ -797,7 +931,15 @@ class BinManager:
 
         # we will need to confer with the user
         # plot some stuff
+        # sort the bins by kmer val
+        bid_tuples = [(tbid, self.bins[tbid].kValMean) for tbid in bids[1:]]
+        bid_tuples.sort(key=operator.itemgetter(1))
+        index = 1
+        for pair in bid_tuples:
+            bids[index] = pair[0]
+            index += 1 
         self.plotSideBySide(bids)
+        
         user_option = self.promptOnSplit(n,mode)
         if(user_option == 'Y'):
             if(saveBins):
@@ -885,58 +1027,6 @@ class BinManager:
             bids.append(split_bin.id)
 
         return (bin_stats, bin_update, bids)
-            
-    def findAllNeighbours(self, maxDist):
-        """Create a lookup of all the bins and their nearest neighbours"""
-        # first we make three sorted lists for X, Y and Z
-        # this will save us an all Vs all comparison
-        bids = self.getBids()
-        max_index = len(bids)
-        Xs = []
-        Ys = []
-        Zs = []
-        for bid in bids:
-            CM = self.getBin(bid).covMeans
-            Xs.append(CM[0])
-            Ys.append(CM[1])
-            Zs.append(CM[2])
-        sorted_Xs = np.argsort(Xs)
-        sorted_Ys = np.argsort(Ys)
-        sorted_Zs = np.argsort(Zs)
-
-        x_dists = {}
-        for i in range(max_index):
-            for j in range(i + 1, max_index):
-                dist = np.abs(Xs[sorted_Xs[i]] - Xs[sorted_Xs[j]])
-                if(dist <= maxDist):
-                    key = self.makeBidKey(bids[sorted_Xs[i]], bids[sorted_Xs[j]])
-                    x_dists[key] = dist
-                else:
-                    break 
-        y_dists = {}
-        for i in range(max_index):
-            for j in range(i + 1, max_index):
-                dist = np.abs(Ys[sorted_Ys[i]] - Ys[sorted_Ys[j]])
-                if(dist <= maxDist):
-                    key = self.makeBidKey(bids[sorted_Ys[i]], bids[sorted_Ys[j]])
-                    if(key in x_dists):
-                        y_dists[key] = dist
-                else:
-                    break 
-        actual_dists = {}
-        for i in range(max_index):
-            for j in range(i + 1, max_index):
-                dist = np.abs(Zs[sorted_Zs[i]] - Zs[sorted_Zs[j]])
-                if(dist <= maxDist):
-                    key = self.makeBidKey(bids[sorted_Zs[i]], bids[sorted_Zs[j]])
-                    if(key in y_dists):
-                        dist = np.sqrt(y_dists[key]**2 + x_dists[key]**2 + dist**2)
-                        if(dist <= maxDist):
-                            actual_dists[key] = dist
-                else:
-                    break 
-
-        return actual_dists
 
     def shouldMerge(self, bin1, bin2, ignoreCov=False, ignoreMer=False, merTol=0, confidence=0.95, verbose=False):
         """Determine whether its wise to merge two bins
@@ -1125,9 +1215,9 @@ class BinManager:
 #------------------------------------------------------------------------------
 # UI 
     
-    def printCondensePlotterInstructions(self):
+    def printRefinePlotterInstructions(self):
         raw_input( "****************************************************************\n"
-                   " CONDENSING INSTRUCTIONS - PLEASE READ CAREFULLY\n"+
+                   " REFINING INSTRUCTIONS - PLEASE READ CAREFULLY\n"+
                    "****************************************************************\n"
                    " You have chosen to refine in plotter mode. Congratulations!\n"
                    " You will be shown a 3d plot of all the bins, coloured by kmer\n"
@@ -1162,7 +1252,7 @@ class BinManager:
                    " Press any key to produce plots...")
         print "****************************************************************"        
 
-    def promptOnPlotterCondense(self, minimal=False):
+    def promptOnPlotterRefine(self, minimal=False):
         """Find out what the user wishes to do next when refining bins"""
         input_not_ok = True
         valid_responses = ['R','P','B','M','S','K','Q']

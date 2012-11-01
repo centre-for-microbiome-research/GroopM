@@ -111,24 +111,25 @@ class GroopMOptionsParser():
         elif(options.subparser_name == 'refine'):
             # refine bin cores
             print "****************************************************************"
-            print " [[GroopM]] Running in core condensing mode..."
+            print " [[GroopM]] Running in core refining mode..."
             print "****************************************************************"
             plotter = False
-            chimera_check = False
-            outlier_check = False
-            if(options.mode == 'plot'):
+            shuffle = False
+            transform=True^options.no_transform
+            
+            if(options.mode == 'shuffle'):
+                shuffle = True
+                transform = True
+            elif(options.mode == 'plot'):
                 plotter = True
-            elif(options.mode == 'outlier'):
-                outlier_check = True
             else:
                 print "**Error: unknown mode:",options.mode
                 return
             BM = dataManagers.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True, silent=False)
-            BM.condenseWrapper(save=True,
-                               chimeraCheck=chimera_check,
-                               outlierCheck=outlier_check,
-                               plotter=plotter
+            BM.loadBins(makeBins=True, silent=False, transform=transform)
+            BM.refineWrapper(save=True,
+                               plotter=plotter,
+                               shuffle=shuffle
                                )
 
         elif(options.subparser_name == 'recruit'):
