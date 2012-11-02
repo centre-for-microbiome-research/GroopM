@@ -246,6 +246,10 @@ if __name__ == '__main__':
     try:
         GM_parser = groopm.GroopMOptionsParser()
         if(False):
+            #import pstats
+            #p = pstats.Stats('prof')
+            #p.sort_stats('cumulative').print_stats(10)
+            #p.sort_stats('time').print_stats(10)
             import cProfile
             cProfile.run('GM_parser.parseOptions(args)', 'prof')
         else:        

@@ -233,7 +233,8 @@ class BinExplorer:
 
     def plotFlyOver(self, fps=10.0, totalTime=120.0):
         """Plot a flyover of the data with bins being removed"""
-        self.BM.loadBins(makeBins=True,silent=True,bids=self.bids)
+        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        print "Plotting flyover"
         all_bids = self.bins.keys()
 
         # control image form and output
@@ -290,6 +291,7 @@ class BinExplorer:
     
     def plotPoints(self):
         """plot points"""
+        print "Plotting bin points"
         self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
         self.BM.plotBinPoints()
     
@@ -305,6 +307,7 @@ class BinExplorer:
     
     def plotSideBySide(self, coreCut):
         """Plot cores side by side with their contigs"""
+        print "Plotting side by side graphs"        
         self.PM2 = dataManagers.ProfileManager(dbFileName=self.BM.PM.dbFileName)
         self.PM2.loadData(condition="length >= "+str(coreCut))
         (min,max) = self.PM2.transformCP()
@@ -319,10 +322,12 @@ class BinExplorer:
         
         This function will help users know which bins to merge
         """
+        print "Plotting bin IDs"        
         self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
         self.BM.plotBinIds()
 
     def plotUnbinned(self, coreCut):
+        print "Plotting unbinned contigs"        
         """Plot all contigs over a certain length which are unbinned"""
         self.PM.plotUnbinned(coreCut)
             
