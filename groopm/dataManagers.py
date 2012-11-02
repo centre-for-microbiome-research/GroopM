@@ -49,7 +49,7 @@ __status__ = "Development"
 
 ###############################################################################
 
-from sys import exc_info, exit
+from sys import exc_info, exit, stdout
 from operator import itemgetter
 
 from colorsys import hsv_to_rgb as htr
@@ -495,7 +495,7 @@ class BinManager:
         return (np_mean(links), np_std(links), min_links)
     
 #------------------------------------------------------------------------------
-# BIN EXPANSION
+# BIN REFINEMENT AND EXPANSION
 
     def recruitContigs(self, saveBins=False):
         """Recuit more contigs to the bins"""
@@ -529,31 +529,6 @@ class BinManager:
         if(saveBins):
             self.saveBins(doCores=False, saveBinStats=False, updateBinStats=True)
     
-    def findClosestBin(self, rowIndex, covCentres, kVals, kStdevs, bids):
-        """Who is the closest match for this row index?"""
-        c_dists = cdist([self.PM.transformedCP[rowIndex]], covCentres)[0]
-        cov_choice = np_argmin(c_dists)
-        mer_choice = np_argmin(np_abs(kVals- self.PM.kmerVals[rowIndex]))
-        
-        # make sure we're not being silly
-        if(c_dists[cov_choice] > 70):
-            return 0
-        
-        if(cov_choice == mer_choice):
-            # if they agree then we won't argue!
-            return bids[cov_choice]
-        else:
-            # always trust coverage first
-            z_dist = (self.PM.kmerVals[rowIndex] - kVals[cov_choice]) / kStdevs[cov_choice]
-            if(z_dist < 4.5):
-                return bids[cov_choice]
-            
-        # better not to include everything
-        return 0
-        
-#------------------------------------------------------------------------------
-# BIN REFINEMENT 
-
     def refineWrapper(self,
                       manual=False,          # do we need to ask permission every time?
                       save=False,
@@ -720,77 +695,6 @@ class BinManager:
             
             round += 1
             print "    Refine round %d: reassigned %d contigs, removed %d cores" % (round, num_reassigned, bins_removed)
-
-    def removeOutliers(self, saveBins=False, remove=False):
-        """Identify and remove outlying contigs in each bin"""
-        print "Removing outliers"
-        bins_affected = 0
-        contigs_removed = 0
-        updates = {}
-        bids = self.getBids()
-        for bid in bids:
-            bin = self.getBin(bid)
-            outliers = bin.identifyOutliers(self.PM.averageCoverages, self.PM.kmerVals)
-            original_size = bin.binSize
-            lo = len(outliers)
-            if(remove and lo != 0):
-                # we delete these guys!
-                contigs_removed += lo
-                bins_affected += 1
-                nri = np_array([i for i in bin.rowIndices if i not in outliers])
-                bin.rowIndices = nri
-                bin.binSize = original_size - lo
-                for i in outliers:
-                    updates[i] = 0  # this will set the bid to 0 when we save
-                    del self.PM.binnedRowIndicies[i]
-        print "    Removed: %d contigs across %d bins" % (contigs_removed, bins_affected)
-        print "    Saving updated bins"
-        # save what we did
-        self.saveBins(doCores=False, saveBinStats=False, unbinned=updates)
-
-    def identifyChimeras(self, remove=False):
-        """identify and remove chimeric bins"""
-        bids = self.getBids()
-        for bid in bids:
-            self.isChimera(bid, 'kmer')
-            self.isChimera(bid, 'cov')
-
-    def isChimera(self, bid, mode='kmer', saveBins=False):
-        """Is this bin chimeric?
-        
-        Change mode to test for coverage of kmer
-        """
-        (bin_stats, bin_update, bids) = self.getSplitties(bid, 2, mode)
-        del bids[0]
-        bin1 = self.getBin(bids[0])
-        bin2 = self.getBin(bids[1])
-        bins_saved = False
-        if mode == 'kmer':
-            ik = False
-            ic = True
-        else:
-            ik = True
-            ic = False
-        if(self.shouldMerge(bin1, bin2, confidence=0.85, ignoreCov=ic, ignoreMer=ik, verbose=True)):
-            # split means nothing
-            print "OK: %d, %s" % (bid, mode)
-        else:
-            # should not merge the split, so the split can stay
-            print "Chimera: %d, %s" % (bid, mode)
-            if(saveBins):
-                bins_saved = True
-                self.deleteBins([bids[0]], force=True)  # delete the combined bin
-                self.updateBinStats(bin_stats)
-                self.PM.saveBinIds(bin_update)
-        
-        # did we change stuff?
-        if(not bins_saved):
-            # If we're here than we don't need the temp bins        
-            # remove this query from the list so we don't delete him
-            del bids[0]
-            self.deleteBins(bids, force=True)
-            
-        return
 
 #------------------------------------------------------------------------------
 # BIN UTILITIES 
@@ -1456,7 +1360,7 @@ class BinManager:
         if("" != fileName):
             try:
                 # redirect stdout to a file
-                sys.stdout = open(fileName, 'w')
+                stdout = open(fileName, 'w')
                 self.printInner(outFormat)
             except:
                 print "Error diverting stout to file:", fileName, exc_info()[0]
