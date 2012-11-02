@@ -49,9 +49,9 @@ __status__ = "Development"
 
 ###############################################################################
 
-import sys
-import os
-import string
+from sys import exc_info, exit
+from os.path import splitext as op_splitext, basename as op_basename
+from string import maketrans as s_maketrans
 
 import tables
 import numpy as np
@@ -195,18 +195,18 @@ class GMDataManager:
                     (ksig_data, contigNames) = conParser.parse(f, kse)
                     f.close()
                 except:
-                    print "Could not parse contig file:",contigsFile,sys.exc_info()[0]
+                    print "Could not parse contig file:",contigsFile,exc_info()[0]
                     raise
 
                 try:
                     KMER_table = h5file.createTable(profile_group, 'kms', db_desc, "Kmer signature", expectedrows=len(contigNames))
                 except:
-                    print "Error creating KMERSIG table:", sys.exc_info()[0]
+                    print "Error creating KMERSIG table:", exc_info()[0]
                     raise
                 try:
                     conParser.storeSigs(ksig_data, KMER_table)
                 except:
-                    print "Could not load kmer sigs:",contigsFile,sys.exc_info()[0]
+                    print "Could not load kmer sigs:",contigsFile,exc_info()[0]
                     raise
 
                 #------------------------
@@ -220,7 +220,7 @@ class GMDataManager:
                     CONTIG_table = h5file.createTable(meta_group, 'contigs', db_desc, "Contig information", expectedrows=len(contigNames))
                     cid_2_indices = self.initContigs(CONTIG_table, contigNames)
                 except:
-                    print "Error creating CONTIG table:", sys.exc_info()[0]
+                    print "Error creating CONTIG table:", exc_info()[0]
                     raise
 
                 #------------------------
@@ -232,7 +232,7 @@ class GMDataManager:
                     BIN_table = h5file.createTable(meta_group, 'bins', db_desc, "Bin information")
                     BIN_table.flush()
                 except:
-                    print "Error creating BIN table:", sys.exc_info()[0]
+                    print "Error creating BIN table:", exc_info()[0]
                     raise
                 print "    %s" % timer.getTimeStamp()
 
@@ -253,7 +253,7 @@ class GMDataManager:
                 try:
                     COV_table = h5file.createTable(profile_group, 'coverage', db_desc, "Bam based coverage", expectedrows=len(contigNames))
                 except:
-                    print "Error creating coverage table:", sys.exc_info()[0]
+                    print "Error creating coverage table:", exc_info()[0]
                     raise
 
                 # now fill in coverage details
@@ -273,7 +273,7 @@ class GMDataManager:
                     LINKS_table = h5file.createTable(links_group, 'links', db_desc, "ContigLinks", expectedrows=len(rowwise_links))
                     bamParser.initLinks(rowwise_links, LINKS_table)
                 except:
-                    print "Error creating links table:", sys.exc_info()[0]
+                    print "Error creating links table:", exc_info()[0]
                     raise
                 print "    %s" % timer.getTimeStamp()
                 
@@ -295,10 +295,10 @@ class GMDataManager:
                     META_table = h5file.createTable(meta_group, 'meta', db_desc, "Descriptive data", expectedrows=1)
                     self.initMeta(META_table, str.join(',',stoitColNames), len(stoitColNames), str.join(',',kse.kmerCols), kmerSize, len(kse.kmerCols), len(contigNames))
                 except:
-                    print "Error creating META table:", sys.exc_info()[0]
+                    print "Error creating META table:", exc_info()[0]
                     raise
         except:
-            print "Error creating database:", dbFileName, sys.exc_info()[0]
+            print "Error creating database:", dbFileName, exc_info()[0]
             raise
         
         print "****************************************************************"
@@ -375,7 +375,7 @@ class GMDataManager:
             with tables.openFile(dbFileName, mode='r') as h5file:
                 full_record = [list(x) for x in h5file.root.links.links.readWhere("contig1 >= 0")]
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
         
         if indices == []:
@@ -404,7 +404,7 @@ class GMDataManager:
             with tables.openFile(dbFileName, mode='r') as h5file:
                 return np.array([x.nrow for x in h5file.root.meta.contigs.where(condition)])
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
     def getCoverageProfiles(self, dbFileName, condition='', indices=np.array([])):
@@ -418,7 +418,7 @@ class GMDataManager:
                         condition = "cid != ''" # no condition breaks everything!
                     return np.array([list(h5file.root.profile.coverage[x.nrow]) for x in h5file.root.meta.contigs.where(condition)])
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
     def nukeBins(self, dbFileName):
@@ -441,7 +441,7 @@ class GMDataManager:
             num_cons = self.getNumCons(dbFileName)
             stoit_col_names = self.getStoitColNames(dbFileName)
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
         try:
             with tables.openFile(dbFileName, mode='a', rootUEP="/meta") as meta_group:
@@ -496,7 +496,7 @@ class GMDataManager:
                 meta_group.renameNode('/', 'meta', 'tmp_meta', overwrite=True)
                                 
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
 
@@ -530,7 +530,7 @@ class GMDataManager:
                 # do the rename
                 meta_group.renameNode('/', 'bins', 'tmp_bins', overwrite=True)
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
     def getBinStats(self, dbFileName):
@@ -547,7 +547,7 @@ class GMDataManager:
                     ret_dict[row[0]] = row[1]
                 return ret_dict
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
         return {}
         
@@ -563,7 +563,7 @@ class GMDataManager:
                         condition = "cid != ''" # no condition breaks everything!
                     return np.array([list(x)[1] for x in h5file.root.meta.contigs.readWhere(condition)]).ravel()
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
     def setBins(self, dbFileName, updates):
@@ -582,7 +582,7 @@ class GMDataManager:
                     table.modifyRows(start=row_num, rows=new_row)
                 table.flush()
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
     def getCores(self, dbFileName, condition='', indices=np.array([])):
@@ -596,7 +596,7 @@ class GMDataManager:
                         condition = "cid != ''" # no condition breaks everything!
                     return np.array([list(x)[3] for x in h5file.root.meta.contigs.readWhere(condition)]).ravel()
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
     def setCores(self, dbFileName, updates):
@@ -615,7 +615,7 @@ class GMDataManager:
                     table.modifyRows(start=row_num, rows=new_row)
                 table.flush()
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
     def getContigNames(self, dbFileName, condition='', indices=np.array([])):
@@ -629,7 +629,7 @@ class GMDataManager:
                         condition = "cid != ''" # no condition breaks everything!
                     return np.array([list(x)[0] for x in h5file.root.meta.contigs.readWhere(condition)]).ravel()
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
     def getContigLengths(self, dbFileName, condition='', indices=np.array([])):
@@ -643,7 +643,7 @@ class GMDataManager:
                         condition = "cid != ''" # no condition breaks everything!
                     return np.array([list(x)[2] for x in h5file.root.meta.contigs.readWhere(condition)]).ravel()
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
     def getKmerSigs(self, dbFileName, condition='', indices=np.array([])):
@@ -657,7 +657,7 @@ class GMDataManager:
                         condition = "cid != ''" # no condition breaks everything!
                     return np.array([list(h5file.root.profile.kms[x.nrow]) for x in h5file.root.meta.contigs.where(condition)])
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
     def getMetaField(self, dbFileName, fieldName):
@@ -667,7 +667,7 @@ class GMDataManager:
                 # theres only one value
                 return h5file.root.meta.meta.read()[fieldName][0]
         except:
-            print "Error opening DB:",dbFileName, sys.exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
     def getNumStoits(self, dbFileName):
@@ -704,7 +704,7 @@ class GMDataManager:
                     META_row.update()
                 META_table.flush()
         except:
-            print "Error opening database:", dbFileName, sys.exc_info()[0]
+            print "Error opening database:", dbFileName, exc_info()[0]
             raise
         
     def getStoitColNames(self, dbFileName):
@@ -720,7 +720,7 @@ class GMDataManager:
             with tables.openFile(dbFileName, mode='r') as h5file:
                 return h5file.root.meta.meta.read()['clustered']
         except:
-            print "Error opening database:", dbFileName, sys.exc_info()[0]
+            print "Error opening database:", dbFileName, exc_info()[0]
             raise
             
     def setClustered(self, dbFileName, state=True):
@@ -733,7 +733,7 @@ class GMDataManager:
                     META_row.update()
                 META_table.flush()
         except:
-            print "Error opening database:", dbFileName, sys.exc_info()[0]
+            print "Error opening database:", dbFileName, exc_info()[0]
             raise
             
     def isComplete(self, dbFileName):
@@ -742,7 +742,7 @@ class GMDataManager:
             with tables.openFile(dbFileName, mode='r') as h5file:
                 return h5file.root.meta.meta.read()['complete']
         except:
-            print "Error opening database:", dbFileName, sys.exc_info()[0]
+            print "Error opening database:", dbFileName, exc_info()[0]
             raise
 
     def setComplete(self, dbFileName, state=True):
@@ -755,7 +755,7 @@ class GMDataManager:
                     META_row.update()
                 META_table.flush()
         except:
-            print "Error opening database:", dbFileName, sys.exc_info()[0]
+            print "Error opening database:", dbFileName, exc_info()[0]
             raise
 
 #------------------------------------------------------------------------------
@@ -811,7 +811,7 @@ class GMDataManager:
                 self.dumpContigs(h5file.root.meta.contigs)
                 self.dumpMeta(h5file.root.meta.meta)
         except:
-            print "Error opening database:", dbFileName, sys.exc_info()[0]
+            print "Error opening database:", dbFileName, exc_info()[0]
             raise
 
 ###############################################################################
@@ -904,7 +904,7 @@ class KmerSigEngine:
     """Simple class for determining kmer signatures"""
     def __init__(self, kLen=4):
         self.kLen = kLen
-        self.compl = string.maketrans('ACGT', 'TGCA')
+        self.compl = s_maketrans('ACGT', 'TGCA')
         (self.kmerCols, self.llDict) = self.makeKmerColNames(makeLL=True)
         self.numMers = len(self.kmerCols)
         
@@ -937,7 +937,7 @@ class KmerSigEngine:
         """Return a hash of index into kmer sig -> GC %"""
         kmer_names = self.makeKmerColNames()
         weights = []
-        compl = string.maketrans('ACGTacgt', '01100110')
+        compl = s_maketrans('ACGTacgt', '01100110')
         for kmer in kmer_names:
             weights.append(sum([float(x) for x in list(kmer.translate(compl))])/float(self.kLen))
         return weights
@@ -945,7 +945,7 @@ class KmerSigEngine:
     def getGC(self, seq):
         """Get the GC of a sequence"""
         Ns = seq.count('N') + seq.count('n')
-        compl = string.maketrans('ACGTacgtnN', '0110011000')
+        compl = s_maketrans('ACGTacgtnN', '0110011000')
         return sum([float(x) for x in list(seq.translate(compl))])/float(len(seq) - Ns)
 
     def shiftLowLexi(self, seq):
@@ -1069,7 +1069,7 @@ class BamParser:
 
 def getBamDescriptor(fullPath):
     """AUX: Reduce a full path to just the file name minus extension"""
-    return os.path.splitext(os.path.basename(fullPath))[0]
+    return op_splitext(op_basename(fullPath))[0]
 
 ###############################################################################
 ###############################################################################

@@ -140,7 +140,6 @@ class GroopMOptionsParser():
             BM = dataManagers.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True,
                         silent=False,
-                        loadLinks=True,
                         getUnbinned=True,
                         cutOff=options.cutoff
                         )

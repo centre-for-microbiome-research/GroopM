@@ -49,34 +49,28 @@ __status__ = "Development"
 
 ###############################################################################
 
-import sys
-import math
-import random
-import os
-import string
-import operator                 
+from sys import exc_info, exit
+from operator import itemgetter
 
-import colorsys
-import matplotlib as mpl
+from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
 
-import numpy as np
+from numpy import abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
+from numpy.linalg import norm as np_norm 
 import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist
 from scipy.spatial import KDTree as kdt
 from scipy.stats import f_oneway, distributions
 
-import tables
-
 # GroopM imports
-import PCA
-import mstore
-import bin
+from PCA import PCA, Center
+from mstore import GMDataManager
+from bin import Bin
 import groopmExceptions as ge
 
-np.seterr(all='raise')     
+np_seterr(all='raise')     
 
 ###############################################################################
 ###############################################################################
@@ -161,21 +155,21 @@ class BinManager:
             bin_members[bid] = []
         
         # fill them up
-        for row_index in range(0, np.size(self.PM.indices)):
+        for row_index in range(0, np_size(self.PM.indices)):
             bin_members[self.PM.binIds[row_index]].append(row_index)
             bin_sizes[self.PM.binIds[row_index]] += self.PM.contigLengths[row_index]
 
         # we need to get the largest BinId in use
         bids = self.PM.getBinStats().keys()
         if(len(bids) > 0):
-            self.nextFreeBinId = np.max(bids)
+            self.nextFreeBinId = np_max(bids)
         
         return bin_members
 
     def makeBins(self, binMembers):
         """Make bin objects from loaded data"""
         for bid in self.PM.validBinIds.keys():
-            self.bins[bid] = bin.Bin(np.array(binMembers[bid]), bid, self.PM.scaleFactor-1)
+            self.bins[bid] = Bin(np_array(binMembers[bid]), bid, self.PM.scaleFactor-1)
             self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)      
 
     def saveBins(self, doCores=True, saveBinStats=True, updateBinStats=True, unbinned={}):
@@ -208,7 +202,7 @@ class BinManager:
         """
         bin_updates = {}
         for bid in self.getBids():
-            bin_updates[bid] = np.size(self.bins[bid].rowIndices)
+            bin_updates[bid] = np_size(self.bins[bid].rowIndices)
         self.PM.saveValidBinIds(bin_updates)
 
     def updateBinStats(self, updates):
@@ -279,7 +273,7 @@ class BinManager:
         # get some info
         rem_bin = self.getBin(bid)
         original_length = len(self.PM.indices)
-        rem_list = np.sort(rem_bin.rowIndices)
+        rem_list = np_sort(rem_bin.rowIndices)
         
         # affect the raw data in the PM
         self.PM.reduceIndicies(rem_list)
@@ -290,7 +284,7 @@ class BinManager:
         
         # now fix all the rowIndices in all the other bins
         for bid in self.getBids():
-            self.bins[bid].rowIndices = self.fixRowIndexLists(original_length, np.sort(self.bins[bid].rowIndices), rem_list)
+            self.bins[bid].rowIndices = self.fixRowIndexLists(original_length, np_sort(self.bins[bid].rowIndices), rem_list)
 
 
     def fixRowIndexLists(self, originalLength, oldList, remList):
@@ -306,12 +300,12 @@ class BinManager:
         """
         shift_down = 0;
         old_list_index = 0
-        new_list = np.array([])
+        new_list = np_array([])
         for i in range(originalLength):
             if(i in remList):
                 shift_down+=1
             elif(i in oldList):
-                new_list = np.append(new_list, oldList[old_list_index]-shift_down)
+                new_list = np_append(new_list, oldList[old_list_index]-shift_down)
                 old_list_index += 1
         return new_list
 
@@ -322,13 +316,13 @@ class BinManager:
         """Construct a network of all bins and their closest neighbours"""
         num_bins = len(self.bins)
         bids = self.getBids()
-        cov_centres = np.reshape([self.bins[bid].covMeans for bid in bids], (num_bins,3))
+        cov_centres = np_reshape([self.bins[bid].covMeans for bid in bids], (num_bins,3))
         
         # get an all vs all distance matrix
         c_dists = cdist(cov_centres, cov_centres)
         
         # reduce this to only close neighbours
-        neigbour_dists = np.where(c_dists < thresholdDist, c_dists, 0.0)
+        neigbour_dists = np_where(c_dists < thresholdDist, c_dists, 0.0)
         
         # now make the network
         network = {}
@@ -386,14 +380,14 @@ class BinManager:
             Xs.append(CM[0])
             Ys.append(CM[1])
             Zs.append(CM[2])
-        sorted_Xs = np.argsort(Xs)
-        sorted_Ys = np.argsort(Ys)
-        sorted_Zs = np.argsort(Zs)
+        sorted_Xs = np_argsort(Xs)
+        sorted_Ys = np_argsort(Ys)
+        sorted_Zs = np_argsort(Zs)
 
         x_dists = {}
         for i in range(max_index):
             for j in range(i + 1, max_index):
-                dist = np.abs(Xs[sorted_Xs[i]] - Xs[sorted_Xs[j]])
+                dist = np_abs(Xs[sorted_Xs[i]] - Xs[sorted_Xs[j]])
                 if(dist <= maxDist):
                     key = self.makeBidKey(bids[sorted_Xs[i]], bids[sorted_Xs[j]])
                     x_dists[key] = dist
@@ -402,7 +396,7 @@ class BinManager:
         y_dists = {}
         for i in range(max_index):
             for j in range(i + 1, max_index):
-                dist = np.abs(Ys[sorted_Ys[i]] - Ys[sorted_Ys[j]])
+                dist = np_abs(Ys[sorted_Ys[i]] - Ys[sorted_Ys[j]])
                 if(dist <= maxDist):
                     key = self.makeBidKey(bids[sorted_Ys[i]], bids[sorted_Ys[j]])
                     if(key in x_dists):
@@ -412,11 +406,11 @@ class BinManager:
         actual_dists = {}
         for i in range(max_index):
             for j in range(i + 1, max_index):
-                dist = np.abs(Zs[sorted_Zs[i]] - Zs[sorted_Zs[j]])
+                dist = np_abs(Zs[sorted_Zs[i]] - Zs[sorted_Zs[j]])
                 if(dist <= maxDist):
                     key = self.makeBidKey(bids[sorted_Zs[i]], bids[sorted_Zs[j]])
                     if(key in y_dists):
-                        dist = np.sqrt(y_dists[key]**2 + x_dists[key]**2 + dist**2)
+                        dist = np_sqrt(y_dists[key]**2 + x_dists[key]**2 + dist**2)
                         if(dist <= maxDist):
                             actual_dists[key] = dist
                 else:
@@ -472,7 +466,7 @@ class BinManager:
                     all_links[key] = links[link]
     
         # sort and return
-        return sorted(all_links.iteritems(), key=operator.itemgetter(1), reverse=True)
+        return sorted(all_links.iteritems(), key=itemgetter(1), reverse=True)
        
     def getWithinLinkProfiles(self):
         """Determine the average number of links between contigs for all bins"""
@@ -498,7 +492,7 @@ class BinManager:
                             min_links = link[1] 
             except KeyError:
                 pass
-        return (np.mean(links), np.std(links), min_links)
+        return (np_mean(links), np_std(links), min_links)
     
 #------------------------------------------------------------------------------
 # BIN EXPANSION
@@ -542,10 +536,10 @@ class BinManager:
             total_expanded += float(num_expanded) 
             num_expanded = 0
             # get bin stats        
-            k_vals = dict(zip(bids, np.array([self.bins[bid].kValMean for bid in bids])))
-            k_stdevs = dict(zip(bids, np.array([self.bins[bid].kValStdev for bid in bids])))
-            c_vals = dict(zip(bids, np.array([self.bins[bid].cValMean for bid in bids])))
-            c_stdevs = dict(zip(bids, np.array([self.bins[bid].cValStdev for bid in bids])))
+            k_vals = dict(zip(bids, np_array([self.bins[bid].kValMean for bid in bids])))
+            k_stdevs = dict(zip(bids, np_array([self.bins[bid].kValStdev for bid in bids])))
+            c_vals = dict(zip(bids, np_array([self.bins[bid].cValMean for bid in bids])))
+            c_stdevs = dict(zip(bids, np_array([self.bins[bid].cValStdev for bid in bids])))
             
             # get a dict of contig Ids to bins
             c2b = self.contig2bids()
@@ -579,8 +573,8 @@ class BinManager:
                                 bid = 0
                             else:
                                 # work out the z-score for these guys coverage and kmer vals
-                                cZ = np.abs((self.PM.averageCoverages[row_index] - c_vals[bid])/c_stdevs[bid])
-                                kZ = np.abs((self.PM.kmerVals[row_index] - k_vals[bid])/k_stdevs[bid])
+                                cZ = np_abs((self.PM.averageCoverages[row_index] - c_vals[bid])/c_stdevs[bid])
+                                kZ = np_abs((self.PM.kmerVals[row_index] - k_vals[bid])/k_stdevs[bid])
     
                                 # we have unambiguous links so we can relax
                                 # tolerance thresholds, kmer ore so than coverage 
@@ -607,7 +601,7 @@ class BinManager:
             # now update all the bins
             for bid in bids:
                 if(bid in new_recruits):
-                    self.bins[bid].rowIndices = np.sort(np.append(self.bins[bid].rowIndices, np.array(new_recruits[bid])))
+                    self.bins[bid].rowIndices = np_sort(np_append(self.bins[bid].rowIndices, np_array(new_recruits[bid])))
 
             # talk to the user
             round += 1
@@ -627,8 +621,8 @@ class BinManager:
     def findClosestBin(self, rowIndex, covCentres, kVals, kStdevs, bids):
         """Who is the closest match for this row index?"""
         c_dists = cdist([self.PM.transformedCP[rowIndex]], covCentres)[0]
-        cov_choice = np.argmin(c_dists)
-        mer_choice = np.argmin(np.abs(kVals- self.PM.kmerVals[rowIndex]))
+        cov_choice = np_argmin(c_dists)
+        mer_choice = np_argmin(np_abs(kVals- self.PM.kmerVals[rowIndex]))
         
         # make sure we're not being silly
         if(c_dists[cov_choice] > 70):
@@ -737,6 +731,8 @@ class BinManager:
     def getClosestBID(self, rowIndex, searchTree, tdm, c2b, k=101, verbose=False):
         """Find the bin ID which would best describe the placement of the contig"""
         # find the k nearest neighbours for the query contig
+        if k < 21:
+            k = 21
         t_list = searchTree.query(tdm[rowIndex],k=k)[1]
         # calculate the distribution of neighbouring bins
         refined_t_list = {}
@@ -764,7 +760,7 @@ class BinManager:
         # we're done!
         return max_bid
 
-    def autoRefineBins(self):
+    def autoRefineBins(self, verbose=False):
         """Automagically refine bins"""
         num_reassigned = -1
         round = 0
@@ -773,16 +769,21 @@ class BinManager:
             num_reassigned = 0
             reassignment_map = {}
             c2b = self.contig2bids()
-            tdm = np.append(self.PM.transformedCP, 1000*np.reshape(self.PM.kmerVals,(len(self.PM.kmerVals),1)),1)
+            tdm = np_append(self.PM.transformedCP, 1000*np_reshape(self.PM.kmerVals,(len(self.PM.kmerVals),1)),1)
             search_tree = kdt(tdm)
             bids = self.getBids()
             for bid in bids:
-                if bid not in stable_bids:
+                bin = self.getBin(bid)
+                if bid in stable_bids:
+                    try:
+                        reassignment_map[bid] += list(bin.rowIndices)
+                    except KeyError:
+                        reassignment_map[bid] = list(bin.rowIndices)
+                else:
                     stable = True
-                    bin = self.getBin(bid)
                     #print "BID:", bid, bin.binSize 
                     for row_index in bin.rowIndices:
-                        assigned_bid = self.getClosestBID(row_index, search_tree, tdm, c2b, k=bin.binSize)                        
+                        assigned_bid = self.getClosestBID(row_index, search_tree, tdm, c2b, verbose=verbose, k=2*bin.binSize-1)                        
                         if assigned_bid != bid:
                             stable = False
                             num_reassigned += 1
@@ -799,7 +800,7 @@ class BinManager:
             bins_removed = 0
             for bid in bids:
                 if bid in reassignment_map:
-                    self.bins[bid].rowIndices = np.array(reassignment_map[bid])
+                    self.bins[bid].rowIndices = np_array(reassignment_map[bid])
                     self.bins[bid].binSize = len(reassignment_map[bid])
                 else:
                     # empty bin
@@ -825,7 +826,7 @@ class BinManager:
                 # we delete these guys!
                 contigs_removed += lo
                 bins_affected += 1
-                nri = np.array([i for i in bin.rowIndices if i not in outliers])
+                nri = np_array([i for i in bin.rowIndices if i not in outliers])
                 bin.rowIndices = nri
                 bin.binSize = original_size - lo
                 for i in outliers:
@@ -890,14 +891,14 @@ class BinManager:
     def getCentroidProfiles(self, mode="mer"):
         """Return an array containing the centroid stats for each bin"""
         if(mode == "mer"):
-            ret_vecs = np.zeros((len(self.bins)))
+            ret_vecs = np_zeros((len(self.bins)))
             outer_index = 0
             for bid in self.getBids():
                 ret_vecs[outer_index] = self.bins[bid].kValMean
                 outer_index += 1
             return ret_vecs
         elif(mode == "cov"):
-            ret_vecs = np.zeros((len(self.bins), len(self.PM.transformedCP[0])))
+            ret_vecs = np_zeros((len(self.bins), len(self.PM.transformedCP[0])))
             outer_index = 0
             for bid in self.getBids():
                 ret_vecs[outer_index] = self.bins[bid].covMeans
@@ -933,7 +934,7 @@ class BinManager:
         # plot some stuff
         # sort the bins by kmer val
         bid_tuples = [(tbid, self.bins[tbid].kValMean) for tbid in bids[1:]]
-        bid_tuples.sort(key=operator.itemgetter(1))
+        bid_tuples.sort(key=itemgetter(1))
         index = 1
         for pair in bid_tuples:
             bids[index] = pair[0]
@@ -979,11 +980,11 @@ class BinManager:
     def getSplitties(self, bid, n, mode):
         """Return a set of split bins"""
         bin = self.getBin(bid)
-        obs = np.array([])
+        obs = np_array([])
         if(mode=='kmer'):
-            obs = np.array([self.PM.kmerVals[i] for i in bin.rowIndices])
+            obs = np_array([self.PM.kmerVals[i] for i in bin.rowIndices])
         elif(mode=='cov'):
-            obs = np.array([self.PM.covProfiles[i] for i in bin.rowIndices])
+            obs = np_array([self.PM.covProfiles[i] for i in bin.rowIndices])
         
         # do the clustering
         from scipy.cluster.vq import kmeans,vq
@@ -997,13 +998,13 @@ class BinManager:
 
         # build some temp bins 
         # this way we can show the user what the split will look like       
-        idx_sorted = np.argsort(np.array(idx))
+        idx_sorted = np_argsort(np_array(idx))
         current_group = 0
         bids = [bid]
         bin_stats = {} # bin id to bin size
         bin_stats[bid]=0 # this will ensure that the old bin id will be deleted!
         bin_update = {} # row index to bin id
-        holding_array = np.array([])
+        holding_array = np_array([])
         split_bin = None
         for i in idx_sorted:
             if(idx[i] != current_group):
@@ -1014,11 +1015,11 @@ class BinManager:
                 bin_stats[split_bin.id] = split_bin.binSize  
                 split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
                 bids.append(split_bin.id)
-                holding_array = np.array([])
+                holding_array = np_array([])
                 current_group = idx[i]
-            holding_array = np.append(holding_array, bin.rowIndices[i])
+            holding_array = np_append(holding_array, bin.rowIndices[i])
         # do the last one
-        if(np.size(holding_array) != 0):
+        if(np_size(holding_array) != 0):
             split_bin = self.makeNewBin(holding_array)
             for row_index in holding_array:
                 bin_update[self.PM.indices[row_index]] = split_bin.id  
@@ -1043,7 +1044,7 @@ class BinManager:
                 c_dist_1 = b1_c_dist
                 if(bin1.binSize < bin2.binSize):
                     c_dist_1 = b2_c_dist
-                c_dist_2 = np.append(b2_c_dist, b1_c_dist)
+                c_dist_2 = np_append(b2_c_dist, b1_c_dist)
                 if verbose:
                     tag = "COV:"
                 else:
@@ -1070,9 +1071,9 @@ class BinManager:
                     k_dist_1 = b1_k_dist
                     if(bin1.binSize < bin2.binSize):
                         k_dist_1 = b2_k_dist
-                    k_dist_2 = np.append(b2_k_dist, b1_k_dist)
+                    k_dist_2 = np_append(b2_k_dist, b1_k_dist)
                     if verbose:
-                        tag = "MER: %0.4f %0.4f" % (np.mean(k_dist_2), np.std(k_dist_2))
+                        tag = "MER: %0.4f %0.4f" % (np_mean(k_dist_2), np_std(k_dist_2))
                     else:
                         tag = "" 
                     mer_match = self.isSameVariance(k_dist_1, k_dist_2, confidence=confidence, tag=tag)
@@ -1128,7 +1129,7 @@ class BinManager:
                 ret_val = 2
                 continue_merge = True
             else:
-                tmp_bin = self.makeNewBin(np.concatenate([parent_bin.rowIndices,dead_bin.rowIndices]))
+                tmp_bin = self.makeNewBin(np_concatenate([parent_bin.rowIndices,dead_bin.rowIndices]))
                 tmp_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
                 self.plotSideBySide([parent_bin.id,dead_bin.id,tmp_bin.id])
                 self.deleteBins([tmp_bin.id], force=True)
@@ -1204,12 +1205,12 @@ class BinManager:
             self.PM.saveBinIds(bin_update)
         return True
         
-    def makeNewBin(self, rowIndices=np.array([]), bid=None):
+    def makeNewBin(self, rowIndices=np_array([]), bid=None):
         """Make a new bin and add to the list of existing bins"""
         if bid is None:
             self.nextFreeBinId +=1
             bid = self.nextFreeBinId
-        self.bins[bid] = bin.Bin(rowIndices, bid, self.PM.scaleFactor-1)        
+        self.bins[bid] = Bin(rowIndices, bid, self.PM.scaleFactor-1)        
         return self.bins[bid]
 
 #------------------------------------------------------------------------------
@@ -1411,10 +1412,10 @@ class BinManager:
         
         # find the mean and stdev 
         if(not makeKillList):
-            return (np.mean(np.array(Ms.values())), np.std(np.array(Ms.values())), np.median(np.array(Ss.values())), np.std(np.array(Ss.values())))
+            return (np_mean(np_array(Ms.values())), np_std(np_array(Ms.values())), np_median(np_array(Ss.values())), np_std(np_array(Ss.values())))
         
         else:
-            cutoff = np.mean(np.array(Ms.values())) + tolerance * np.std(np.array(Ms.values()))  
+            cutoff = np_mean(np_array(Ms.values())) + tolerance * np_std(np_array(Ms.values()))  
             kill_list = []
             for bid in Ms:
                 if(Ms[bid] > cutoff):
@@ -1424,9 +1425,9 @@ class BinManager:
     def findCoreCentres(self, krange=None):
         """Find the point representing the centre of each core"""
         print "    Finding bin centers"
-        bin_centroid_points = np.array([])
-        bin_centroid_colours = np.array([])
-        bids = np.array([])
+        bin_centroid_points = np_array([])
+        bin_centroid_colours = np_array([])
+        bids = np_array([])
         k_low = 0.0
         k_high = 0.0
         if krange is not None:
@@ -1437,25 +1438,25 @@ class BinManager:
         for bid in self.getBids():
             add_bin = True
             if krange is not None:
-                ave_kval = np.mean([self.PM.kmerVals[row_index] for row_index in self.bins[bid].rowIndices])
+                ave_kval = np_mean([self.PM.kmerVals[row_index] for row_index in self.bins[bid].rowIndices])
                 if ave_kval < k_low or ave_kval > k_high:
                     add_bin = False
             if add_bin:
-                bin_centroid_points = np.append(bin_centroid_points,
+                bin_centroid_points = np_append(bin_centroid_points,
                                                 self.bins[bid].covMeans)
-                bin_centroid_colours = np.append(bin_centroid_colours, 
-                                                 np.mean([
+                bin_centroid_colours = np_append(bin_centroid_colours, 
+                                                 np_mean([
                                                           self.PM.contigColours[row_index] for row_index in 
                                                           self.bins[bid].rowIndices
                                                           ],
                                                          axis=0)
                                                  )
-                bids = np.append(bids, bid)
+                bids = np_append(bids, bid)
                 num_added += 1
         
         if num_added != 0:
-            bin_centroid_points = np.reshape(bin_centroid_points, (num_added, 3))
-            bin_centroid_colours = np.reshape(bin_centroid_colours, (num_added, 3))
+            bin_centroid_points = np_reshape(bin_centroid_points, (num_added, 3))
+            bin_centroid_colours = np_reshape(bin_centroid_colours, (num_added, 3))
         
         return (bin_centroid_points, bin_centroid_colours, bids)
 
@@ -1465,36 +1466,36 @@ class BinManager:
         return a list of potentially confounding kmer indices
         """
         print "    Measuring kmer type variances"        
-        means = np.array([])
-        stdevs = np.array([])
-        bids = np.array([])
+        means = np_array([])
+        stdevs = np_array([])
+        bids = np_array([])
         
         # work out the mean and stdev for the kmer sigs for each bin
         for bid in self.getBids():
-            bkworking = np.array([])
+            bkworking = np_array([])
             for row_index in self.bins[bid].rowIndices:
-                bkworking = np.append(bkworking, self.PM.kmerSigs[row_index])
-            bkworking = np.reshape(bkworking, (self.bins[bid].binSize, np.size(self.PM.kmerSigs[0])))
-            bids = np.append(bids, [bid])
-            means = np.append(means, np.mean(bkworking, axis=0))
-            stdevs = np.append(stdevs, np.std(bkworking, axis=0))
+                bkworking = np_append(bkworking, self.PM.kmerSigs[row_index])
+            bkworking = np_reshape(bkworking, (self.bins[bid].binSize, np_size(self.PM.kmerSigs[0])))
+            bids = np_append(bids, [bid])
+            means = np_append(means, np_mean(bkworking, axis=0))
+            stdevs = np_append(stdevs, np_std(bkworking, axis=0))
             
-        means = np.reshape(means, (len(self.bins), np.size(self.PM.kmerSigs[0])))
-        stdevs = np.reshape(stdevs, (len(self.bins), np.size(self.PM.kmerSigs[0])))
+        means = np_reshape(means, (len(self.bins), np_size(self.PM.kmerSigs[0])))
+        stdevs = np_reshape(stdevs, (len(self.bins), np_size(self.PM.kmerSigs[0])))
         
         # now work out the between and within core variances
-        between = np.std(means, axis=0)
-        within = np.median(stdevs, axis=0)
+        between = np_std(means, axis=0)
+        within = np_median(stdevs, axis=0)
 
-        B = np.arange(0, np.size(self.PM.kmerSigs[0]), 1)
+        B = np_arange(0, np_size(self.PM.kmerSigs[0]), 1)
         names = self.PM.getMerColNames().split(',')
         
         # we'd like to find the indices of the worst 10% for each type so we can ignore them
         # specifically, we'd like to remove the least variable between core kms and the 
         # most variable within core kms.
-        sort_between_indices = np.argsort(between)
-        sort_within_indices = np.argsort(within)[::-1]
-        number_to_trim = int(outlierTrim* float(np.size(self.PM.kmerSigs[0])))
+        sort_between_indices = np_argsort(between)
+        sort_within_indices = np_argsort(within)[::-1]
+        number_to_trim = int(outlierTrim* float(np_size(self.PM.kmerSigs[0])))
         
         return_indices =[]
         for i in range(0,number_to_trim):
@@ -1547,7 +1548,7 @@ class BinManager:
                 sys.stdout = open(fileName, 'w')
                 self.printInner(outFormat)
             except:
-                print "Error diverting stout to file:", fileName, sys.exc_info()[0]
+                print "Error diverting stout to file:", fileName, exc_info()[0]
                 raise
         else:
             self.printInner(outFormat)           
@@ -1580,8 +1581,10 @@ class BinManager:
         for bid in self.getBids():
             self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
         if(sideBySide):
+            print "Plotting side by side"
             self.plotSideBySide(self.bins.keys(), tag=FNPrefix)
         else:
+            print "Plotting bins"
             for bid in self.getBids():
                 self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName=FNPrefix+"_"+str(bid))
 
@@ -1590,8 +1593,8 @@ class BinManager:
         fig = plt.figure()
         # we need to work out how to shape the plots
         num_plots = len(bids)
-        plot_rows = float(int(np.sqrt(num_plots)))
-        plot_cols = np.ceil(float(num_plots)/plot_rows)
+        plot_rows = float(int(np_sqrt(num_plots)))
+        plot_cols = np_ceil(float(num_plots)/plot_rows)
         plot_num = 1
         for bid in bids:
             title = self.bins[bid].plotOnAx(fig, plot_rows, plot_cols, plot_num, self.PM.transformedCP, self.PM.contigColours, fileName=fileName)
@@ -1602,13 +1605,13 @@ class BinManager:
                 fig.set_size_inches(12,6)
                 plt.savefig(fileName,dpi=300)
             except:
-                print "Error saving image:", fileName, sys.exc_info()[0]
+                print "Error saving image:", fileName, exc_info()[0]
                 raise
         elif(show):
             try:
                 plt.show()
             except:
-                print "Error showing image:", sys.exc_info()[0]
+                print "Error showing image:", exc_info()[0]
                 raise
         plt.close(fig)
         del fig
@@ -1635,7 +1638,7 @@ class BinManager:
             plt.show()
             plt.close(fig)
         except:
-            print "Error showing image", sys.exc_info()[0]
+            print "Error showing image", exc_info()[0]
             raise
         del fig
 
@@ -1649,7 +1652,7 @@ class BinManager:
             plt.show()
             plt.close(fig)
         except:
-            print "Error showing image", sys.exc_info()[0]
+            print "Error showing image", exc_info()[0]
             raise
         del fig
 
@@ -1665,24 +1668,24 @@ class ProfileManager:
     """
     def __init__(self, dbFileName, force=False, scaleFactor=1000):
         # data
-        self.dataManager = mstore.GMDataManager()  # most data is saved to hdf
+        self.dataManager = GMDataManager()  # most data is saved to hdf
         self.dbFileName = dbFileName        # db containing all the data we'd like to use
         self.condition = ""                 # condition will be supplied at loading time
         # --> NOTE: ALL of the arrays in this section are in sync
         # --> each one holds information for an individual contig 
-        self.indices = np.array([])        # indices into the data structure based on condition
-        self.covProfiles = np.array([])     # coverage based coordinates
-        self.transformedCP = np.array([])   # the munged data points
-        self.averageCoverages = np.array([]) # average coverage across all stoits
-        self.kmerSigs = np.array([])        # raw kmer signatures
-        self.kmerVals = np.array([])        # PCA'd kmer sigs
+        self.indices = np_array([])        # indices into the data structure based on condition
+        self.covProfiles = np_array([])     # coverage based coordinates
+        self.transformedCP = np_array([])   # the munged data points
+        self.averageCoverages = np_array([]) # average coverage across all stoits
+        self.kmerSigs = np_array([])        # raw kmer signatures
+        self.kmerVals = np_array([])        # PCA'd kmer sigs
 
-        self.contigNames = np.array([])
-        self.contigLengths = np.array([])
-        self.contigColours = np.array([])   # calculated from kmerVals
+        self.contigNames = np_array([])
+        self.contigLengths = np_array([])
+        self.contigColours = np_array([])   # calculated from kmerVals
         
-        self.binIds = np.array([])          # list of bin IDs
-        self.isCore = np.array([])          # True False values
+        self.binIds = np_array([])          # list of bin IDs
+        self.isCore = np_array([])          # True False values
         # --> end section
 
         # meta                
@@ -1741,7 +1744,7 @@ class ProfileManager:
                 self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indices=self.indices)
 
                 # work out average coverages
-                self.averageCoverages = np.array([sum(i)/self.numStoits for i in self.covProfiles])
+                self.averageCoverages = np_array([sum(i)/self.numStoits for i in self.covProfiles])
 
             if(loadKmerSigs):
                 if(verbose):
@@ -1755,7 +1758,7 @@ class ProfileManager:
                     # use HSV to RGB to generate colours
                     S = 1       # SAT and VAL remain fixed at 1. Reduce to make
                     V = 1       # Pastels if that's your preference...
-                    self.contigColours = np.array([colorsys.hsv_to_rgb(val, S, V) for val in self.kmerVals])
+                    self.contigColours = np_array([htr(val, S, V) for val in self.kmerVals])
 
             if(loadContigNames):
                 if(verbose):
@@ -1794,7 +1797,7 @@ class ProfileManager:
                 self.links = self.getLinks()
             
         except:
-            print "Error loading DB:", self.dbFileName, sys.exc_info()[0]
+            print "Error loading DB:", self.dbFileName, exc_info()[0]
             raise
 
     def reduceIndicies(self, deadRowIndicies):
@@ -1803,16 +1806,16 @@ class ProfileManager:
         Be sure that deadRowIndicies are sorted ascending
         """
         # strip out the other values        
-        self.indices = np.delete(self.indices, deadRowIndicies, axis=0)
-        self.covProfiles = np.delete(self.covProfiles, deadRowIndicies, axis=0)
-        self.transformedCP = np.delete(self.transformedCP, deadRowIndicies, axis=0)
-        self.contigNames = np.delete(self.contigNames, deadRowIndicies, axis=0)
-        self.contigLengths = np.delete(self.contigLengths, deadRowIndicies, axis=0)
-        self.contigColours = np.delete(self.contigColours, deadRowIndicies, axis=0)
-        self.kmerSigs = np.delete(self.kmerSigs, deadRowIndicies, axis=0)
-        self.kmerVals = np.delete(self.kmerVals, deadRowIndicies, axis=0)
-        self.binIds = np.delete(self.binIds, deadRowIndicies, axis=0)
-        self.isCore = np.delete(self.isCore, deadRowIndicies, axis=0)
+        self.indices = np_delete(self.indices, deadRowIndicies, axis=0)
+        self.covProfiles = np_delete(self.covProfiles, deadRowIndicies, axis=0)
+        self.transformedCP = np_delete(self.transformedCP, deadRowIndicies, axis=0)
+        self.contigNames = np_delete(self.contigNames, deadRowIndicies, axis=0)
+        self.contigLengths = np_delete(self.contigLengths, deadRowIndicies, axis=0)
+        self.contigColours = np_delete(self.contigColours, deadRowIndicies, axis=0)
+        self.kmerSigs = np_delete(self.kmerSigs, deadRowIndicies, axis=0)
+        self.kmerVals = np_delete(self.kmerVals, deadRowIndicies, axis=0)
+        self.binIds = np_delete(self.binIds, deadRowIndicies, axis=0)
+        self.isCore = np_delete(self.isCore, deadRowIndicies, axis=0)
         
 #------------------------------------------------------------------------------
 # GET / SET 
@@ -1948,25 +1951,25 @@ class ProfileManager:
 
     def transformCP(self, silent=False, nolog=False, min=None, max=None):
         """Do the main ransformation on the coverage profile data"""
-        shrinkFn = np.log10
+        shrinkFn = np_log10
         if(nolog):
             shrinkFn = lambda x:x
          
         s = (self.numContigs,3)
-        self.transformedCP = np.zeros(s)
+        self.transformedCP = np_zeros(s)
 
         if(not silent):
             print "    Dimensionality reduction"
 
         # get the median distance from the origin
-        unit_vectors = [(np.cos(i*2*np.pi/self.numStoits),np.sin(i*2*np.pi/self.numStoits)) for i in range(self.numStoits)]
+        unit_vectors = [(np_cos(i*2*np_pi/self.numStoits),np_sin(i*2*np_pi/self.numStoits)) for i in range(self.numStoits)]
         for i in range(len(self.indices)):
-            norm = np.linalg.norm(self.covProfiles[i])
+            norm = np_norm(self.covProfiles[i])
             if(norm != 0):
                 radial = shrinkFn(norm)
             else:
                 radial = norm
-            shifted_vector = np.array([0.0,0.0])
+            shifted_vector = np_array([0.0,0.0])
             flat_vector = (self.covProfiles[i] / sum(self.covProfiles[i]))
             
             for j in range(self.numStoits):
@@ -1975,7 +1978,7 @@ class ProfileManager:
 
             # log scale it towards the centre
             scaling_vector = shifted_vector * self.scaleFactor
-            sv_size = np.linalg.norm(scaling_vector)
+            sv_size = np_norm(scaling_vector)
             if(sv_size > 1):
                 shifted_vector /= shrinkFn(sv_size)
 
@@ -1988,8 +1991,8 @@ class ProfileManager:
             
         # finally scale the matrix to make it equal in all dimensions
         if(min is None):                
-            min = np.amin(self.transformedCP, axis=0)
-            max = np.amax(self.transformedCP, axis=0)
+            min = np_amin(self.transformedCP, axis=0)
+            max = np_amax(self.transformedCP, axis=0)
             max = max - min
             max = max / (self.scaleFactor-1)
 
@@ -2000,17 +2003,17 @@ class ProfileManager:
 
     def makeColourProfile(self):
         """Make a colour profile based on ksig information"""
-        working_data = np.array(self.kmerSigs, copy=True) 
-        PCA.Center(working_data,verbose=0)
-        p = PCA.PCA(working_data)
+        working_data = np_array(self.kmerSigs, copy=True) 
+        Center(working_data,verbose=0)
+        p = PCA(working_data)
         components = p.pc()
         
         # now make the colour profile based on PC1
-        self.kmerVals = np.array([float(i) for i in components[:,0]])
+        self.kmerVals = np_array([float(i) for i in components[:,0]])
         
         # normalise to fit between 0 and 1
-        self.kmerVals -= np.min(self.kmerVals)
-        self.kmerVals /= np.max(self.kmerVals)
+        self.kmerVals -= np_min(self.kmerVals)
+        self.kmerVals /= np_max(self.kmerVals)
         if(False):
             plt.figure(1)
             plt.subplot(111)
@@ -2057,21 +2060,21 @@ class ProfileManager:
         B = delta_max/las
         delta = 2*B*theta - A *(theta**2) # the amount to shift
         V_p = point*(1-delta) + centerVector*delta
-        return V_p/np.linalg.norm(V_p)
+        return V_p/np_norm(V_p)
     
     def rad2deg(self, anglein):
-        return 180*anglein/np.pi
+        return 180*anglein/np_pi
 
     def getAngBetween(self, P1, P2):
         """Return the angle between two points (in radians)"""
         # find the existing angle between them theta
-        c = np.dot(P1,P2)/np.linalg.norm(P1)/np.linalg.norm(P2) 
+        c = np_dot(P1,P2)/np_norm(P1)/np_norm(P2) 
         # rounding errors hurt everyone...
         if(c > 1):
             c = 1
         elif(c < -1):
             c = -1
-        return np.arccos(c) # in radians
+        return np_arccos(c) # in radians
 
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
@@ -2087,7 +2090,7 @@ class ProfileManager:
             plt.show()
             plt.close(fig)
         except:
-            print "Error showing image", sys.exc_info()[0]
+            print "Error showing image", exc_info()[0]
             raise
         del fig
 
@@ -2200,13 +2203,13 @@ class ProfileManager:
                     fig.set_size_inches(primaryWidth,primaryWidth)            
                 plt.savefig(fileName,dpi=dpi,format=format)
             except:
-                print "Error saving image",fileName, sys.exc_info()[0]
+                print "Error saving image",fileName, exc_info()[0]
                 raise
         elif(show):
             try:
                 plt.show()
             except:
-                print "Error showing image", sys.exc_info()[0]
+                print "Error showing image", exc_info()[0]
                 raise
         if del_fig:
             plt.close(fig)
