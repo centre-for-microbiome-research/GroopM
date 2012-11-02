@@ -122,9 +122,9 @@ if __name__ == '__main__':
                                         help='load saved data and make bin cores',
                                         description='Load saved data and make bin cores')
     core_builder.add_argument('dbname', help="name of the database to open")
-    core_builder.add_argument('-c', '--cutoff', default=3000, help="cutoff contig size for core creation")
-    core_builder.add_argument('-s', '--size', default=5, help="minimum number of contigs which define a core")
-    core_builder.add_argument('-b', '--bp', default=1000000, help="cumulative size of contigs which define a core regardless of number of contigs")
+    core_builder.add_argument('-c', '--cutoff', type=int, default=3000, help="cutoff contig size for core creation")
+    core_builder.add_argument('-s', '--size', type=int, default=5, help="minimum number of contigs which define a core")
+    core_builder.add_argument('-b', '--bp', type=int, default=1000000, help="cumulative size of contigs which define a core regardless of number of contigs")
     core_builder.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing DB file without prompting")
     core_builder.add_argument('-p', '--plot', action="store_true", default=False, help="create plots during core creation - MAKES MANY IMAGES!")
 
@@ -145,9 +145,10 @@ if __name__ == '__main__':
                                         help='load saved data and enlarge bins',
                                         description='Recruit more contigs into existing bins')
     bin_expander.add_argument('dbname', help="name of the database to open")
-    bin_expander.add_argument('-c', '--cutoff', type=int, default=2000, help="cutoff contig size")
+    bin_expander.add_argument('-c', '--cutoff', type=int, default=500, help="cutoff contig size")
     bin_expander.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing db file without prompting")
-    #bin_expander.add_argument('-p', '--plot', action="store_true", default=False, help="create plots during bin expansion")
+    bin_expander.add_argument('-s', '--step', default=200, type=int, help="step size for iterative recruitment")
+    bin_expander.add_argument('-i', '--inclusivity', default=2.5, type=float, help="make recruitment more or less inclusive")
 
     #-------------------------------------------------
     # extract reads and contigs from saved
@@ -158,7 +159,7 @@ if __name__ == '__main__':
     bin_extractor.add_argument('dbname', help="name of the database to open")
     bin_extractor.add_argument('data', nargs='+', help="data file(s) to extract from, bam or fasta")
     bin_extractor.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to use (None for all)")
-    bin_extractor.add_argument('-c', '--cutoff', default=0, help="cutoff contig size, ignored for reads (0 for no cutoff)")
+    bin_extractor.add_argument('-c', '--cutoff', type=int, default=0, help="cutoff contig size, ignored for reads (0 for no cutoff)")
     bin_extractor.add_argument('-m', '--mode', default="contigs", help="what to extract [reads, contigs]")
     bin_extractor.add_argument('-o', '--outfolder', default="", help="write to this folder (None for current dir)")
     bin_extractor.add_argument('-s', '--shuffle', action="store_true", default=False, help="shuffle reads file, ignored for contigs or unpaired reads")

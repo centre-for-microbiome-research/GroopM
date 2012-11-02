@@ -497,31 +497,105 @@ class BinManager:
 #------------------------------------------------------------------------------
 # BIN REFINEMENT AND EXPANSION
 
-    def recruitContigs(self, saveBins=False):
+    def recruitWrapper(self, inclusivity=2, step=200, saveBins=False):
         """Recuit more contigs to the bins"""
         print "Recruiting unbinned contigs"
-        # pare down each bin
-    
         # make a list of all the cov and kmer vals
         num_bins = len(self.bins)
-        bids = self.getBids()
         num_expanded = 1
         total_expanded = 0
         total_binned = 0
+        total_unbinned = 0
         total_contigs = len(self.PM.indices)
-
-        # for stats, work out number binned and unbinned
-        for row_index in range(len(self.PM.indices)):
-            if(row_index not in self.PM.binnedRowIndicies):
-                total_unbinned += 1
-            else:
-                total_binned += 1
-        perc_binned = float(total_binned)/float(total_contigs)
-        print "    BEGIN: %0.4f" % perc_binned +"%"+" of %d requested contigs in bins" % total_contigs
+        shortest_binned = 1000000000          # we need to know this
+        shortest_unbinned = 1000000000
         
+        # we need to get a list of bin centroids
+        (bin_centroid_points,
+         bin_centroid_colours,
+         bin_centroid_kvals,
+         bids) = self.findCoreCentres(getKVals=True)
+        # centroids
+        tdm_centroid = np_append(bin_centroid_points,
+                                 1000*np_reshape(bin_centroid_kvals,(len(bin_centroid_kvals),1)),
+                                 1)
+        search_tree = kdt(tdm_centroid)
+        # contigs
+        tdm = np_append(self.PM.transformedCP,
+                        1000*np_reshape(self.PM.kmerVals,(len(self.PM.kmerVals),1)),
+                        1)
+        # for stats, work out number binned and unbinned and relative lengths
+        unbinned = {}
+        for row_index in range(len(self.PM.indices)):
+            if(row_index in self.PM.binnedRowIndicies):
+                if self.PM.contigLengths[row_index] < shortest_binned:
+                    shortest_binned = self.PM.contigLengths[row_index] 
+                total_binned += 1
+            else:
+                if self.PM.contigLengths[row_index] < shortest_unbinned:
+                    shortest_unbinned = self.PM.contigLengths[row_index] 
+                total_unbinned += 1
+                unbinned[row_index] = self.PM.contigLengths[row_index] 
+        
+        # work out how many iterations we'll do
+        if shortest_binned > shortest_unbinned:
+            size_range = shortest_binned - shortest_unbinned 
+            num_steps = size_range/step
+            if num_steps == 0:
+                steps = [shortest_unbinned]
+            else:
+                step_size = size_range/num_steps
+                steps = [shortest_binned - i*step_size for i in range(1,num_steps)]
+                steps.append(shortest_unbinned)
+        else:
+            steps = [shortest_unbinned]
+
+        # talk to the user
+        perc_binned = float(total_binned)/float(total_contigs)
+        print "    Planned steps = ", steps
+        print "    BEGIN: %0.4f" % perc_binned +"%"+" of %d requested contigs in bins" % total_contigs
+        print "    %d contigs unbinned" % total_unbinned
+        
+        # go through the steps we decided on
+        for cutoff in steps:
+            print "    Recruiting contigs above: %d" % cutoff
+            newly_binned = [0]
+            this_step_binned = 0 
+            while len(newly_binned) > 0:
+                newly_binned = []
+                affected_bids = []
+                for row_index in unbinned:
+                    if unbinned[row_index] >= cutoff:
+                        # meets our criteria
+                        putative_bid = int(bids[search_tree.query(tdm[row_index])[1]])
+                        (covZ,merZ) = self.scoreContig(row_index, putative_bid)
+                        if covZ <= inclusivity and merZ <= inclusivity:
+                            # we can recruit
+                            self.bins[putative_bid].rowIndices = np_append(self.bins[putative_bid].rowIndices,
+                                                                            row_index
+                                                                            ) 
+                            affected_bids.append(putative_bid)
+                            newly_binned.append(row_index)
+                            this_step_binned += 1
+                            total_binned += 1
+                            total_expanded += 1
+    
+                # remove any binned contigs from the unbinned list
+                for row_index in newly_binned:
+                    del unbinned[row_index]
+
+                # remake bin stats
+                for bid in affected_bids:
+                    self.bins[bid].makeBinDist(self.PM.transformedCP,
+                                               self.PM.averageCoverages,
+                                               self.PM.kmerVals,
+                                               self.PM.contigLengths)      
+
+            print "    Recruited: %d contigs" % this_step_binned
+
         # talk to the user
         perc_recruited = float(total_expanded)/float(total_unbinned)
-        perc_binned = (total_expanded + total_binned)/float(total_contigs)
+        perc_binned = float(total_binned)/float(total_contigs)
         print "    Recruited %0.4f" % perc_recruited +"%"+" of %d unbinned contigs" % total_unbinned
         print "    END: %0.4f" % perc_binned +"%"+" of %d requested contigs in bins" % total_contigs
          
@@ -619,6 +693,8 @@ class BinManager:
         # find the k nearest neighbours for the query contig
         if k < 21:
             k = 21
+        if k > 101:
+            k = 101
         t_list = searchTree.query(tdm[rowIndex],k=k)[1]
         # calculate the distribution of neighbouring bins
         refined_t_list = {}
@@ -658,6 +734,7 @@ class BinManager:
             reassignment_map = {}
             c2b = self.contig2bids()
             bids = self.getBids()
+            calls = 0
             for bid in bids:
                 bin = self.getBin(bid)
                 if bid in stable_bids:
@@ -669,6 +746,7 @@ class BinManager:
                     stable = True
                     #print "BID:", bid, bin.binSize 
                     for row_index in bin.rowIndices:
+                        calls += 1
                         assigned_bid = self.getClosestBID(row_index, search_tree, tdm, c2b, verbose=verbose, k=2*bin.binSize-1)                        
                         if assigned_bid != bid:
                             stable = False
@@ -682,6 +760,7 @@ class BinManager:
                     if stable: # no changes this round, mark bin as stable
                         stable_bids[bid] = True
             
+            print "Calls:", calls
             # now fix the bins
             bins_removed = 0
             for bid in bids:
@@ -1193,19 +1272,6 @@ class BinManager:
 #------------------------------------------------------------------------------
 # BIN STATS 
 
-    def classify(self, rowIndex, bids):
-        """Classify a contig based on similarity to a set of bins"""
-        min_score = 100000000
-        info = [rowIndex, len(bids)]
-        classification = 0
-        for bid in sorted(bids):
-            (score, scores) = self.scoreContig(rowIndex, bid)
-            info.append((bid, score, scores))
-            if(score < min_score):
-                classification = bid
-                min_score = score
-        return (classification, "".join(str(info)))
-
     def scoreContig(self, rowIndex, bid):
         """Determine how well a particular contig fits with a bin"""
         return self.getBin(bid).scoreProfile(self.PM.kmerVals[rowIndex], self.PM.transformedCP[rowIndex])
@@ -1237,11 +1303,12 @@ class BinManager:
                     kill_list.append(bid)
             return (kill_list, cutoff)
 
-    def findCoreCentres(self, krange=None):
+    def findCoreCentres(self, krange=None, getKVals=False):
         """Find the point representing the centre of each core"""
         print "    Finding bin centers"
         bin_centroid_points = np_array([])
         bin_centroid_colours = np_array([])
+        bin_centroid_kvals = np_array([])
         bids = np_array([])
         k_low = 0.0
         k_high = 0.0
@@ -1266,13 +1333,24 @@ class BinManager:
                                                           ],
                                                          axis=0)
                                                  )
+                if getKVals:
+                    bin_centroid_kvals = np_append(bin_centroid_kvals, 
+                                                   np_mean([
+                                                            self.PM.kmerVals[row_index] for row_index in 
+                                                            self.bins[bid].rowIndices
+                                                            ],
+                                                           axis=0)
+                                                   )
+
                 bids = np_append(bids, bid)
                 num_added += 1
         
         if num_added != 0:
             bin_centroid_points = np_reshape(bin_centroid_points, (num_added, 3))
             bin_centroid_colours = np_reshape(bin_centroid_colours, (num_added, 3))
-        
+                
+        if getKVals:
+            return (bin_centroid_points, bin_centroid_colours, bin_centroid_kvals, bids)
         return (bin_centroid_points, bin_centroid_colours, bids)
 
     def analyseBinKVariance(self, outlierTrim=0.1, plot=False):

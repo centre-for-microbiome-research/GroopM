@@ -142,9 +142,9 @@ class Bin:
         
         This is the norm of the vector containing z distances for both profiles
         """
-        covZ = np.mean(np.abs((transformedCP - self.covMeans)/self.covStdevs))**2
-        merZ = (np.abs(kmerVal - self.kValMean)/self.kValStdev)**2 
-        return (np.sqrt(covZ + merZ), (covZ,merZ))
+        covZ = np.mean(np.abs(transformedCP - self.covMeans)/self.covStdevs)
+        merZ = np.abs(kmerVal - self.kValMean)/self.kValStdev 
+        return (covZ,merZ)
 
     def isSimilar(self, alien, merValTol=5, covTol=5):
         """See if two bins are similar
@@ -335,30 +335,6 @@ class Bin:
         if centroid is None:
             centroid = self.covMeans
         return np.linalg.norm(Csig-centroid)
-    
-    def findOutliers(self, transformedCP, kmerVals, percent=0.1, mode="kmer"):
-        """Return the list of row indices which least match the profile of the bin"""
-
-        # check we're not trying to do something stupid
-        num_to_purge = int(self.binSize * percent)
-        if(num_to_purge == self.binSize):
-            return []
-
-        # make a list of all the profile distances
-        dists = []
-        if(mode == "kmer"):
-            dists = [np.abs(self.kValMean - kmerVals[i]) for i in self.rowIndices]
-        elif(mode =="cov"):
-            dists = [self.getCDist(transformedCP[i]) for i in self.rowIndices]
-        else:
-            raise ModeNotAppropriateException("Mode",mode,"unknown")
-        
-        # find the bottom x
-        sorted_dists = np.argsort(dists)[::-1]
-        ret_list = []
-        for i in range(num_to_purge):
-            ret_list.append(self.rowIndices[sorted_dists[i]])
-        return ret_list
         
 #------------------------------------------------------------------------------
 # Grow the bin 

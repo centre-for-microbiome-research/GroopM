@@ -143,7 +143,7 @@ class GroopMOptionsParser():
                         getUnbinned=True,
                         cutOff=options.cutoff
                         )
-            BM.recruitContigs(saveBins=True)
+            BM.recruitWrapper(inclusivity=options.inclusivity, step=options.step, saveBins=True)
         
         elif(options.subparser_name == 'extract'):
             # Extract data
