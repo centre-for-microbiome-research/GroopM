@@ -506,22 +506,10 @@ class BinManager:
         num_bins = len(self.bins)
         bids = self.getBids()
         num_expanded = 1
-        total_expanded = -1.0
-        total_unbinned = 0
+        total_expanded = 0
         total_binned = 0
         total_contigs = len(self.PM.indices)
 
-        # work out what the average linking consistency is for 
-        # contigs in the same bin
-        wlp = self.getWithinLinkProfiles()
-        # work out bare minimum number of links to be able to include
-        wlp_mins = {}
-        for bid in wlp:
-            min = wlp[bid][0] - 3 * wlp[bid][1]
-            if min < 0:
-                min = 0
-            wlp_mins[bid] = min
-        
         # for stats, work out number binned and unbinned
         for row_index in range(len(self.PM.indices)):
             if(row_index not in self.PM.binnedRowIndicies):
@@ -531,85 +519,8 @@ class BinManager:
         perc_binned = float(total_binned)/float(total_contigs)
         print "    BEGIN: %0.4f" % perc_binned +"%"+" of %d requested contigs in bins" % total_contigs
         
-        round = 0
-        while num_expanded > 0:
-            total_expanded += float(num_expanded) 
-            num_expanded = 0
-            # get bin stats        
-            k_vals = dict(zip(bids, np_array([self.bins[bid].kValMean for bid in bids])))
-            k_stdevs = dict(zip(bids, np_array([self.bins[bid].kValStdev for bid in bids])))
-            c_vals = dict(zip(bids, np_array([self.bins[bid].cValMean for bid in bids])))
-            c_stdevs = dict(zip(bids, np_array([self.bins[bid].cValStdev for bid in bids])))
-            
-            # get a dict of contig Ids to bins
-            c2b = self.contig2bids()
-            
-            # build them back up again
-            new_recruits = {} # save new recruits here and update bins in one go
-            for row_index in range(len(self.PM.indices)):
-                if(row_index not in self.PM.binnedRowIndicies):
-                    # get information about contigs this guy is linked to
-                    # and which bins they belong to
-                    linking_bins = self.getConnectedBins(row_index, c2b)
-                    # summarise this info, look for a consensus bin...
-                    bin2counts = {}
-                    for link in linking_bins:
-                        if link[1] != 0:
-                            try:
-                                bin2counts[link[1]] += link[2]
-                            except KeyError:
-                                bin2counts[link[1]] = link[2]
-                    bid = 0
-                    if len(bin2counts) > 0:
-                        #print row_index, self.PM.contigLengths[row_index], bin2counts
-                        # we only want completely unambiguous link information
-                        if len(bin2counts) == 1:
-                            # choose the putative bid
-                            bid = bin2counts.keys()[0]
-                            num_links = bin2counts.values()[0]
-                            
-                            # check that there are a suitable number of links here
-                            if num_links < wlp_mins[bid]:
-                                bid = 0
-                            else:
-                                # work out the z-score for these guys coverage and kmer vals
-                                cZ = np_abs((self.PM.averageCoverages[row_index] - c_vals[bid])/c_stdevs[bid])
-                                kZ = np_abs((self.PM.kmerVals[row_index] - k_vals[bid])/k_stdevs[bid])
-    
-                                # we have unambiguous links so we can relax
-                                # tolerance thresholds, kmer ore so than coverage 
-                                if (cZ > 3 or kZ > 3) and num_links < wlp[bid][0]:
-                                    bid = 0
-                                else:
-                                    print self.PM.averageCoverages[row_index], c_vals[bid], c_stdevs[bid]
-                                    print self.PM.kmerVals[row_index], k_vals[bid], k_stdevs[bid]
-                                    print cZ, kZ ,"{", num_links, wlp[bid][0], "}"
-                                    
-                    if(bid != 0):
-                        # we could bin this guy
-                        try:
-                            new_recruits[bid].append(row_index)
-                        except KeyError:
-                            new_recruits[bid] = [row_index]
-
-                        # mark this guy as binned
-                        self.PM.binnedRowIndicies[row_index] = True
-                                                    
-                        # we did at least some work
-                        num_expanded += 1 
-
-            # now update all the bins
-            for bid in bids:
-                if(bid in new_recruits):
-                    self.bins[bid].rowIndices = np_sort(np_append(self.bins[bid].rowIndices, np_array(new_recruits[bid])))
-
-            # talk to the user
-            round += 1
-            print "    Recruit round %d: recruited: %d contigs" % (round, num_expanded)
-            break
-        
         # talk to the user
-        perc_recruited = total_expanded/float(total_unbinned)
+        perc_recruited = float(total_expanded)/float(total_unbinned)
         perc_binned = (total_expanded + total_binned)/float(total_contigs)
         print "    Recruited %0.4f" % perc_recruited +"%"+" of %d unbinned contigs" % total_unbinned
         print "    END: %0.4f" % perc_binned +"%"+" of %d requested contigs in bins" % total_contigs
@@ -765,12 +676,12 @@ class BinManager:
         num_reassigned = -1
         round = 0
         stable_bids = {} # once a bin is stable it's stable!
+        tdm = np_append(self.PM.transformedCP, 1000*np_reshape(self.PM.kmerVals,(len(self.PM.kmerVals),1)),1)
+        search_tree = kdt(tdm)
         while num_reassigned != 0:
             num_reassigned = 0
             reassignment_map = {}
             c2b = self.contig2bids()
-            tdm = np_append(self.PM.transformedCP, 1000*np_reshape(self.PM.kmerVals,(len(self.PM.kmerVals),1)),1)
-            search_tree = kdt(tdm)
             bids = self.getBids()
             for bid in bids:
                 bin = self.getBin(bid)
