@@ -66,9 +66,6 @@ from scipy.stats import kstest
 
 import time
 
-# GroopM imports
-import dataManagers
-
 np.seterr(all='raise')
 
 ###############################################################################

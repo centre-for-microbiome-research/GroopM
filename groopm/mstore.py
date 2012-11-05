@@ -127,7 +127,6 @@ class GMDataManager:
     'cid'    : tables.StringCol(512, pos=0)
     'bid'    : tables.Int32Col(pos=1)
     'length' : tables.Int32Col(pos=2)
-    'core'   : tables.BoolCol(pos=3)                  # is this contig part of a bin's core?
     
     ** Bins **
     table = 'bin'
@@ -214,8 +213,7 @@ class GMDataManager:
                 #------------------------
                 db_desc = {'cid' : tables.StringCol(512, pos=0),
                            'bid' : tables.Int32Col(dflt=0,pos=1),
-                           'length' : tables.Int32Col(pos=2),
-                           'core' : tables.BoolCol(dflt=False, pos=3) }
+                           'length' : tables.Int32Col(pos=2) }
                 try:
                     CONTIG_table = h5file.createTable(meta_group, 'contigs', db_desc, "Contig information", expectedrows=len(contigNames))
                     cid_2_indices = self.initContigs(CONTIG_table, contigNames)
@@ -466,8 +464,7 @@ class GMDataManager:
                 # make a new tmp table
                 db_desc = {'cid' : tables.StringCol(512, pos=0),
                            'bid' : tables.Int32Col(dflt=0,pos=1),
-                           'length' : tables.Int32Col(pos=2),
-                           'core' : tables.BoolCol(dflt=False, pos=3) }
+                           'length' : tables.Int32Col(pos=2) }
                 CONTIG_table = meta_group.createTable('/', 'tmp_contigs', db_desc, "Contig information", expectedrows=len(contig_names))
                 cid_2_indices = self.initContigs(CONTIG_table, contig_names)
                 # do the rename
@@ -566,52 +563,19 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
-    def setBins(self, dbFileName, updates):
+    def setBinAssignments(self, dbFileName, assignments):
         """Set per-contig bins
         
         updates is a dictionary which looks like:
         { tableRow : binValue }
         """
-        row_nums = updates.keys()
+        row_nums = assignments.keys()
         try:
             with tables.openFile(dbFileName, mode='a') as h5file:
                 table = h5file.root.meta.contigs
-                for row_num in updates.keys():
-                    new_row = np.zeros((1,),dtype=('S512,i4,i4,b1'))
-                    new_row[:] = [(table[row_num][0],updates[row_num],table[row_num][2],table[row_num][3])]
-                    table.modifyRows(start=row_num, rows=new_row)
-                table.flush()
-        except:
-            print "Error opening DB:",dbFileName, exc_info()[0]
-            raise
-
-    def getCores(self, dbFileName, condition='', indices=np.array([])):
-        """Load bin core info"""
-        try:
-            with tables.openFile(dbFileName, mode='r') as h5file:
-                if(np.size(indices) != 0):
-                    return np.array([h5file.root.meta.contigs[x][3] for x in indices]).ravel()
-                else:
-                    if('' == condition):
-                        condition = "cid != ''" # no condition breaks everything!
-                    return np.array([list(x)[3] for x in h5file.root.meta.contigs.readWhere(condition)]).ravel()
-        except:
-            print "Error opening DB:",dbFileName, exc_info()[0]
-            raise
-
-    def setCores(self, dbFileName, updates):
-        """Set bin cores
-        
-        updates is a dictionary which looks like:
-        { tableRow : coreValue }
-        """
-        row_nums = updates.keys()
-        try:
-            with tables.openFile(dbFileName, mode='a') as h5file:
-                table = h5file.root.meta.contigs
-                for row_num in updates.keys():
-                    new_row = np.zeros((1,),dtype=('S512,i4,i4,b1'))
-                    new_row[:] = [(table[row_num][0],table[row_num][1],table[row_num][2],updates[row_num])]
+                for row_num in row_nums:
+                    new_row = np.zeros((1,),dtype=('S512,i4,i4'))
+                    new_row[:] = [(table[row_num][0],assignments[row_num],table[row_num][2])]
                     table.modifyRows(start=row_num, rows=new_row)
                 table.flush()
         except:
@@ -767,7 +731,7 @@ class GMDataManager:
         print "Contigs table"
         print "-----------------------------------"
         for row in table:
-            print row['cid'],",",row['length'],",",row['bid'],",",row['core']
+            print row['cid'],",",row['length'],",",row['bid']
 
     def dumpbins(self, table):
         """Raw dump of bin information"""

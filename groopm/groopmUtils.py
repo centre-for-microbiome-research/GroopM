@@ -60,7 +60,8 @@ from pylab import plot,subplot,axis,stem,show,figure
 import numpy as np
 
 # GroopM imports
-import dataManagers
+import profileManager
+import binManager
 import mstore
 
 np.seterr(all='raise')
@@ -95,7 +96,7 @@ class GMExtractor:
         
     def extractContigs(self, fasta=[], cutoff=0):
         """Extract contigs and write to file"""
-        self.BM = dataManagers.BinManager(dbFileName=self.dbFileName)   # bins
+        self.BM = binManager.BinManager(dbFileName=self.dbFileName)   # bins
         self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
         self.PM = self.BM.PM
         
@@ -202,8 +203,8 @@ class GMExtractor:
         """Extract reads from sam files and write to file"""
         print "Soz LOL"
         return
-        self.PM = dataManagers.ProfileManager(self.dbFileName)   # based on user specified length
-        self.BM = dataManagers.BinManager(dbFileName=self.dbFileName)   # bins
+        self.PM = binManager.ProfileManager(self.dbFileName)   # based on user specified length
+        self.BM = binManager.BinManager(dbFileName=self.dbFileName)   # bins
         self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
 
 
@@ -223,7 +224,7 @@ class GMExtractor:
 class BinExplorer:
     """Inspect bins, used for validation"""
     def __init__(self, dbFileName, bids=[]):
-        self.BM = dataManagers.BinManager(dbFileName=dbFileName)   # bins
+        self.BM = binManager.BinManager(dbFileName=dbFileName)   # bins
         self.PM = self.BM.PM
         self.PM2 = None
         if bids is None:
@@ -308,7 +309,7 @@ class BinExplorer:
     def plotSideBySide(self, coreCut):
         """Plot cores side by side with their contigs"""
         print "Plotting side by side graphs"        
-        self.PM2 = dataManagers.ProfileManager(dbFileName=self.BM.PM.dbFileName)
+        self.PM2 = binManager.ProfileManager(dbFileName=self.BM.PM.dbFileName)
         self.PM2.loadData(condition="length >= "+str(coreCut))
         (min,max) = self.PM2.transformCP()
         self.BM.loadBins(makeBins=True,bids=self.bids, silent=False, min=min, max=max)
