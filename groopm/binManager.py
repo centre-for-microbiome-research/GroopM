@@ -493,6 +493,9 @@ class BinManager:
         perc_binned = float(total_binned)/float(total_contigs)
         print "    Recruited %0.4f" % perc_recruited +"%"+" of %d unbinned contigs" % total_unbinned
         print "    END: %0.4f" % perc_binned +"%"+" of %d requested contigs in bins" % total_contigs
+        
+        # now do some refinin!
+        self.autoRefineBins()
          
         # now save
         if(saveBins):
@@ -614,7 +617,7 @@ class BinManager:
         
         try:
             t_list = neighbourList[rowIndex]
-            if len(t_list) < k:
+            if len(t_list) > k:
                 # must have made a change, we'll fix it here
                 t_list = searchTree.query(tdm[rowIndex],k=k)[1]
                 neighbourList[rowIndex] = t_list
@@ -629,12 +632,14 @@ class BinManager:
             #print len(self.PM.binIds), "::", row_index 
             try:
                 cbid = self.PM.binIds[row_index]
-                try:
-                    refined_t_list[cbid] += 1
-                except KeyError:
-                    refined_t_list[cbid] = 1
+                if cbid != 0: # don't want these guys
+                    try:
+                        refined_t_list[cbid] += 1
+                    except KeyError:
+                        refined_t_list[cbid] = 1
             except KeyError:
                 pass
+
         # work out the most prominent BID
         max_bid = 0
         max_count = 0
@@ -648,7 +653,7 @@ class BinManager:
                 print "[", cbid, ",", refined_t_list[cbid], "]",
             print
         # we're done!
-        return max_bid
+        return (max_bid, neighbourList)
 
     def autoRefineBins(self, verbose=False):
         """Automagically refine bins"""
@@ -661,8 +666,8 @@ class BinManager:
         while num_reassigned != 0:
             num_reassigned = 0
             reassignment_map = {}
+            moved_RIs = {}
             bids = self.getBids()
-            calls = 0
             for bid in bids:
                 bin = self.getBin(bid)
                 if bid in stable_bids:
@@ -672,23 +677,26 @@ class BinManager:
                         reassignment_map[bid] = list(bin.rowIndices)
                 else:
                     stable = True
-                    #print "BID:", bid, bin.binSize 
                     for row_index in bin.rowIndices:
-                        calls += 1
-                        assigned_bid = self.getClosestBID(row_index, search_tree, tdm, neighbourList=neighbour_list, verbose=verbose, k=2*bin.binSize-1)                        
+                        (assigned_bid, neighbour_list) = self.getClosestBID(row_index, search_tree, tdm, neighbourList=neighbour_list, verbose=verbose, k=2*bin.binSize-1)
                         if assigned_bid != bid:
                             stable = False
                             num_reassigned += 1
+                            moved_RIs[row_index] = assigned_bid 
                         
                         # keep track of where this guy lives
                         try:
                             reassignment_map[assigned_bid].append(row_index)
                         except KeyError:
                             reassignment_map[assigned_bid] = [row_index]
+                            
                     if stable: # no changes this round, mark bin as stable
                         stable_bids[bid] = True
             
-            print "Calls:", calls
+            # fix the lookup table
+            for moved_index in moved_RIs:
+                self.PM.binIds[moved_index] = moved_RIs[moved_index]
+
             # now fix the bins
             bins_removed = 0
             for bid in bids:
