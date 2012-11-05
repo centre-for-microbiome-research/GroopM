@@ -61,7 +61,8 @@ import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist
 
 # GroopM imports
-from dataManagers import ProfileManager, BinManager
+from profileManager import ProfileManager
+from binManager import BinManager
 import groopmTimekeeper as gtime
 
 np_seterr(all='raise')      
@@ -166,7 +167,7 @@ class ClusterEngine:
 
         # Now save all the stuff to disk!
         print "Saving bins"
-        self.BM.saveBins(doCores=True, saveBinStats=True)
+        self.BM.saveBins()
         print "    %s" % timer.getTimeStamp()
 
     def initialiseCores(self):
@@ -276,6 +277,12 @@ class ClusterEngine:
                         self.restrictRowIndicies(row_indices)
 
         print "\n     .... .... .... .... .... .... .... .... .... ...."
+        
+        # now we need to update the PM's binIds
+        bids = self.BM.getBids()
+        for bid in bids:
+            for row_index in self.BM.bins[bid].rowIndices:
+                self.PM.binIds[row_index] = bid 
 
     def isGoodBin(self, totalBP, binSize, ms=0):
         """Does this bin meet my exacting requirements?"""

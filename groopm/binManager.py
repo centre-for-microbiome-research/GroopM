@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 ###############################################################################
 #                                                                             #
-#    dataManagers.py                                                          #
+#    binManager.py                                                            #
 #                                                                             #
-#    GroopM - High level data management                                      #
+#    GroopM - High level bin data management                                  #
 #                                                                             #
 #    Copyright (C) Michael Imelfort                                           #
 #                                                                             #
@@ -63,10 +63,10 @@ import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist
 from scipy.spatial import KDTree as kdt
 from scipy.stats import f_oneway, distributions
+from scipy.cluster.vq import kmeans,vq
 
 # GroopM imports
-from PCA import PCA, Center
-from mstore import GMDataManager
+from profileManager import ProfileManager
 from bin import Bin
 import groopmExceptions as ge
 
@@ -89,9 +89,6 @@ class BinManager:
         # all about bins
         self.nextFreeBinId = 0                      # increment before use!
         self.bins = {}                              # bid -> Bin
-        
-        # linking row indices to bids
-        self.r2b = {}
 
 #------------------------------------------------------------------------------
 # LOADING / SAVING
@@ -132,7 +129,6 @@ class BinManager:
                          loadLinks=loadLinks
                         )
         
-        bin_members = self.initialiseContainers()
         if(makeBins):
             if transform:
                 self.PM.transformCP(silent=silent, min=min, max=max)
@@ -142,124 +138,99 @@ class BinManager:
                 else:
                     print "Number of stoits != 3. You need to transform"
                     self.PM.transformCP(silent=silent, min=min, max=max)
-            self.makeBins(bin_members)
+            self.makeBins(self.getBinMembers())
 
-    def initialiseContainers(self):
-        """Munge the raw data into something more usable"""
-        # initialise these containers
-        bin_members = {0:[]}
-        bin_sizes = {0:0}
-        for bid in self.PM.validBinIds.keys():
-            bin_sizes[bid] = 0;
-            bin_members[bid] = []
+    def getBinMembers(self):
+        """Munge the raw data into something more usable
         
+        self.PM.binIds is an array, contains 0 for unassigned rows
+        By default this creates an array for the '0' bin. You need
+        to ignore it later if you want to
+        """
         # fill them up
-        for row_index in range(0, np_size(self.PM.indices)):
-            bin_members[self.PM.binIds[row_index]].append(row_index)
-            bin_sizes[self.PM.binIds[row_index]] += self.PM.contigLengths[row_index]
+        bin_members = {0:[]}
+        for row_index in range(np_size(self.PM.indices)):
+            try:
+                bin_members[self.PM.binIds[row_index]].append(row_index)
+            except KeyError:
+                bin_members[self.PM.binIds[row_index]] = [row_index]
 
         # we need to get the largest BinId in use
-        bids = self.PM.getBinStats().keys()
-        if(len(bids) > 0):
-            self.nextFreeBinId = np_max(bids)
+        if len(bin_members) > 0:
+            self.nextFreeBinId = np_max(bin_members.keys())
         
         return bin_members
 
-    def makeBins(self, binMembers):
+    def makeBins(self, binMembers, zeroIsBin=False):
         """Make bin objects from loaded data"""
         invalid_bids = []
-        for bid in self.PM.validBinIds.keys():
-            if len(binMembers[bid]) == 0:
-                invalid_bids.append(bid)
-            else:
-                self.bins[bid] = Bin(np_array(binMembers[bid]), bid, self.PM.scaleFactor-1)
-                self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
-        print invalid_bids
-        exit(-1)      
+        for bid in binMembers:
+            if bid != 0 or zeroIsBin:
+                if len(binMembers[bid]) == 0:
+                    invalid_bids.append(bid)
+                else:
+                    self.bins[bid] = Bin(np_array(binMembers[bid]), bid, self.PM.scaleFactor-1)
+                    self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
+        if len(invalid_bids) != 0:
+            print "MT bins!"
+            print invalid_bids
+            exit(-1)      
 
-    def saveBins(self, firstSave=False, unbinned={}):
-        """Save binning results"""
+    def saveBins(self, binAssignments={}):
+        """Save binning results
         
-        # get a hash of global row indices Vs bin ids
-        bin_assignments = self.getBinAssignments(unbinned)
-        self.PM.setBinAssignments(bin_assignments)
+        binAssignments is a hash of LOCAL row indices Vs bin ids
+        { row_index : bid } 
+        PM.setBinAssignments needs GLOBAL row indices
+        
+        We always overwrite the bins table (It is smallish)
+        """
+
+        # save the bin assignments        
+        self.PM.setBinAssignments(
+                                  self.getGlobalBinAssignments(binAssignments) # convert to global indices
+                                  )
+        # overwrite the bins table
+        self.setBinStats()
+        
+        # we must have done something
         self.PM.setClustered()
-        
-        if firstSave:
-            # should be called on the first save only
-            self.setBinStats()
-        else:
-            # we need to make a list of updates, saves overwriting everything
-            # This is an update in the true sense of the word
-            # updates looks like { bid : numMembers }
-            # if numMember == 0 then this bid is removed
-            # from the table in the call to updateBinStats
-            updates = {}
-            for bid in self.getBids():
-                updates[bid] = self.bins[bid].binSize
-            self.PM.updateBinStats(updates)
+
     
     def setBinStats(self):
         """Update / overwrite the table holding the bin stats
         
         Note that this call effectively nukes the existing table
-        and should only be used during initial coring. BID must be somewhere!
         """
-        bin_stats_updates = {}
+        bin_stats = {}
         for bid in self.getBids():
             # no point in saving empty bins
             if np_size(self.bins[bid].rowIndices) > 0:
-                bin_stats_updates[bid] = np_size(self.bins[bid].rowIndices)
-        self.PM.setBinStats(bin_stats_updates)
+                bin_stats[bid] = np_size(self.bins[bid].rowIndices)
+        self.PM.setBinStats(bin_stats)
 
-    def getBinAssignments(self, unbinned=[]):
+    def getGlobalBinAssignments(self, binAssignments={}):
         """Merge the bids, raw DB indexes and core information so we can save to disk
         
         returns a hash of type:
         
         { global_index : bid }
         """
-        # we need a mapping from cid (or local index) to to gloabl index to binID
+        # we need a mapping from cid (or local index) to to global index to binID
         bin_assignment_update = {}
         
-        # These are the updates for guys who have been 'unbinned'
-        # we need to do them here cause they won't appear in the loop below
-        for row_index in unbinned:
-            bin_assignment_update[self.PM.indices[row_index]] = 0
-        
-        # this are all our regularly binned guys
-        for bid in self.getBids():
-            for row_index in self.bins[bid].rowIndices:
-                bin_assignment_update[self.PM.indices[row_index]] = bid
+        if binAssignments != {}:
+            # we have been told to do only these guys
+            for row_index in binAssignments:
+                bin_assignment_update[self.PM.indices[row_index]] = binAssignments[row_index]
+
+        else:
+            # this are all our regularly binned guys
+            for bid in self.getBids():
+                for row_index in self.bins[bid].rowIndices:
+                    bin_assignment_update[self.PM.indices[row_index]] = bid
             
         return bin_assignment_update
-
-#------------------------------------------------------------------------------
-# HANDY LOOKUP TABLES
-
-    def makeR2BLookup(self):
-        """Get a list of row indicies to bin ids"""
-        self.r2b = {}
-        bids = self.getBids()
-        for bid in bids:
-            bin = self.getBin(bid)
-            for row_index in bin.rowIndices:
-                self.r2b[row_index] = bid
-                
-        # do the unbinned guys too
-        for i in range(len(self.PM.indices)):
-            if i not in self.r2b:
-                self.r2b[i] = 0
-
-    def contig2bids(self):
-        """Map contigIDs (row indices) to bins"""
-        c2b = {}
-        for bid in self.getBids():
-            bin = self.bins[bid]
-            for row_index in bin.rowIndices:
-                c2b[row_index] = bid
-            
-        return c2b
     
 #------------------------------------------------------------------------------
 # REMOVE ALREADY LOADED BINS
@@ -336,88 +307,6 @@ class BinManager:
                     network[bids[i]][1].append(neigbour_dists[i,j])
         return network
 
-    def getAllContigTrueDistances(self, binNetwork={}, c2b={}):
-        """work out the "true" distance between all closely situated contigs"""
-        # work out which bins lie nearby
-        if binNetwork == {}:
-            binNetwork = self.findBinNeighbours()
-        
-        # work out which contigs are in which bins
-        if c2b == {}:
-            c2b = self.contig2bids()
-        
-        all_distances = {} # hash of type cid -> [(cid, dist), (cid,dist), ... ]
-        for row_index in range(len(self.PM.indices)):
-            self.getContigTrueDistances(row_index, binNetwork, c2b, all_distances)
-        return all_distances 
-
-    def getContigTrueDistances(self, rowIndex, binNetwork, c2b, distances):
-        """work out the "true" distance between this contig and all closely situated contigs"""
-        try:
-            this_bid = c2b[rowIndex]
-        except KeyError:
-            this_bid = 0
-            pass
-        if this_bid != 0:
-            pass
-        else:
-            # we will need to generate a list of close bins 
-            # using some other method
-            pass
-
-    def findAllNeighbours(self, maxDist):
-        """Create a lookup of all the bins and their nearest neighbours"""
-        # first we make three sorted lists for X, Y and Z
-        # this will save us an all Vs all comparison
-        bids = self.getBids()
-        max_index = len(bids)
-        Xs = []
-        Ys = []
-        Zs = []
-        for bid in bids:
-            CM = self.getBin(bid).covMeans
-            Xs.append(CM[0])
-            Ys.append(CM[1])
-            Zs.append(CM[2])
-        sorted_Xs = np_argsort(Xs)
-        sorted_Ys = np_argsort(Ys)
-        sorted_Zs = np_argsort(Zs)
-
-        x_dists = {}
-        for i in range(max_index):
-            for j in range(i + 1, max_index):
-                dist = np_abs(Xs[sorted_Xs[i]] - Xs[sorted_Xs[j]])
-                if(dist <= maxDist):
-                    key = self.makeBidKey(bids[sorted_Xs[i]], bids[sorted_Xs[j]])
-                    x_dists[key] = dist
-                else:
-                    break 
-        y_dists = {}
-        for i in range(max_index):
-            for j in range(i + 1, max_index):
-                dist = np_abs(Ys[sorted_Ys[i]] - Ys[sorted_Ys[j]])
-                if(dist <= maxDist):
-                    key = self.makeBidKey(bids[sorted_Ys[i]], bids[sorted_Ys[j]])
-                    if(key in x_dists):
-                        y_dists[key] = dist
-                else:
-                    break 
-        actual_dists = {}
-        for i in range(max_index):
-            for j in range(i + 1, max_index):
-                dist = np_abs(Zs[sorted_Zs[i]] - Zs[sorted_Zs[j]])
-                if(dist <= maxDist):
-                    key = self.makeBidKey(bids[sorted_Zs[i]], bids[sorted_Zs[j]])
-                    if(key in y_dists):
-                        dist = np_sqrt(y_dists[key]**2 + x_dists[key]**2 + dist**2)
-                        if(dist <= maxDist):
-                            actual_dists[key] = dist
-                else:
-                    break 
-
-        return actual_dists
-
-
 #------------------------------------------------------------------------------
 # LINKS
 
@@ -432,7 +321,7 @@ class BinManager:
                 for link in self.PM.links[row_index]:
                     #print "{{{",link,"}}}",
                     try:
-                        link_bid = self.r2b[link[0]]
+                        link_bid = self.PM.binIds[link[0]]
                         #print ";;", link_bid, bid ,
                         if link_bid != bid and link_bid != 0:
                             try: 
@@ -447,13 +336,13 @@ class BinManager:
         #print bin2count
         return bin2count
     
-    def getConnectedBins(self, rowIndex, c2b):
+    def getConnectedBins(self, rowIndex):
         """Get a  list of bins connected to this contig"""
         ret_links = []
         for link in self.PM.links[rowIndex]:
             cid = link[0]
             try:
-                bid = c2b[cid]
+                bid = self.PM.binIds[cid]
             except KeyError:
                 bid = 0
             ret_links.append((cid, bid, link[1])) 
@@ -477,7 +366,6 @@ class BinManager:
        
     def getWithinLinkProfiles(self):
         """Determine the average number of links between contigs for all bins"""
-        self.makeR2BLookup()
         bids = self.getBids()
         link_profiles = {}
         for bid in bids:
@@ -492,7 +380,7 @@ class BinManager:
         for row_index in bin.rowIndices:
             try: 
                 for link in self.PM.links[row_index]:
-                    link_bid = self.r2b[link[0]] 
+                    link_bid = self.PM.binIds[link[0]] 
                     if link_bid == bid:
                         links.append(link[1])
                         if link[1] < min_links:
@@ -608,11 +496,11 @@ class BinManager:
          
         # now save
         if(saveBins):
-            self.saveBins(setBinStats=False, updateBinStats=True)
+            self.saveBins()
     
     def refineWrapper(self,
                       manual=False,          # do we need to ask permission every time?
-                      save=False,
+                      saveBins=False,
                       plotter=False,
                       shuffle=False,
                       links=False
@@ -622,19 +510,18 @@ class BinManager:
             self.plotterRefineBins()
         if shuffle:
             self.autoRefineBins()
-            if save:
-                self.saveBins(setBinStats=True, updateBinStats=True)
+            if saveBins:
+                self.saveBins()
         if links:
             # we don't load links by default, so lets do it now
             print "    Loading links"
             self.PM.loadLinks()
             self.refineViaLinks()
-            if save:
-                self.saveBins(setBinStats=True, updateBinStats=True)
+            if saveBins:
+                self.saveBins()
 
     def refineViaLinks(self):
         """Use linking information to refine bins"""
-        self.makeR2BLookup()
         bin_links = self.getAllLinks()
         print bin_links
                         
@@ -710,7 +597,7 @@ class BinManager:
                 return
         return
 
-    def getClosestBID(self, rowIndex, searchTree, tdm, c2b, neighbourList={}, k=101, verbose=False):
+    def getClosestBID(self, rowIndex, searchTree, tdm, neighbourList={}, k=101, verbose=False):
         """Find the bin ID which would best describe the placement of the contig
         
         The neighbourlist is a hash of type:
@@ -726,21 +613,22 @@ class BinManager:
             k = 101
         
         try:
-            t_list = neighbourList[row_index]
+            t_list = neighbourList[rowIndex]
             if len(t_list) < k:
                 # must have made a change, we'll fix it here
                 t_list = searchTree.query(tdm[rowIndex],k=k)[1]
-                neighbourList[row_index] = t_list
+                neighbourList[rowIndex] = t_list
         except KeyError:
             # first time, we need to do the search
             t_list = searchTree.query(tdm[rowIndex],k=k)[1]
-            neighbourList[row_index] = t_list
+            neighbourList[rowIndex] = t_list
             
         # calculate the distribution of neighbouring bins
         refined_t_list = {}
         for row_index in t_list:
+            #print len(self.PM.binIds), "::", row_index 
             try:
-                cbid = c2b[row_index]
+                cbid = self.PM.binIds[row_index]
                 try:
                     refined_t_list[cbid] += 1
                 except KeyError:
@@ -773,7 +661,6 @@ class BinManager:
         while num_reassigned != 0:
             num_reassigned = 0
             reassignment_map = {}
-            c2b = self.contig2bids()
             bids = self.getBids()
             calls = 0
             for bid in bids:
@@ -788,7 +675,7 @@ class BinManager:
                     #print "BID:", bid, bin.binSize 
                     for row_index in bin.rowIndices:
                         calls += 1
-                        assigned_bid = self.getClosestBID(row_index, search_tree, tdm, c2b, neighbourList=neighbour_list, verbose=verbose, k=2*bin.binSize-1)                        
+                        assigned_bid = self.getClosestBID(row_index, search_tree, tdm, neighbourList=neighbour_list, verbose=verbose, k=2*bin.binSize-1)                        
                         if assigned_bid != bid:
                             stable = False
                             num_reassigned += 1
@@ -856,13 +743,14 @@ class BinManager:
             self.printSplitInstructions()
 
         # make some split bins
-        (bin_stats, bin_assignment_update, bids) = self.getSplitties(bid, n, mode)
+        # bids[0] holds the original bin id
+        (bin_assignment_update, bids) = self.getSplitties(bid, n, mode)
         
         if(auto and saveBins):
             # charge on through
             self.deleteBins([bids[0]], force=True)  # delete the combined bin
-            self.updateBinStats(bin_stats)
-            self.PM.setBinAssignments(bin_assignment_update)
+            # save new bins
+            self.saveBins(binAssignments=bin_assignment_update)
             return
 
         # we will need to confer with the user
@@ -881,8 +769,8 @@ class BinManager:
             if(saveBins):
                 # save the temp bins
                 self.deleteBins([bids[0]], force=True)  # delete the combined bin
-                self.updateBinStats(bin_stats)
-                self.PM.setBinAssignments(bin_assignment_update)
+                # save new bins
+                self.saveBins(binAssignments=bin_assignment_update)
             return
 
         # If we're here than we don't need the temp bins        
@@ -922,7 +810,6 @@ class BinManager:
             obs = np_array([self.PM.covProfiles[i] for i in bin.rowIndices])
         
         # do the clustering
-        from scipy.cluster.vq import kmeans,vq
         try:
             centroids,_ = kmeans(obs,n)
         except ValueError:
@@ -936,8 +823,6 @@ class BinManager:
         idx_sorted = np_argsort(np_array(idx))
         current_group = 0
         bids = [bid]
-        bin_stats = {} # bin id to bin size
-        bin_stats[bid]=0 # this will ensure that the old bin id will be deleted!
         bin_assignment_update = {} # row index to bin id
         holding_array = np_array([])
         split_bin = None
@@ -947,7 +832,6 @@ class BinManager:
                 split_bin = self.makeNewBin(holding_array)
                 for row_index in holding_array:
                     bin_assignment_update[self.PM.indices[row_index]] = split_bin.id
-                bin_stats[split_bin.id] = split_bin.binSize  
                 split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
                 bids.append(split_bin.id)
                 holding_array = np_array([])
@@ -958,11 +842,10 @@ class BinManager:
             split_bin = self.makeNewBin(holding_array)
             for row_index in holding_array:
                 bin_assignment_update[self.PM.indices[row_index]] = split_bin.id  
-            bin_stats[split_bin.id] = split_bin.binSize  
             split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
             bids.append(split_bin.id)
 
-        return (bin_stats, bin_assignment_update, bids)
+        return (bin_assignment_update, bids)
 
     def shouldMerge(self, bin1, bin2, ignoreCov=False, ignoreMer=False, merTol=0, confidence=0.95, verbose=False):
         """Determine whether its wise to merge two bins
@@ -1037,7 +920,6 @@ class BinManager:
         """
         parent_bin = None
 
-        bin_stats = {}
         if(printInstructions and not auto):
             self.printMergeInstructions()
 
@@ -1048,8 +930,6 @@ class BinManager:
             dead_bin = self.getBin(bids[0])
             parent_bin.consume(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths, dead_bin, verbose=verbose)
             self.deleteBins([bids[0]], force=True)
-            bin_stats[bids[0]] = 0
-            bin_stats[parent_bin.id] = parent_bin.binSize
         else:
             # just use the first given as the parent
             parent_bin = self.getBin(bids[0])
@@ -1082,22 +962,22 @@ class BinManager:
             if(continue_merge):
                 parent_bin.consume(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths, dead_bin, verbose=verbose)
                 self.deleteBins([bids[i]], force=True)
-                bin_stats[bids[i]] = 0
-                bin_stats[parent_bin.id] = parent_bin.binSize
                 some_merged = True
 
-        if(saveBins and some_merged):
-            self.updateBinStats(bin_stats)
-            self.saveBins(setBinStats=False)
-            
-        # now fix up the r2b indices
-        if self.r2b != {}:
+        if some_merged:
+            # Fix up the r2b indices and bin updates
             parent_bid = parent_bin.id
-            for row_index in self.r2b:
+            bin_assignment_update = {}
+            for row_index in parent_bin.rowIndices:
+                bin_assignment_update[row_index] = parent_bid
                 try:
-                    self.r2b[row_index] = parent_bid
+                    self.PM.binIds[row_index] = parent_bid
                 except KeyError:
                     pass 
+    
+            if saveBins:
+                self.saveBins(binAssignments=bin_assignment_update)
+            
         return ret_val
 
     def makeBidKey(self, bid1, bid2):
@@ -1119,7 +999,6 @@ class BinManager:
             user_option = self.promptOnDelete(bids)
             if(user_option != 'Y'):
                 return False
-        bin_stats = {}
         bin_assignment_update = {}
         for bid in bids:
             if bid in self.bins:
@@ -1130,14 +1009,12 @@ class BinManager:
                         else:
                             print bid, row_index, "FUNG"
                         bin_assignment_update[self.PM.indices[row_index]] = 0 
-                bin_stats[bid] = 0
                 del self.bins[bid]
             else:
                 raise ge.BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
             
         if(saveBins):
-            self.updateBinStats(bin_stats)
-            self.PM.setBinAssignments(bin_assignment_update)
+            self.saveBins(binAssignments=bin_assignment_update)
         return True
         
     def makeNewBin(self, rowIndices=np_array([]), bid=None):
@@ -1359,9 +1236,6 @@ class BinManager:
             k_high = float((krange + 1.5)/10.0)
         num_added = 0
         for bid in self.getBids():
-            print bid
-            print self.bins[bid]
-            print self.bins[bid].rowIndices
             add_bin = True
             if krange is not None:
                 ave_kval = np_mean([self.PM.kmerVals[row_index] for row_index in self.bins[bid].rowIndices])
@@ -1592,557 +1466,6 @@ class BinManager:
             print "Error showing image", exc_info()[0]
             raise
         del fig
-
-###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
-
-class ProfileManager:
-    """Interacts with the groopm DataManager and local data fields
-    
-    Mostly a wrapper around a group of numpy arrays and a pytables quagmire
-    """
-    def __init__(self, dbFileName, force=False, scaleFactor=1000):
-        # data
-        self.dataManager = GMDataManager()  # most data is saved to hdf
-        self.dbFileName = dbFileName        # db containing all the data we'd like to use
-        self.condition = ""                 # condition will be supplied at loading time
-        # --> NOTE: ALL of the arrays in this section are in sync
-        # --> each one holds information for an individual contig 
-        self.indices = np_array([])        # indices into the data structure based on condition
-        self.covProfiles = np_array([])     # coverage based coordinates
-        self.transformedCP = np_array([])   # the munged data points
-        self.averageCoverages = np_array([]) # average coverage across all stoits
-        self.kmerSigs = np_array([])        # raw kmer signatures
-        self.kmerVals = np_array([])        # PCA'd kmer sigs
-
-        self.contigNames = np_array([])
-        self.contigLengths = np_array([])
-        self.contigColours = np_array([])   # calculated from kmerVals
-        
-        self.binIds = np_array([])          # list of bin IDs
-        # --> end section
-
-        # meta                
-        self.validBinIds = {}               # valid bin ids -> numMembers
-        self.binnedRowIndicies = {}         # dictionary of those indices which belong to some bin
-        self.restrictedRowIndicies = {}     # dictionary of those indices which can not be binned yet
-        self.numContigs = 0                 # this depends on the condition given
-        self.numStoits = 0                  # this depends on the data which was parsed
-
-        # contig links
-        self.links = {}
-        
-        # misc
-        self.forceWriting = force           # overwrite existng values silently?
-        self.scaleFactor = scaleFactor      # scale every thing in the transformed data to this dimension
-
-    def loadData(self,
-                 condition="",              # condition as set by another function
-                 bids=[],                   # if this is set then only load those contigs with these bin ids
-                 verbose=True,              # many to some output messages
-                 silent=False,              # some to no output messages
-                 loadCovProfiles=True,
-                 loadKmerSigs=True,
-                 makeColours=True,
-                 loadContigNames=True,
-                 loadContigLengths=True,
-                 loadBins=False,
-                 loadLinks=False):
-        """Load pre-parsed data"""
-        if(verbose):
-            print "Loading data from:", self.dbFileName
-        
-        # check to see if we need to override the condition
-        if(len(bids) != 0):
-            condition = "((bid == "+str(bids[0])+")"
-            for index in range (1,len(bids)):
-                condition += " | (bid == "+str(bids[index])+")"
-            condition += ")"
-        if(silent):
-            verbose=False
-        try:
-            self.numStoits = self.getNumStoits()
-            self.condition = condition
-            if(verbose):
-                print "    Loading indices (", condition,")"
-            self.indices = self.dataManager.getConditionalIndicies(self.dbFileName, condition=condition)
-            self.numContigs = len(self.indices)
-            
-            if(not silent):
-                print "    Working with: %d contigs" % self.numContigs
-
-            if(loadCovProfiles):
-                if(verbose):
-                    print "    Loading coverage profiles"
-                self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indices=self.indices)
-
-                # work out average coverages
-                self.averageCoverages = np_array([sum(i)/self.numStoits for i in self.covProfiles])
-
-            if(loadKmerSigs):
-                if(verbose):
-                    print "    Loading kmer sigs"
-                self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indices=self.indices)
-
-                if(makeColours):
-                    if(verbose):
-                        print "    Creating colour profiles"
-                    self.makeColourProfile()
-                    # use HSV to RGB to generate colours
-                    S = 1       # SAT and VAL remain fixed at 1. Reduce to make
-                    V = 1       # Pastels if that's your preference...
-                    self.contigColours = np_array([htr(val, S, V) for val in self.kmerVals])
-
-            if(loadContigNames):
-                if(verbose):
-                    print "    Loading contig names"
-                self.contigNames = self.dataManager.getContigNames(self.dbFileName, indices=self.indices)
-            
-            if(loadContigLengths):
-                if(verbose):
-                    print "    Loading contig lengths"
-                self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indices=self.indices)
-                print "    Contigs contain %d BP" % ( sum(self.contigLengths) )
-            
-            if(loadBins):
-                if(verbose):
-                    print "    Loading bins"
-                self.binIds = self.dataManager.getBins(self.dbFileName, indices=self.indices)
-                if len(bids) != 0: # need to make sure we're not restricted in terms of bins
-                    tmp_bids = self.getBinStats()
-                    for bid in bids:
-                        self.validBinIds[bid] = tmp_bids[bid]
-                else:
-                    self.validBinIds = self.getBinStats()
-
-                # fix the binned indices
-                self.binnedRowIndicies = {}
-                for i in range(len(self.indices)):
-                    if(self.binIds[i] != 0):
-                        self.binnedRowIndicies[i] = True 
-                
-            if(loadLinks):
-                self.loadLinks()
-            
-        except:
-            print "Error loading DB:", self.dbFileName, exc_info()[0]
-            raise
-
-    def reduceIndicies(self, deadRowIndicies):
-        """purge indices from the data structures
-        
-        Be sure that deadRowIndicies are sorted ascending
-        """
-        # strip out the other values        
-        self.indices = np_delete(self.indices, deadRowIndicies, axis=0)
-        self.covProfiles = np_delete(self.covProfiles, deadRowIndicies, axis=0)
-        self.transformedCP = np_delete(self.transformedCP, deadRowIndicies, axis=0)
-        self.contigNames = np_delete(self.contigNames, deadRowIndicies, axis=0)
-        self.contigLengths = np_delete(self.contigLengths, deadRowIndicies, axis=0)
-        self.contigColours = np_delete(self.contigColours, deadRowIndicies, axis=0)
-        self.kmerSigs = np_delete(self.kmerSigs, deadRowIndicies, axis=0)
-        self.kmerVals = np_delete(self.kmerVals, deadRowIndicies, axis=0)
-        self.binIds = np_delete(self.binIds, deadRowIndicies, axis=0)
-        
-#------------------------------------------------------------------------------
-# GET / SET 
-
-    def getNumStoits(self):
-        """return the value of numStoits in the metadata tables"""
-        return self.dataManager.getNumStoits(self.dbFileName)
-            
-    def getMerColNames(self):
-        """return the value of merColNames in the metadata tables"""
-        return self.dataManager.getMerColNames(self.dbFileName)
-            
-    def getMerSize(self):
-        """return the value of merSize in the metadata tables"""
-        return self.dataManager.getMerSize(self.dbFileName)
-
-    def getNumMers(self):
-        """return the value of numMers in the metadata tables"""
-        return self.dataManager.getNumMers(self.dbFileName)
-
-### USE the member vars instead!
-#    def getNumCons(self):
-#        """return the value of numCons in the metadata tables"""
-#        return self.dataManager.getNumCons(self.dbFileName)
-
-    def getNumBins(self):
-        """return the value of numBins in the metadata tables"""
-        return self.dataManager.getNumBins(self.dbFileName)
-        
-    def setNumBins(self, numBins):
-        """set the number of bins"""
-        self.dataManager.setNumBins(self.dbFileName, numBins)
-        
-    def getStoitColNames(self):
-        """return the value of stoitColNames in the metadata tables"""
-        return self.dataManager.getStoitColNames(self.dbFileName)
-    
-    def isClustered(self):
-        """Has the data been clustered already"""
-        return self.dataManager.isClustered(self.dbFileName)
-    
-    def setClustered(self):
-        """Save that the db has been clustered"""
-        self.dataManager.setClustered(self.dbFileName, True)
-    
-    def isComplete(self):
-        """Has the data been *completely* clustered already"""
-        return self.dataManager.isComplete(self.dbFileName)
-    
-    def setComplete(self):
-        """Save that the db has been completely clustered"""
-        self.dataManager.setComplete(self.dbFileName, True)
-
-    def getBinStats(self):
-        """Go through all the "bins" array and make a list of unique bin ids vs number of contigs"""
-        return self.dataManager.getBinStats(self.dbFileName)
-    
-    def setBinAssignments(self, assignments):
-        """Save our bins into the DB"""
-        self.dataManager.setBinAssignments(self.dbFileName, assignments)
-    
-    def setBinStats(self, updates):
-        """Store the valid bin Ids and number of members
-                
-        updates is a dictionary which looks like:
-        { tableRow : [bid , numMembers] }
-        """
-        self.dataManager.setBinStats(self.dbFileName, updates)
-        self.setNumBins(len(updates.keys()))
-
-    def updateBinStats(self, updates):
-        """Store the valid bin Ids and number of members
-        
-        updates is a dictionary which looks like:
-        { bid : numMembers }
-        if numMembers == 0 then the bid is removed from the table
-        if bid is not in the table yet then it is added
-        otherwise it is updated
-        """
-        # get the current guys
-        existing_bin_stats = self.dataManager.getBinStats(self.dbFileName)
-        num_bins = self.getNumBins()
-        # now update this dict
-        for bid in updates.keys():
-            if bid in existing_bin_stats:
-                if updates[bid] == 0:
-                    # remove this guy
-                    del existing_bin_stats[bid]
-                    num_bins -= 1
-                else:
-                    # update the count
-                    existing_bin_stats[bid] = updates[bid]
-            else:
-                # new guy!
-                existing_bin_stats[bid] = updates[bid]
-                num_bins += 1
-        
-        # finally , save
-        self.setBinStats(existing_bin_stats)
-
-    def loadLinks(self):
-        """Extra wrapper 'cause I am dumb"""
-        self.links = self.getLinks()
-        
-    def getLinks(self):
-        """Get contig links"""
-        # first we get the absolute links
-        absolute_links = self.dataManager.restoreLinks(self.dbFileName, self.indices)
-        # now convert this into plain old row_indices
-        reverse_index_lookup = {} 
-        for i in range(len(self.indices)):
-            reverse_index_lookup[self.indices[i]] = i
-
-        # now convert the absolute links to local ones
-        relative_links = {}
-        for cid in self.indices:
-            local_cid = reverse_index_lookup[cid]
-            relative_links[local_cid] = []
-            try:
-                for link in absolute_links[cid]:
-                    relative_links[local_cid].append([reverse_index_lookup[link[0]], link[1], link[2], link[3]])
-            except KeyError: # not everyone is linked
-                pass
-
-        return relative_links
-                 
-#------------------------------------------------------------------------------
-# DATA TRANSFORMATIONS 
-
-    def getAverageCoverage(self, rowIndex):
-        """Return the average coverage for this contig across all stoits"""
-        return sum(self.transformedCP[rowIndex])/self.numStoits
-
-    def transformCP(self, silent=False, nolog=False, min=None, max=None):
-        """Do the main ransformation on the coverage profile data"""
-        shrinkFn = np_log10
-        if(nolog):
-            shrinkFn = lambda x:x
-         
-        s = (self.numContigs,3)
-        self.transformedCP = np_zeros(s)
-
-        if(not silent):
-            print "    Dimensionality reduction"
-
-        # get the median distance from the origin
-        unit_vectors = [(np_cos(i*2*np_pi/self.numStoits),np_sin(i*2*np_pi/self.numStoits)) for i in range(self.numStoits)]
-        for i in range(len(self.indices)):
-            norm = np_norm(self.covProfiles[i])
-            if(norm != 0):
-                radial = shrinkFn(norm)
-            else:
-                radial = norm
-            shifted_vector = np_array([0.0,0.0])
-            flat_vector = (self.covProfiles[i] / sum(self.covProfiles[i]))
-            
-            for j in range(self.numStoits):
-                shifted_vector[0] += unit_vectors[j][0] * flat_vector[j]
-                shifted_vector[1] += unit_vectors[j][1] * flat_vector[j]
-
-            # log scale it towards the centre
-            scaling_vector = shifted_vector * self.scaleFactor
-            sv_size = np_norm(scaling_vector)
-            if(sv_size > 1):
-                shifted_vector /= shrinkFn(sv_size)
-
-            self.transformedCP[i,0] = shifted_vector[0]
-            self.transformedCP[i,1] = shifted_vector[1]
-            self.transformedCP[i,2] = radial
-
-        if(not silent):
-            print "    Reticulating splines"
-            
-        # finally scale the matrix to make it equal in all dimensions
-        if(min is None):                
-            min = np_amin(self.transformedCP, axis=0)
-            max = np_amax(self.transformedCP, axis=0)
-            max = max - min
-            max = max / (self.scaleFactor-1)
-
-        for i in range(0,3):
-            self.transformedCP[:,i] = (self.transformedCP[:,i] -  min[i])/max[i]
-            
-        return(min,max)
-
-    def makeColourProfile(self):
-        """Make a colour profile based on ksig information"""
-        working_data = np_array(self.kmerSigs, copy=True) 
-        Center(working_data,verbose=0)
-        p = PCA(working_data)
-        components = p.pc()
-        
-        # now make the colour profile based on PC1
-        self.kmerVals = np_array([float(i) for i in components[:,0]])
-        
-        # normalise to fit between 0 and 1
-        self.kmerVals -= np_min(self.kmerVals)
-        self.kmerVals /= np_max(self.kmerVals)
-        if(False):
-            plt.figure(1)
-            plt.subplot(111)
-            plt.plot(components[:,0], components[:,1], 'r.')
-            plt.show()
-        
-    def rotateVectorAndScale(self, point, las, centerVector, delta_max=0.25):
-        """
-        Move a vector closer to the center of the positive quadrant
-        
-        Find the co-ordinates of its projection
-        onto the surface of a hypersphere with radius R
-        
-        What?...  ...First some definitions:
-       
-        For starters, think in 3 dimensions, then take it out to N.
-        Imagine all points (x,y,z) on the surface of a sphere
-        such that all of x,y,z > 0. ie trapped within the positive
-        quadrant.
-       
-        Consider the line x = y = z which passes through the origin
-        and the point on the surface at the "center" of this quadrant.
-        Call this line the "main mapping axis". Let the unit vector 
-        coincident with this line be called A.
-       
-        Now think of any other vector V also located in the positive
-        quadrant. The goal of this function is to move this vector
-        closer to the MMA. Specifically, if we think about the plane
-        which contains both V and A, we'd like to rotate V within this
-        plane about the origin through phi degrees in the direction of
-        A.
-        
-        Once this has been done, we'd like to project the rotated co-ords 
-        onto the surface of a hypersphere with radius R. This is a simple
-        scaling operation.
-       
-        The idea is that vectors closer to the corners should be pertubed
-        more than those closer to the center.
-        
-        Set delta_max as the max percentage of the existing angle to be removed
-        """
-        theta = self.getAngBetween(point, centerVector)
-        A = delta_max/((las)**2)
-        B = delta_max/las
-        delta = 2*B*theta - A *(theta**2) # the amount to shift
-        V_p = point*(1-delta) + centerVector*delta
-        return V_p/np_norm(V_p)
-    
-    def rad2deg(self, anglein):
-        return 180*anglein/np_pi
-
-    def getAngBetween(self, P1, P2):
-        """Return the angle between two points (in radians)"""
-        # find the existing angle between them theta
-        c = np_dot(P1,P2)/np_norm(P1)/np_norm(P2) 
-        # rounding errors hurt everyone...
-        if(c > 1):
-            c = 1
-        elif(c < -1):
-            c = -1
-        return np_arccos(c) # in radians
-
-#------------------------------------------------------------------------------
-# IO and IMAGE RENDERING 
-
-    def plotUnbinned(self, coreCut):
-        """Plot all contigs over a certain length which are unbinned"""
-        self.loadData(condition="((length >= "+str(coreCut)+") & (bid == 0))")
-        self.transformCP()
-        fig = plt.figure()
-        ax1 = fig.add_subplot(111, projection='3d')
-        ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
-        try:
-            plt.show()
-            plt.close(fig)
-        except:
-            print "Error showing image", exc_info()[0]
-            raise
-        del fig
-
-
-    def plotTransViews(self, tag="fordens"):
-        """Plot top, side and front views of the transformed data"""
-        self.renderTransData(tag+"_top.png",azim = 0, elev = 90)
-        self.renderTransData(tag+"_front.png",azim = 0, elev = 0)
-        self.renderTransData(tag+"_side.png",azim = 90, elev = 0)
-
-    def renderTransCPData(self, fileName="", show=True, elev=45, azim=45, all=False, showAxis=False, primaryWidth=12, primarySpace=3, dpi=300, format='png', fig=None):
-        """Plot transformed data in 3D"""
-        del_fig = False
-        if(fig is None):
-            fig = plt.figure()
-            del_fig = True
-        else:
-            plt.clf()
-        if(all):
-            myAXINFO = {
-                'x': {'i': 0, 'tickdir': 1, 'juggled': (1, 0, 2),
-                'color': (0, 0, 0, 0, 0)},
-                'y': {'i': 1, 'tickdir': 0, 'juggled': (0, 1, 2),
-                'color': (0, 0, 0, 0, 0)},
-                'z': {'i': 2, 'tickdir': 0, 'juggled': (0, 2, 1),
-                'color': (0, 0, 0, 0, 0)},
-            }
-
-            ax = fig.add_subplot(131, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
-            ax.azim = 0
-            ax.elev = 0
-            ax.set_xlim3d(0,self.scaleFactor)
-            ax.set_ylim3d(0,self.scaleFactor)
-            ax.set_zlim3d(0,self.scaleFactor)
-            ax.set_xticklabels([])
-            ax.set_yticklabels([])
-            ax.set_zticklabels([])
-            ax.set_xticks([])
-            ax.set_yticks([])
-            ax.set_zticks([])
-            for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
-                for elt in axis.get_ticklines() + axis.get_ticklabels():
-                    elt.set_visible(False)
-            ax.w_xaxis._AXINFO = myAXINFO
-            ax.w_yaxis._AXINFO = myAXINFO
-            ax.w_zaxis._AXINFO = myAXINFO
-            
-            ax = fig.add_subplot(132, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
-            ax.azim = 90
-            ax.elev = 0
-            ax.set_xlim3d(0,self.scaleFactor)
-            ax.set_ylim3d(0,self.scaleFactor)
-            ax.set_zlim3d(0,self.scaleFactor)
-            ax.set_xticklabels([])
-            ax.set_yticklabels([])
-            ax.set_zticklabels([])
-            ax.set_xticks([])
-            ax.set_yticks([])
-            ax.set_zticks([])
-            for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
-                for elt in axis.get_ticklines() + axis.get_ticklabels():
-                    elt.set_visible(False)
-            ax.w_xaxis._AXINFO = myAXINFO
-            ax.w_yaxis._AXINFO = myAXINFO
-            ax.w_zaxis._AXINFO = myAXINFO
-            
-            ax = fig.add_subplot(133, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
-            ax.azim = 0
-            ax.elev = 90
-            ax.set_xlim3d(0,self.scaleFactor)
-            ax.set_ylim3d(0,self.scaleFactor)
-            ax.set_zlim3d(0,self.scaleFactor)
-            ax.set_xticklabels([])
-            ax.set_yticklabels([])
-            ax.set_zticklabels([])
-            ax.set_xticks([])
-            ax.set_yticks([])
-            ax.set_zticks([])
-            for axis in ax.w_xaxis, ax.w_yaxis, ax.w_zaxis:
-                for elt in axis.get_ticklines() + axis.get_ticklabels():
-                    elt.set_visible(False)
-            ax.w_xaxis._AXINFO = myAXINFO
-            ax.w_yaxis._AXINFO = myAXINFO
-            ax.w_zaxis._AXINFO = myAXINFO
-        else:
-            ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='none', c=self.contigColours, s=2, marker='.')
-            ax.azim = azim
-            ax.elev = elev
-            ax.set_xlim3d(0,self.scaleFactor)
-            ax.set_ylim3d(0,self.scaleFactor)
-            ax.set_zlim3d(0,self.scaleFactor)
-            ax.set_xticklabels([])
-            ax.set_yticklabels([])
-            ax.set_zticklabels([])
-            ax.set_xticks([])
-            ax.set_yticks([])
-            ax.set_zticks([])
-            if(not showAxis):
-                ax.set_axis_off()
-
-        if(fileName != ""):
-            try:
-                if(all):
-                    fig.set_size_inches(3*primaryWidth+2*primarySpace,primaryWidth)
-                else:
-                    fig.set_size_inches(primaryWidth,primaryWidth)            
-                plt.savefig(fileName,dpi=dpi,format=format)
-            except:
-                print "Error saving image",fileName, exc_info()[0]
-                raise
-        elif(show):
-            try:
-                plt.show()
-            except:
-                print "Error showing image", exc_info()[0]
-                raise
-        if del_fig:
-            plt.close(fig)
-            del fig
 
 ###############################################################################
 ###############################################################################

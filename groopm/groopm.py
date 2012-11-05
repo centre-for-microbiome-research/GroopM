@@ -61,7 +61,7 @@ import os
 import mstore
 import cluster
 import bin
-import dataManagers
+import binManager
 import groopmUtils
 
 ###############################################################################
@@ -115,6 +115,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             plotter = False
             shuffle = False
+            links = False
             transform=True^options.no_transform
             
             if(options.mode == 'shuffle'):
@@ -122,14 +123,17 @@ class GroopMOptionsParser():
                 transform = True
             elif(options.mode == 'plot'):
                 plotter = True
+            elif(options.mode == 'links'):
+                links = True
             else:
                 print "**Error: unknown mode:",options.mode
                 return
-            BM = dataManagers.BinManager(dbFileName=options.dbname)
+            BM = binManager.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False, transform=transform)
-            BM.refineWrapper(save=True,
+            BM.refineWrapper(saveBins=True,
                                plotter=plotter,
-                               shuffle=shuffle
+                               shuffle=shuffle,
+                               links=links,
                                )
 
         elif(options.subparser_name == 'recruit'):
@@ -137,13 +141,13 @@ class GroopMOptionsParser():
             print "****************************************************************"
             print " [[GroopM]] Running in bin expansion mode..."
             print "****************************************************************"
-            BM = dataManagers.BinManager(dbFileName=options.dbname)
+            BM = binManager.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True,
                         silent=False,
                         getUnbinned=True,
                         cutOff=options.cutoff
                         )
-            BM.recruitContigs(saveBins=True)
+            BM.recruitWrapper(inclusivity=options.inclusivity, step=options.step, saveBins=True)
         
         elif(options.subparser_name == 'extract'):
             # Extract data
@@ -169,7 +173,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             print " [[GroopM]] Running in bin merging mode..."
             print "****************************************************************"
-            BM = dataManagers.BinManager(dbFileName=options.dbname)
+            BM = binManager.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
             BM.merge(options.bids, options.force, saveBins=True)
 
@@ -178,7 +182,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             print " [[GroopM]] Running in bin splitting mode..."
             print "****************************************************************"
-            BM = dataManagers.BinManager(dbFileName=options.dbname)
+            BM = binManager.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=False)
             BM.split(options.bid, options.parts, mode=options.mode, saveBins=True, auto=options.force)
 
@@ -187,7 +191,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             print " [[GroopM]] Running in bin deleting mode..."
             print "****************************************************************"
-            BM = dataManagers.BinManager(dbFileName=options.dbname)
+            BM = binManager.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=True, bids=options.bids)
             BM.deleteBins(options.bids, force=options.force, saveBins=True, freeBinnedRowIndicies=True)
 
@@ -216,7 +220,7 @@ class GroopMOptionsParser():
                 print "**Error: unknown mode:",options.mode
             
         elif(options.subparser_name == 'print'):
-            BM = dataManagers.BinManager(dbFileName=options.dbname)
+            BM = binManager.BinManager(dbFileName=options.dbname)
             bids = []
             if options.bids is not None:
                 bids = options.bids
@@ -227,7 +231,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             print " [[GroopM]] Plot bins..."
             print "****************************************************************"
-            BM = dataManagers.BinManager(dbFileName=options.dbname)
+            BM = binManager.BinManager(dbFileName=options.dbname)
             bids = []
             if options.bids is not None:
                 bids = options.bids
