@@ -512,7 +512,11 @@ class BinManager:
         if plotter:
             self.plotterRefineBins()
         if shuffle:
-            self.autoRefineBins()
+            print "Start automatic bin refinement"
+            self.autoRefineBins(iterate=True)
+            num_binned = len(self.PM.binnedRowIndicies.keys())
+            print "   ",num_binned,"contigs across",len(self.bins.keys()),"cores"
+            
             if saveBins:
                 self.saveBins()
         if links:
@@ -655,62 +659,72 @@ class BinManager:
         # we're done!
         return (max_bid, neighbourList)
 
-    def autoRefineBins(self, verbose=False):
+    def autoRefineBins(self, iterate=False, verbose=False):
         """Automagically refine bins"""
-        num_reassigned = -1
-        round = 0
-        stable_bids = {} # once a bin is stable it's stable!
-        tdm = np_append(self.PM.transformedCP, 1000*np_reshape(self.PM.kmerVals,(len(self.PM.kmerVals),1)),1)
-        neighbour_list={} # save looking things up a 1,000,000 times
-        search_tree = kdt(tdm)
-        while num_reassigned != 0:
-            num_reassigned = 0
-            reassignment_map = {}
-            moved_RIs = {}
-            bids = self.getBids()
-            for bid in bids:
-                bin = self.getBin(bid)
-                if bid in stable_bids:
-                    try:
-                        reassignment_map[bid] += list(bin.rowIndices)
-                    except KeyError:
-                        reassignment_map[bid] = list(bin.rowIndices)
-                else:
-                    stable = True
-                    for row_index in bin.rowIndices:
-                        (assigned_bid, neighbour_list) = self.getClosestBID(row_index, search_tree, tdm, neighbourList=neighbour_list, verbose=verbose, k=2*bin.binSize-1)
-                        if assigned_bid != bid:
-                            stable = False
-                            num_reassigned += 1
-                            moved_RIs[row_index] = assigned_bid 
-                        
-                        # keep track of where this guy lives
+        super_round = 1
+        while True:
+            total_changed = 0
+            num_reassigned = -1
+            round = 0
+            stable_bids = {} # once a bin is stable it's stable!
+            tdm = np_append(self.PM.transformedCP, 1000*np_reshape(self.PM.kmerVals,(len(self.PM.kmerVals),1)),1)
+            neighbour_list={} # save looking things up a 1,000,000 times
+            search_tree = kdt(tdm)
+            while num_reassigned != 0:
+                num_reassigned = 0
+                reassignment_map = {}
+                moved_RIs = {}
+                bids = self.getBids()
+                for bid in bids:
+                    bin = self.getBin(bid)
+                    if bid in stable_bids:
                         try:
-                            reassignment_map[assigned_bid].append(row_index)
+                            reassignment_map[bid] += list(bin.rowIndices)
                         except KeyError:
-                            reassignment_map[assigned_bid] = [row_index]
+                            reassignment_map[bid] = list(bin.rowIndices)
+                    else:
+                        stable = True
+                        for row_index in bin.rowIndices:
+                            (assigned_bid, neighbour_list) = self.getClosestBID(row_index, search_tree, tdm, neighbourList=neighbour_list, verbose=verbose, k=2*bin.binSize-1)
+                            if assigned_bid != bid:
+                                stable = False
+                                num_reassigned += 1
+                                total_changed += 1
+                                moved_RIs[row_index] = assigned_bid 
                             
-                    if stable: # no changes this round, mark bin as stable
-                        stable_bids[bid] = True
+                            # keep track of where this guy lives
+                            try:
+                                reassignment_map[assigned_bid].append(row_index)
+                            except KeyError:
+                                reassignment_map[assigned_bid] = [row_index]
+                                
+                        if stable: # no changes this round, mark bin as stable
+                            stable_bids[bid] = True
+                
+                # fix the lookup table
+                for moved_index in moved_RIs:
+                    self.PM.binIds[moved_index] = moved_RIs[moved_index]
+    
+                # now fix the bins
+                bins_removed = 0
+                for bid in bids:
+                    if bid in reassignment_map:
+                        self.bins[bid].rowIndices = np_array(reassignment_map[bid])
+                        self.bins[bid].binSize = len(reassignment_map[bid])
+                    else:
+                        # empty bin
+                        bins_removed += 1
+                        self.deleteBins([bid], force=True, freeBinnedRowIndicies=False, saveBins=False)
+                
+                round += 1
+                if verbose:
+                    print "    Refine round %d: reassigned %d contigs, removed %d cores" % (round, num_reassigned, bins_removed)
+            if total_changed == 0 or not iterate:
+                break
+            else:
+                print "    Refine super round %d complete" % super_round
+                super_round += 1
             
-            # fix the lookup table
-            for moved_index in moved_RIs:
-                self.PM.binIds[moved_index] = moved_RIs[moved_index]
-
-            # now fix the bins
-            bins_removed = 0
-            for bid in bids:
-                if bid in reassignment_map:
-                    self.bins[bid].rowIndices = np_array(reassignment_map[bid])
-                    self.bins[bid].binSize = len(reassignment_map[bid])
-                else:
-                    # empty bin
-                    bins_removed += 1
-                    self.deleteBins([bid], force=True, freeBinnedRowIndicies=False, saveBins=False)
-            
-            round += 1
-            print "    Refine round %d: reassigned %d contigs, removed %d cores" % (round, num_reassigned, bins_removed)
-
 #------------------------------------------------------------------------------
 # BIN UTILITIES 
 
