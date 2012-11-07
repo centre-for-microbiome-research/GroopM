@@ -123,8 +123,6 @@ class GroopMOptionsParser():
                 transform = True
             elif(options.mode == 'plot'):
                 plotter = True
-            elif(options.mode == 'links'):
-                links = True
             else:
                 print "**Error: unknown mode:",options.mode
                 return
