@@ -716,11 +716,10 @@ class BinManager:
                 round += 1
                 if verbose:
                     print "    Refine round %d: reassigned %d contigs, removed %d cores" % (round, num_reassigned, bins_removed)
+            print "    Refine round %d complete. (%d iterations) Total contigs reassigned: %d" % (super_round, round, sr_contigs_reassigned)
             if sr_contigs_reassigned == 0 or not iterate:
                 break
-            else:
-                print "    Refine round %d complete. (% iterations) Total contigs reassigned: %d" % (super_round, round, sr_contigs_reassigned)
-                super_round += 1
+            super_round += 1
             
 #------------------------------------------------------------------------------
 # BIN UTILITIES 
