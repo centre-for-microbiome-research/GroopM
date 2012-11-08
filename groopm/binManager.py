@@ -48,8 +48,8 @@ __email__ = "mike@mikeimelfort.com"
 __status__ = "Development"
 
 ###############################################################################
-
-from sys import exc_info, exit, stdout
+from os.path import join as osp_join
+from sys import exc_info, exit, stdout as sys_stdout
 from operator import itemgetter
 
 from colorsys import hsv_to_rgb as htr
@@ -69,6 +69,7 @@ from scipy.cluster.vq import kmeans,vq
 from profileManager import ProfileManager
 from bin import Bin
 import groopmExceptions as ge
+from groopmUtils import makeSurePathExists
 
 np_seterr(all='raise')     
 
@@ -1375,21 +1376,21 @@ class BinManager:
             try:
                 # redirect stdout to a file
                 stdout = open(fileName, 'w')
-                self.printInner(outFormat)
+                self.printInner(outFormat, stdout)
             except:
                 print "Error diverting stout to file:", fileName, exc_info()[0]
                 raise
         else:
             self.printInner(outFormat)           
 
-    def printInner(self, outFormat):
+    def printInner(self, outFormat, stream=sys_stdout):
         """Print bin information to STDOUT"""
         # handle the headers first
         separator = "\t"
         if(outFormat == 'summary'):
-            print separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"cMean\"","\"cStdev\"","\"kMean\"","\"kStdev\""]) 
+            stream.write(separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"cMean\"","\"cStdev\"","\"kMean\"","\"kStdev\""])+"\n") 
         elif(outFormat == 'minimal'):
-            print separator.join(["#\"bid\"","\"cid\"","\"length\""])            
+            stream.write(separator.join(["#\"bid\"","\"cid\"","\"length\""])+"\n")            
         elif(outFormat == 'full'):
             pass
         else:
@@ -1398,15 +1399,18 @@ class BinManager:
 
         for bid in self.getBids():
             self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
-            self.bins[bid].printBin(self.PM.contigNames, self.PM.contigLengths, outFormat=outFormat, separator=separator)
+            self.bins[bid].printBin(self.PM.contigNames, self.PM.contigLengths, outFormat=outFormat, separator=separator, stream=stream)
 
     def plotProfileDistributions(self):
         """Plot the coverage and kmer distributions for each bin"""
         for bid in self.getBids():
             self.bins[bid].plotProfileDistributions(self.PM.transformedCP, self.PM.kmerSigs, fileName="PROFILE_"+str(bid))
 
-    def plotBins(self, FNPrefix="BIN", sideBySide=False):
+    def plotBins(self, FNPrefix="BIN", sideBySide=False, folder=''):
         """Make plots of all the bins"""
+        if folder != '':
+            makeSurePathExists(folder)
+            
         for bid in self.getBids():
             self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
         if(sideBySide):
@@ -1415,7 +1419,10 @@ class BinManager:
         else:
             print "Plotting bins"
             for bid in self.getBids():
-                self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName=FNPrefix+"_"+str(bid))
+                if folder != '':
+                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName=osp_join(folder, FNPrefix+"_"+str(bid)))
+                else:
+                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, FNPrefix+"_"+str(bid))
 
     def plotSideBySide(self, bids, fileName="", tag=""):
         """Plot two bins side by side in 3d"""

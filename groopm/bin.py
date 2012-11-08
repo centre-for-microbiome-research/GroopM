@@ -539,7 +539,7 @@ class Bin:
                                ])
         return title
 
-    def printBin(self, contigNames, contigLengths, outFormat="summary", separator="\t"):
+    def printBin(self, contigNames, contigLengths, outFormat="summary", separator="\t", stream=sys.stdout):
         """print this bin info in csvformat"""
         kvm_str = "%.4f" % self.kValMean
         kvs_str = "%.4f" % self.kValStdev
@@ -548,29 +548,29 @@ class Bin:
         
         if(outFormat == 'summary'):
             #print separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"cMean\"","\"cStdev\"","\"kMean\"","\"kStdev\""]) 
-            print separator.join([str(self.id), str(self.totalBP), str(self.binSize), cvm_str, cvs_str, kvm_str, kvs_str])
+            stream.write(separator.join([str(self.id), str(self.totalBP), str(self.binSize), cvm_str, cvs_str, kvm_str, kvs_str])+"\n")
         elif(outFormat == 'full'):
-            print("#bid_"+str(self.id)+
+            stream.write("#bid_"+str(self.id)+
                   "_totalBP_"+str(self.totalBP)+
                   "_numCons_"+str(self.binSize)+
                   "_kMean_"+kvm_str+
-                  "_kStdev_"+kvs_str
-                  )
-            print separator.join(["#\"bid\"","\"cid\"","\"length\""])
+                  "_kStdev_"+kvs_str+
+                  "\n")
+            stream.write(separator.join(["#\"bid\"","\"cid\"","\"length\""])+"\n")
             for row_index in self.rowIndices:
-                print separator.join([str(self.id), contigNames[row_index], str(contigLengths[row_index])])
+                stream.write(separator.join([str(self.id), contigNames[row_index], str(contigLengths[row_index])])+"\n")
         elif(outFormat == 'minimal'):
             #print separator.join(["#\"bid\"","\"cid\"","\"length\""])            
             for row_index in self.rowIndices:
-                print separator.join([str(self.id), contigNames[row_index], str(contigLengths[row_index])])
+                stream.write(separator.join([str(self.id), contigNames[row_index], str(contigLengths[row_index])])+"\n")
         else:
-            print "--------------------------------------"
-            print "Bin:", self.id
-            print "Bin size:", self.binSize
-            print "Total BP:", self.totalBP
-            print "KMean:", kvm_str
-            print "KStdev:", kvs_str
-            print "--------------------------------------"
+            stream.write("--------------------------------------\n")
+            stream.write("Bin:", self.id,"\n")
+            stream.write("Bin size:", self.binSize,"\n")
+            stream.write("Total BP:", self.totalBP,"\n")
+            stream.write("KMean:", kvm_str,"\n")
+            stream.write("KStdev:", kvs_str,"\n")
+            stream.write("--------------------------------------\n")
 
 ###############################################################################
 ###############################################################################

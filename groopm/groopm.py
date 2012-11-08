@@ -234,7 +234,7 @@ class GroopMOptionsParser():
             if options.bids is not None:
                 bids = options.bids
             BM.loadBins(makeBins=True, silent=False, bids=bids)
-            BM.plotBins(FNPrefix=options.tag, sideBySide=options.sidebyside)
+            BM.plotBins(FNPrefix=options.tag, sideBySide=options.sidebyside, folder=options.folder)
             
         return 0
     

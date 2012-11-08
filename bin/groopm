@@ -235,7 +235,7 @@ if __name__ == '__main__':
     bin_plotter.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot (None for all)")
     bin_plotter.add_argument('-s', '--sidebyside', action="store_true", default=False, help="plot bins in 3d side by side instead of to file")
     bin_plotter.add_argument('-t', '--tag', default="BIN", help="tag to add to output filename")
-    
+    bin_plotter.add_argument('-f', '--folder', default="", help="save plots in folder")    
         
     #-------------------------------------------------
     # get and check options
