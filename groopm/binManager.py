@@ -659,14 +659,14 @@ class BinManager:
     def autoRefineBins(self, iterate=False, verbose=False):
         """Automagically refine bins"""
         super_round = 1
+        tdm = np_append(self.PM.transformedCP, 1000*np_reshape(self.PM.kmerVals,(len(self.PM.kmerVals),1)),1)
+        neighbour_list={} # save looking things up a 1,000,000 times
+        search_tree = kdt(tdm)
         while True:
-            total_changed = 0
+            sr_contigs_reassigned = 0
             num_reassigned = -1
             round = 0
             stable_bids = {} # once a bin is stable it's stable!
-            tdm = np_append(self.PM.transformedCP, 1000*np_reshape(self.PM.kmerVals,(len(self.PM.kmerVals),1)),1)
-            neighbour_list={} # save looking things up a 1,000,000 times
-            search_tree = kdt(tdm)
             while num_reassigned != 0:
                 num_reassigned = 0
                 reassignment_map = {}
@@ -686,7 +686,7 @@ class BinManager:
                             if assigned_bid != bid:
                                 stable = False
                                 num_reassigned += 1
-                                total_changed += 1
+                                sr_contigs_reassigned += 1
                                 moved_RIs[row_index] = assigned_bid 
                             
                             # keep track of where this guy lives
@@ -716,10 +716,10 @@ class BinManager:
                 round += 1
                 if verbose:
                     print "    Refine round %d: reassigned %d contigs, removed %d cores" % (round, num_reassigned, bins_removed)
-            if total_changed == 0 or not iterate:
+            if sr_contigs_reassigned == 0 or not iterate:
                 break
             else:
-                print "    Refine super round %d complete" % super_round
+                print "    Refine round %d complete. (% iterations) Total contigs reassigned: %d" % (super_round, round, sr_contigs_reassigned)
                 super_round += 1
             
 #------------------------------------------------------------------------------
