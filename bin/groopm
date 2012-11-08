@@ -135,7 +135,7 @@ if __name__ == '__main__':
                                         help='merge similar bins / split chimeric ones',
                                         description='Merge similar bins and split chimeric ones')
     bin_refiner.add_argument('dbname', help="name of the database to open")
-    bin_refiner.add_argument('-m', '--mode', default='plot', help="refinement mode plot|shuffle|links")
+    bin_refiner.add_argument('-m', '--mode', default='plot', help="refinement mode plot|shuffle")
     bin_refiner.add_argument('-r', '--no_transform', action="store_true", default=False, help="skip data transformation (3 stoits only)")
 
     #-------------------------------------------------
@@ -163,6 +163,10 @@ if __name__ == '__main__':
     bin_extractor.add_argument('-m', '--mode', default="contigs", help="what to extract [reads, contigs]")
     bin_extractor.add_argument('-o', '--outfolder', default="", help="write to this folder (None for current dir)")
     bin_extractor.add_argument('-s', '--shuffle', action="store_true", default=False, help="shuffle reads file, ignored for contigs or unpaired reads")
+    bin_extractor.add_argument('-p', '--pairs_only', action="store_true", default=False, help="ignore unpaired reads")
+    bin_extractor.add_argument('-B', '--no_separate_bams', action="store_true", default=False, help="use the same file for all reads")
+    bin_extractor.add_argument('-C', '--combine_reads', action="store_true", default=False, help="write paired and unpaired to the same files")
+    bin_extractor.add_argument('-g', '--no_gzip', action="store_true", default=False, help="do not gzip output files, ignored for contigs")
 
     ##################################################
     # Utilities

@@ -93,7 +93,6 @@ class GMExtractor:
         # make the dir if need be
         self.makeSurePathExists(self.outDir)
         
-        
     def extractContigs(self, fasta=[], cutoff=0):
         """Extract contigs and write to file"""
         self.BM = binManager.BinManager(dbFileName=self.dbFileName)   # bins
