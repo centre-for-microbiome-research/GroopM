@@ -197,19 +197,6 @@ class BinManager:
         # we must have done something
         self.PM.setClustered()
 
-    
-    def setBinStats(self):
-        """Update / overwrite the table holding the bin stats
-        
-        Note that this call effectively nukes the existing table
-        """
-        bin_stats = {}
-        for bid in self.getBids():
-            # no point in saving empty bins
-            if np_size(self.bins[bid].rowIndices) > 0:
-                bin_stats[bid] = np_size(self.bins[bid].rowIndices)
-        self.PM.setBinStats(bin_stats)
-
     def getGlobalBinAssignments(self, binAssignments={}):
         """Merge the bids, raw DB indexes and core information so we can save to disk
         
@@ -232,6 +219,19 @@ class BinManager:
                     bin_assignment_update[self.PM.indices[row_index]] = bid
             
         return bin_assignment_update
+
+    def setBinStats(self):
+        """Update / overwrite the table holding the bin stats
+        
+        Note that this call effectively nukes the existing table
+        """
+        bin_stats = {}
+        for bid in self.getBids():
+            # no point in saving empty bins
+            if np_size(self.bins[bid].rowIndices) > 0:
+                bin_stats[bid] = np_size(self.bins[bid].rowIndices)
+        self.PM.setBinStats(bin_stats)
+
     
 #------------------------------------------------------------------------------
 # REMOVE ALREADY LOADED BINS
@@ -758,7 +758,7 @@ class BinManager:
           less than MCut
         """
         # we need to work out which profile to cluster on
-        if(printInstructions):
+        if(printInstructions and not auto):
             self.printSplitInstructions()
 
         # make some split bins
@@ -850,7 +850,7 @@ class BinManager:
                 # bin is full!
                 split_bin = self.makeNewBin(holding_array)
                 for row_index in holding_array:
-                    bin_assignment_update[self.PM.indices[row_index]] = split_bin.id
+                    bin_assignment_update[row_index] = split_bin.id
                 split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
                 bids.append(split_bin.id)
                 holding_array = np_array([])
@@ -860,7 +860,7 @@ class BinManager:
         if(np_size(holding_array) != 0):
             split_bin = self.makeNewBin(holding_array)
             for row_index in holding_array:
-                bin_assignment_update[self.PM.indices[row_index]] = split_bin.id  
+                bin_assignment_update[row_index] = split_bin.id  
             split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
             bids.append(split_bin.id)
 
@@ -1027,7 +1027,7 @@ class BinManager:
                             del self.PM.binnedRowIndicies[row_index]
                         else:
                             print bid, row_index, "FUNG"
-                        bin_assignment_update[self.PM.indices[row_index]] = 0 
+                        bin_assignment_update[row_index] = 0 
                 del self.bins[bid]
             else:
                 raise ge.BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
