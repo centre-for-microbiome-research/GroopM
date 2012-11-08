@@ -494,6 +494,10 @@ class BinManager:
         print "    Recruited %0.4f" % perc_recruited +"%"+" of %d unbinned contigs" % total_unbinned
         print "    END: %0.4f" % perc_binned +"%"+" of %d requested contigs in bins" % total_contigs
         
+        if(saveBins):
+            self.saveBins()
+
+        return
         # now do some refinin!
         self.autoRefineBins()
          
