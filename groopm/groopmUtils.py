@@ -64,6 +64,8 @@ import profileManager
 import binManager
 import mstore
 
+# other local imports
+from bamtyper.utilities import BamParser as BTBP
 np.seterr(all='raise')
 
 ###############################################################################
@@ -91,84 +93,13 @@ class GMExtractor:
             self.outDir = folder
 
         # make the dir if need be
-        self.makeSurePathExists(self.outDir)
+        makeSurePathExists(self.outDir)
         
     def extractContigs(self, fasta=[], cutoff=0):
         """Extract contigs and write to file"""
         self.BM = binManager.BinManager(dbFileName=self.dbFileName)   # bins
         self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
         self.PM = self.BM.PM
-        
-############################
-############################
-        if(False):
-            kse = mstore.KmerSigEngine()
-            k_weights = kse.getKmerSigWeights()
-            print kse.makeKmerColNames()
-            sys.exit(0)
-            # load all the contigs which have been assigned to bins
-            CP = mstore.ContigParser()
-            # contigs looks like cid->seq
-            contigs = {}
-            try:
-                for file_name in fasta:
-                    with open(file_name, "r") as f:  
-                        contigs = CP.getWantedSeqs(f, self.PM.contigNames, storage=contigs)
-            except:
-                print "Could not parse contig file:",fasta[0],sys.exc_info()[0]
-                raise
-            
-            lengths = np.array([])
-            GCs = np.array([])
-            dists = np.array([])
-            sigs = np.array([])
-             
-            for bid in self.BM.getBids():
-                bin = self.BM.getBin(bid)
-                b_lengths = np.array([])
-                b_GCs = np.array([])
-                b_dists = np.array([])
-                b_sigs = np.array([])
-                b_names = np.array([])
-                for row_index in bin.rowIndices:
-                    dist = np.linalg.norm(self.PM.covProfiles[row_index])
-                    b_dists = np.append(b_dists, dist)
-                    b_GCs = np.append(b_GCs, kse.getGC(contigs[self.PM.contigNames[row_index]]))
-                    b_sigs = np.append(b_sigs, self.PM.kmerSigs[row_index])
-                    b_lengths = np.append(b_lengths, self.PM.contigLengths[row_index])
-                    b_names = np.append(b_names, self.PM.contigNames[row_index])
-                    
-                mean_dist = np.mean(b_dists)
-                mean_length = np.mean(b_lengths)
-                b_sigs = np.reshape(b_sigs, (bin.binSize, len(self.PM.kmerSigs[0])))
-                for i in range(len(b_dists)):
-                    print "C_"+b_names[i], b_dists[i]/mean_dist, b_GCs[i]
-                    print "K_"+b_names[i], b_sigs[i] 
-                    dists = np.append(dists, b_dists[i]/mean_dist)
-                    GCs = np.append(GCs, b_GCs[i])
-                    lengths = np.append(lengths, b_lengths[i])
-    
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(dists, GCs, lengths, edgecolors='none', marker='.')
-                            
-            #fig = plt.figure()
-            #plt.subplot(211)
-            #plt.plot(dists, lengths, 'b.')
-            #plt.subplot(212)
-            #plt.plot(dists, GCs, 'r.')
-            
-            try:
-                plt.show()
-                plt.close(fig)
-            except:
-                print "Error showing image", sys.exc_info()[0]
-                raise
-            del fig
-    
-            return
-#######################
-#######################
         
         # load all the contigs which have been assigned to bins
         CP = mstore.ContigParser()
@@ -198,21 +129,39 @@ class GMExtractor:
                 print "Could not open file for writing:",file_name,sys.exc_info()[0]
                 raise               
         
-    def  extractReads(self, bams=[], shuffled=False):
+    def  extractReads(self, bams=[]):
         """Extract reads from sam files and write to file"""
-        print "Soz LOL"
-        return
-        self.PM = binManager.ProfileManager(self.dbFileName)   # based on user specified length
+        # load data
         self.BM = binManager.BinManager(dbFileName=self.dbFileName)   # bins
         self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.PM = self.BM.PM         
 
+        print "Extracting reads"
+        # work out a set of targets to pass to the parser
+        targets = {}
+        bids = self.BM.getBids()
+        for bid in bids:
+            bin = self.BM.getBin(bid)
+            for row_index in bin.rowIndices:
+                targets[self.PM.contigNames[row_index]] = bid
+        # get something to parse the bams with
+        bam_parser = BTBP()
+        bam_parser.extractReads(bams, 
+                                '', 
+                                targets,   
+                                combineBams=False, 
+                                headersOnly = True,
+                                dontTrustSamFlags=False,
+                                folder=self.outDir, 
+                                verbose=True
+                                )
 
-    def makeSurePathExists(self, path):
-        try:
-            os.makedirs(path)
-        except OSError as exception:
-            if exception.errno != errno.EEXIST:
-                raise
+def makeSurePathExists(path):
+    try:
+        os.makedirs(path)
+    except OSError as exception:
+        if exception.errno != errno.EEXIST:
+            raise
 
 
 ###############################################################################

@@ -162,7 +162,7 @@ class GroopMOptionsParser():
             if(options.mode=='contigs'):
                 BX.extractContigs(fasta=options.data, cutoff=options.cutoff)
             elif(options.mode=='reads'):
-                BX.extractReads(bams=options.data, shuffle=options.shuffle)
+                BX.extractReads(bams=options.data)
             else:
                 raise ge.ExtractModeNotAppropriateException("mode: "+mode+" is unknown")
 
@@ -234,7 +234,7 @@ class GroopMOptionsParser():
             if options.bids is not None:
                 bids = options.bids
             BM.loadBins(makeBins=True, silent=False, bids=bids)
-            BM.plotBins(FNPrefix=options.tag, sideBySide=options.sidebyside)
+            BM.plotBins(FNPrefix=options.tag, sideBySide=options.sidebyside, folder=options.folder)
             
         return 0
     
