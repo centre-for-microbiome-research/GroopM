@@ -162,11 +162,7 @@ if __name__ == '__main__':
     bin_extractor.add_argument('-c', '--cutoff', type=int, default=0, help="cutoff contig size, ignored for reads (0 for no cutoff)")
     bin_extractor.add_argument('-m', '--mode', default="contigs", help="what to extract [reads, contigs]")
     bin_extractor.add_argument('-o', '--outfolder', default="", help="write to this folder (None for current dir)")
-    bin_extractor.add_argument('-s', '--shuffle', action="store_true", default=False, help="shuffle reads file, ignored for contigs or unpaired reads")
-    bin_extractor.add_argument('-p', '--pairs_only', action="store_true", default=False, help="ignore unpaired reads")
-    bin_extractor.add_argument('-B', '--no_separate_bams', action="store_true", default=False, help="use the same file for all reads")
-    bin_extractor.add_argument('-C', '--combine_reads', action="store_true", default=False, help="write paired and unpaired to the same files")
-    bin_extractor.add_argument('-g', '--no_gzip', action="store_true", default=False, help="do not gzip output files, ignored for contigs")
+    bin_extractor.add_argument('-B', '--no_separate_bams', action="store_true", default=False, help="use one file for all stoits")
 
     ##################################################
     # Utilities

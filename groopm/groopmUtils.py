@@ -64,6 +64,8 @@ import profileManager
 import binManager
 import mstore
 
+# other local imports
+from bamtyper.utilities import BamParser as BTBP
 np.seterr(all='raise')
 
 ###############################################################################
@@ -127,14 +129,32 @@ class GMExtractor:
                 print "Could not open file for writing:",file_name,sys.exc_info()[0]
                 raise               
         
-    def  extractReads(self, bams=[], shuffled=False):
+    def  extractReads(self, bams=[]):
         """Extract reads from sam files and write to file"""
-        print "Soz LOL"
-        return
-        self.PM = binManager.ProfileManager(self.dbFileName)   # based on user specified length
+        # load data
         self.BM = binManager.BinManager(dbFileName=self.dbFileName)   # bins
         self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.PM = self.BM.PM         
 
+        print "Extracting reads"
+        # work out a set of targets to pass to the parser
+        targets = {}
+        bids = self.BM.getBids()
+        for bid in bids:
+            bin = self.BM.getBin(bid)
+            for row_index in bin.rowIndices:
+                targets[self.PM.contigNames[row_index]] = bid
+        # get something to parse the bams with
+        bam_parser = BTBP()
+        bam_parser.extractReads(bams, 
+                                '', 
+                                targets,   
+                                combineBams=False, 
+                                headersOnly = True,
+                                dontTrustSamFlags=False,
+                                folder=self.outDir, 
+                                verbose=True
+                                )
 
 def makeSurePathExists(path):
     try:

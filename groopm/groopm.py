@@ -162,7 +162,7 @@ class GroopMOptionsParser():
             if(options.mode=='contigs'):
                 BX.extractContigs(fasta=options.data, cutoff=options.cutoff)
             elif(options.mode=='reads'):
-                BX.extractReads(bams=options.data, shuffle=options.shuffle)
+                BX.extractReads(bams=options.data)
             else:
                 raise ge.ExtractModeNotAppropriateException("mode: "+mode+" is unknown")
 
