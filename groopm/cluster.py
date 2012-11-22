@@ -42,10 +42,10 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
-__status__ = "Development"
+__status__ = "Alpha"
 
 ###############################################################################
 
@@ -1086,10 +1086,10 @@ class ClusterEngine:
 class CenterFinder:
     """When a plain old mean won't cut it
 
-    Uses a bouncing ball algorithm. Imagine walking along a "path",
-    (through the array) hitting a ball into the air each time you
-    come across a value. Gravity is bringing the ball down. If we plot
-    the height of the ball vs array index then the highest the ball
+    Uses a balloon hitting algorithm. Imagine walking along a "path",
+    (through the array) hitting a balloon into the air each time you
+    come across a value. Gravity is bringing the balloon down. If we plot
+    the height of the ball vs array index then the highest the balloon
     reaches is the index in the center of the densest part of the array 
     """
     def __init__(self): pass

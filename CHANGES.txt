@@ -1,3 +1,4 @@
 v0.0.1, 8-7-2012 -- Porting over code from MeSSY. Project is in DEV
 v0.0.1.1, 4-10-2012 -- First release candidate. Fixed docs. Project is in DEV
-v0.2.0, 9-11-2012 -- All functionality for first release is included and tested. Alpha release.
+v0.2.0, 9-11-2012 -- All functionality for first release is included and tested.
+v0.2.1, 22-11-2012 -- Moved into Alpha release phase.

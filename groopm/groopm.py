@@ -42,20 +42,16 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
-__status__ = "Development"
+__status__ = "Alpha"
 
 ###############################################################################
 
 import argparse
 import sys
 import os 
-#import code
-#import readline 
-#import rlcompleter 
-#import atexit
 
 # GroopM imports
 import mstore
