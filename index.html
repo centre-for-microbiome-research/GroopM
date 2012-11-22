@@ -28,7 +28,7 @@
   <div class="row">
     <img style="display: block; margin-left: auto; margin-right: auto;" src="./img/groopm.png"/>
     <br><br>
-    <p class="lead">Semi-automagical metagenomic binning FTW!</p>
+    <p class="lead"><del>Semi-</del>Automagical metagenomic binning FTW!</p>
   </div>
 </header>
 
@@ -53,6 +53,7 @@
           <li>pytables >= 2.3</li>
           <li>pysam >= 0.3</li>
           <li>PIL >= 1.1.7</li>
+          <li>BamTyper >= 0.2.0</li>
           <li>Cython</li>
           <li>GTK or TK dev packages installed on your machine</li>
         </ul>
@@ -75,7 +76,8 @@
         <ul>
           <li><strong>parse</strong> - Load then contigs and coverage info into pytables</li>
           <li><strong>core</strong> - Produce a set of bins</li>
-          <li><strong>refine</strong> - Make sure these bins are ok. Fix and errors you see</li>
+          <li><strong>refine</strong> - Make sure these bins are ok. Fix any errors you see</li>
+          <li><strong>recruit</strong> - Recruit smaller contigs into your existing bins</li>
           <li><strong>extract</strong> - Extract binned contigs</li>
         </ul>
         <p>GroopM was designed to be as parameter-free as possible. For more information on these steps type:</p>
