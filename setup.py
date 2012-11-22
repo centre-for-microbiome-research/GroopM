@@ -6,7 +6,7 @@ setup(
     author='Michael Imelfort',
     author_email='mike@mikeimelfort.com',
     packages=['groopm', 'groopm.test'],
-    scripts=['bin/groopm','bin/groopm_utils'],
+    scripts=['bin/groopm'],
 	url='http://pypi.python.org/pypi/GroopM/',
     license='LICENSE.txt',
     description='Metagenomic binning suite',
