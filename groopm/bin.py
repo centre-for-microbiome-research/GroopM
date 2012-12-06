@@ -139,6 +139,7 @@ class Bin:
         
         This is the norm of the vector containing z distances for both profiles
         """
+        #print self.covStdevs, self.binSize
         covZ = np.mean(np.abs(transformedCP - self.covMeans)/self.covStdevs)
         merZ = np.abs(kmerVal - self.kValMean)/self.kValStdev 
         return (covZ,merZ)
