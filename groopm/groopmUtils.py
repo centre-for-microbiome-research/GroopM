@@ -258,9 +258,17 @@ class BinExplorer:
         """Plot cores side by side with their contigs"""
         print "Plotting side by side graphs"        
         self.PM2 = binManager.ProfileManager(dbFileName=self.BM.PM.dbFileName)
-        self.PM2.loadData(condition="length >= "+str(coreCut))
+        self.PM2.loadData(condition="length >= "+str(coreCut),
+                          bids=self.bids,
+                          loadContigNames=False
+                          )
         (min,max) = self.PM2.transformCP()
-        self.BM.loadBins(makeBins=True,bids=self.bids, silent=False, min=min, max=max)
+        self.BM.loadBins(makeBins=True,
+                         loadContigNames=False,
+                         bids=self.bids,
+                         silent=False,
+                         min=min,
+                         max=max)
         print "Creating side by side plots"
         (bin_centroid_points, bin_centroid_colours, bin_ids) = self.BM.findCoreCentres()
         self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colours)
@@ -289,7 +297,7 @@ class BinExplorer:
             # plot on screen for user
             fig = plt.figure()
             ax1 = fig.add_subplot(121, projection='3d')
-            ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors=self.PM2.contigColours, c=self.PM2.contigColours, marker='.')
+            ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors=self.PM2.contigColours, c=self.PM2.contigColours, s=2, marker='.')
             ax2 = fig.add_subplot(122, projection='3d')
             ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColours, c=binCentroidColours)
             try:

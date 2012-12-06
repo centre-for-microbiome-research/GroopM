@@ -101,6 +101,8 @@ class BinManager:
                  silent=True,
                  loadKmerSigs=False,
                  loadCovProfiles=True,
+                 loadContigNames=True,
+                 loadContigLengths=True,
                  loadLinks=False,
                  min=None,
                  max=None,
@@ -124,8 +126,8 @@ class BinManager:
                          loadCovProfiles=loadCovProfiles,
                          loadKmerSigs=loadKmerSigs,
                          makeColours=True,
-                         loadContigNames=True,
-                         loadContigLengths=True,
+                         loadContigNames=loadContigNames,
+                         loadContigLengths=loadContigLengths,
                          loadBins=True,
                          loadLinks=loadLinks
                         )

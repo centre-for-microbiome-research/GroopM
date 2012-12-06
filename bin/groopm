@@ -78,7 +78,7 @@ def printHelp():
     
         Utilities:
       
-    groopm merge        -> Merge two or bins
+    groopm merge        -> Merge two or more bins
     groopm split        -> Split a bin into N parts
     groopm delete       -> Delete a bin
     
