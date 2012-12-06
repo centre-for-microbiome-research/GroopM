@@ -2,11 +2,11 @@ from distutils.core import setup
 
 setup(
     name='GroopM',
-    version='0.2.0',
+    version='0.2.1',
     author='Michael Imelfort',
     author_email='mike@mikeimelfort.com',
     packages=['groopm', 'groopm.test'],
-    scripts=['bin/groopm','bin/groopm_utils'],
+    scripts=['bin/groopm'],
 	url='http://pypi.python.org/pypi/GroopM/',
     license='LICENSE.txt',
     description='Metagenomic binning suite',
@@ -18,6 +18,6 @@ setup(
         "tables >= 2.3",
         "pysam >= 0.6",
         "PIL >= 1.1.7",
-	    "BamTyper >= 0.2.0"
+        "BamTyper >= 0.2.0"
     ],
 )
