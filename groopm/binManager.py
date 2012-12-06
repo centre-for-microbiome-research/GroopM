@@ -101,7 +101,6 @@ class BinManager:
                  silent=True,
                  loadKmerSigs=False,
                  loadCovProfiles=True,
-                 loadContigNames=True,
                  loadContigLengths=True,
                  loadLinks=False,
                  loadContigNames=True,
