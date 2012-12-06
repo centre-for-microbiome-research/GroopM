@@ -137,6 +137,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             BM = binManager.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True,
+                        loadContigNames=False,
                         silent=False,
                         getUnbinned=True,
                         cutOff=options.cutoff

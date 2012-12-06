@@ -104,6 +104,7 @@ class BinManager:
                  loadContigNames=True,
                  loadContigLengths=True,
                  loadLinks=False,
+                 loadContigNames=True,
                  min=None,
                  max=None,
                  cutOff=0,
@@ -466,17 +467,18 @@ class BinManager:
                     if unbinned[row_index] >= cutoff:
                         # meets our criteria
                         putative_bid = int(bids[search_tree.query(tdm[row_index])[1]])
-                        (covZ,merZ) = self.scoreContig(row_index, putative_bid)
-                        if covZ <= inclusivity and merZ <= inclusivity:
-                            # we can recruit
-                            self.bins[putative_bid].rowIndices = np_append(self.bins[putative_bid].rowIndices,
-                                                                            row_index
+                        if self.bins[putative_bid].binSize > 1:
+                            (covZ,merZ) = self.scoreContig(row_index, putative_bid)
+                            if covZ <= inclusivity and merZ <= inclusivity:
+                                # we can recruit
+                                self.bins[putative_bid].rowIndices = np_append(self.bins[putative_bid].rowIndices,
+                                                                               row_index
                                                                             ) 
-                            affected_bids.append(putative_bid)
-                            newly_binned.append(row_index)
-                            this_step_binned += 1
-                            total_binned += 1
-                            total_expanded += 1
+                                affected_bids.append(putative_bid)
+                                newly_binned.append(row_index)
+                                this_step_binned += 1
+                                total_binned += 1
+                                total_expanded += 1
     
                 # remove any binned contigs from the unbinned list
                 for row_index in newly_binned:
