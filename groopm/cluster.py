@@ -59,6 +59,7 @@ from pylab import plot,subplot,axis,stem,show,figure
 from numpy import unravel_index as np_unravel_index, seterr as np_seterr, abs as np_abs, append as np_append, argmax as np_argmax, argsort as np_argsort, around as np_around, array as np_array, fill_diagonal as np_fill_diagonal, finfo as np_finfo, log10 as np_log10, max as np_max, min as np_min, newaxis as np_newaxis, reshape as np_reshape, seterr as np_seterr, shape as np_shape, size as np_size, square as np_square, std as np_std, sum as np_sum, tile as np_tile, where as np_where, zeros as np_zeros
 import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist
+from scipy.cluster.vq import kmeans,vq
 
 # GroopM imports
 from profileManager import ProfileManager
@@ -173,7 +174,7 @@ class ClusterEngine:
     def initialiseCores(self):
         """Process contigs and form CORE bins"""
         num_below_cutoff = 0            # how many consecutive attempts have produced small bins
-        breakout_point = 25             # how many will we allow before we stop this loop
+        breakout_point = 100            # how many will we allow before we stop this loop
         
         # First we need to find the centers of each blob.
         # We can make a heat map and look for hot spots
@@ -359,9 +360,10 @@ class ClusterEngine:
         if(np_size(putative_center_row_indices) == 0):
             # it's all over!
             return None
-        elif(np_size(putative_center_row_indices) == 1):
+        
+        if(np_size(putative_center_row_indices) == 1):
             # get out of here but keep trying
-            # the callig function should restrict these indices
+            # the calling function may restrict these indices
             return [[np_array(putative_center_row_indices)], ret_values]
         else:
             total_BP = sum([self.PM.contigLengths[i] for i in putative_center_row_indices])
@@ -373,229 +375,42 @@ class ClusterEngine:
                 # we've got a few good guys here, partition them up!
                 # shift these guys around a bit
                 center_k_vals = np_array([self.PM.kmerVals[i] for i in putative_center_row_indices])
-                centre_transformed_CP = np_reshape(np_array([self.PM.transformedCP[i] for i in putative_center_row_indices]),(len(putative_center_row_indices),3))
-                c_cols = np_array([self.PM.contigColours[i] for i in putative_center_row_indices])
-                sk_partitions = self.partitionVals(center_k_vals)
+                k_partitions = self.partitionVals(center_k_vals)
 
-                #MM__print "# PARTS: %d" % len(sk_partitions)
-                
-                if(len(sk_partitions) == 0):
+                if(len(k_partitions) == 0):
                     return None
                 else:
-                    ret_ps = [np_array([putative_center_row_indices[i] for i in p]) for p in sk_partitions]
-                    return [ret_ps, ret_values]
+                    center_c_vals = np_array([self.PM.transformedCP[i][-1] for i in putative_center_row_indices])
+                    #center_c_vals = np_array([self.PM.averageCoverages[i] for i in putative_center_row_indices])
+                    center_c_vals -= np_min(center_c_vals)
+                    c_max = np_max(center_c_vals)
+                    if c_max != 0:
+                        center_c_vals /= c_max
+                    c_partitions = self.partitionVals(center_c_vals)
 
+                    # take the intersection of the two partitions 
+                    tmp_partition_hash_1 = {}
+                    id = 1
+                    for p in k_partitions:
+                        for i in p:
+                            tmp_partition_hash_1[i] = id
+                        id += 1
 
-###############################################################################
-###############################################################################
-###############################################################################
-  #
-  # BEWARE! HERE BE DRAGONS!
-  #
-  # MAGIC NUMBERS ABOUND! WHY ARE THEY HERE? HOW WERE THEY CHOSEN?
-  #  
-  # ONE DAY I WILL EXPLAIN, UNTIL THEN REST ASSURED THAT:
-  #
-  # A. THEY (KINDA) WORK WELL ENOUGH
-  # B. IT TAKES ABOUT THREE DAYS OF LONG HARD TRIAL AND ERROR TO DERIVE THEM
-  # C. THEY BASICALLY ENCODE MY INTUITION 
-  #
-###############################################################################
-###############################################################################
-###############################################################################
-  #
-  # first we normalise the entire space. We would like a cube with a diagonal of 128px
-  #
-        tCP -= np_min(tCP, axis=0)
-        try:
-            tCP /= (np_max(tCP, axis=0)/70) # 70 is the side of said cube
-        except FloatingPointError:
-            # must be a zero in there somewhere...
-            return []
-  #
-  # want to add a long range repulsive force which tries to push all the points
-  # apart, should be quadratically decreasing, think gravity!
-  # This force, if left to its owen devices will push the points
-  # apart until they fill the spherical space.
-  # [0 3], [128, 0]
-  #
-        global_repulsive_force = lambda x : 3 - 0.000183105*np_square(x)
-  #
-  # Add to this another repulsive force which is proportional to the
-  # kmer distance. In combination with the global_repulsive_force it
-  # will force similar kmers to group together, by forcing dissimilar kmers
-  # to move apart
-  # [0 -1], [0.05 0], [1 1]
-  #
-        kmer_force = lambda x : -18.9473684211*np_square(x) + 20.9473684211*x -1.0
-  #
-  # as kmers won;t change, we can just calculate this force once.
-  #
-        k_dm = np_reshape(np_tile(kVals, v_size),(v_size,v_size))
-        k_dm_full = k_dm - k_dm.T
-        k_dm = np_abs(k_dm_full)
-        kf = kmer_force(k_dm)
-  #
-  # [0 -2], [40 0], [128 1]
-  # cov_force = lambda x : -0.0003018466*np_square(x) + 0.0620738636*x + -2.0
-  # [0 -2], [25 0], [128 2]
-  #
-        cov_force = lambda x : -0.0004733010*np_square(x) + 0.0918325243*x -2.0
-        tCP_dm = cdist(tCP,tCP,'euclidean')
-        cf = cov_force(tCP_dm)
-   #
-###############################################################################
-###############################################################################
-###############################################################################
-        
-        counter = ss
-        true_counter = 0
-        total_movement = 0.0
-        movement_grad = 0.0
-        sg = 0
-        while(True):
-            if(False):
-                if(true_counter % 4 == 0):
-                    plt.clf()
-                    ax = plt.subplot(111, projection='3d')
-                    ax.scatter(tCP[:,0], tCP[:,1], tCP[:,2], edgecolors=cols, c=cols, marker='.')
-                    ax.azim = 45
-                    ax.elev = 45
-                    plt.title("Total movement %0.4f \nGradient: %0.4f" % (total_movement, movement_grad))
-                    filename="squeeze_%d.png" % counter
-                    try:
-                        fig.set_size_inches(4,4)
-                        plt.savefig(filename,dpi=100)
-                    except:
-                        print "Error showing image", exc_info()[0]
-                        raise
-                               
-            true_counter += 1
-            counter += 1
-            
-            # get the two lists of values as points and work out how far apart the points are
-            tCP_dm = cdist(tCP,tCP,'euclidean')
-            
-            #k_dm = np_reshape(np_tile(kVals, v_size),(v_size,v_size))
-            #k_dm = np_abs(k_dm - k_dm.T)
+                    tmp_partition_hash_2 = {}
+                    id = 1
+                    for p in c_partitions:
+                        for i in p:
+                            try:
+                                tmp_partition_hash_2[(tmp_partition_hash_1[i],id)].append(i)
+                            except KeyError:
+                                tmp_partition_hash_2[(tmp_partition_hash_1[i],id)] = [i]
+                        id += 1
 
-            # get the inverse of the distance matrix so we can normalise
-            #tCP_idm = np_array(tCP_dm, copy=True)
-            # no dividing by 0
-            #np_fill_diagonal(tCP_idm, 1.0)
-            tCP_idm = np_where(tCP_dm > 0, tCP_dm, 1.0)
-            # now work out the residual forces
-            # work out the force between points
-            # we will need to normalise for distance below but we'll
-            # just do it now...
-            forces = (global_repulsive_force(tCP_dm) + kf + cf)/tCP_idm
-            
-            #forces = np_where(forces > 0, forces, 0)
-            #forces *= (1-k_dm)
-            
-            # get a list of vectors pointing from one vector to the
-            # other, we should normalise this but we'll be multiplying 
-            # it  by the forces vector above so...
-            # THIS IS UNREADABLE, BUT IT'S THE FASTEST I COULD MAKE IT GO
-            pointers = np_reshape(np_reshape(np_repeat(tCP.ravel(),v_size), (3*v_size,v_size)).T - np_tile(tCP, v_size), (v_size,v_size,3))
-            
-            # now we can calculate the effect on each point being made by each other point
-            movement = np_mean(pointers * forces[:,:,np_newaxis], axis=0)     
-            movement_grad = total_movement 
-            total_movement = np_sum(np_sqrt(np_sum(np_square(movement),axis=1)))
-            movement_grad = np_abs(movement_grad - total_movement)
-            tCP += movement 
-            tCP -= np_min(tCP, axis=0)
-            tCP /= (np_max(tCP, axis=0)/70)
+                    partitions = [np_array([putative_center_row_indices[i] for i in tmp_partition_hash_2[key]]) for key in tmp_partition_hash_2.keys()]
 
-            # break out if we stop condensing
-            if(sg == 0):
-                sg = movement_grad
-            if(movement_grad < 0.1 and true_counter > 30):
-                break
-        #MM__print "Start: %0.4f, End: %0.4F, Rounds: %d" % (sg, movement_grad, true_counter)
-        
-        # Now do a quick few rounds with just kmers, to pull things a little tighter...
-        # [0 -3], [0.15 0], [1 0.5] make this guy stronger
-        kmer_force = lambda x : -19.4117647059*np_square(x) + 22.9117647059*x -3.0
-        kf = kmer_force(k_dm)   
-        # [0 2], [128, 0] # make this guy weaker
-        global_repulsive_force = lambda x : 2 - 0.00012207*np_square(x)
-        for l in range(15):
-            if(False):
-                plt.clf()
-                ax = plt.subplot(111, projection='3d')
-                ax.scatter(tCP[:,0], tCP[:,1], tCP[:,2], edgecolors=cols, c=cols, marker='.')
-                ax.azim = 45
-                ax.elev = 45
-                plt.title("Total movement %0.4f \nGradient: %0.4f" % (total_movement, movement_grad))
-                filename="squeeze_%d_FINAL.png" % counter
-                try:
-                    fig.set_size_inches(4,4)
-                    plt.savefig(filename,dpi=100)
-                except:
-                    print "Error showing image", exc_info()[0]
-                    raise
-                               
-            counter += 1
-            tCP_dm = cdist(tCP,tCP,'euclidean')
-            tCP_idm = np_where(tCP_dm > 0, tCP_dm, 1.0)
-            # no coverage force!
-            forces = (global_repulsive_force(tCP_dm) + kf)/tCP_idm
-            pointers = np_reshape(np_reshape(np_repeat(tCP.ravel(),v_size), (3*v_size,v_size)).T - np_tile(tCP, v_size), (v_size,v_size,3))
-            movement = np_mean(pointers * forces[:,:, np_newaxis], axis=0)     
-            movement_grad = total_movement 
-            total_movement = np_sum(np_sqrt(np_sum(np_square(movement),axis=1)))
-            movement_grad = np_abs(movement_grad - total_movement)
-            tCP += movement 
-        #MM__print "R2: %0.4F" % movement_grad
-        
-        # Now fade the values together, this will make kmer selection easier
-        k_blur_factor = lambda k,c : 1 - np_square(k)/0.0009 - np_square(c)/25
-        tCP_dm = cdist(tCP,tCP,'euclidean')
-        
-        blurs = k_blur_factor(k_dm, tCP_dm)
-        # no negative numbers and no self interference!
-        blurs = np_where(blurs > 0, blurs, 0.0)
-        np_fill_diagonal(blurs,0.0)
-
-        min_kVals = np_min(kVals)
-        max_kVals = np_max(kVals)
-        k_range = max_kVals - min_kVals
-        min_kVals += min_kVals*k_range/5 
-        max_kVals -= max_kVals*k_range/5
-        
-        # get the direction the colours should move in
-        effect = np_sum(blurs*k_dm_full, axis=1)
-        kVals += effect
-        
-        # renorm within the same zone
-        kVals -= np_min(kVals)                  # shift to 0
-        kVals *= ((max_kVals - min_kVals) / np_max(kVals))
-        kVals += min_kVals
-
-        if(False):
-            # remake the colours
-            S = 1
-            V = 1
-            cols = np_array([htr(val, S, V) for val in kVals])
-            
-            plt.clf()
-            ax = plt.subplot(111, projection='3d')
-            ax.scatter(tCP[:,0], tCP[:,1], tCP[:,2], edgecolors=cols, c=cols, marker='.')
-            ax.azim = 45
-            ax.elev = 45
-            plt.title("Total movement %0.4f \nGradient: %0.4f" % (total_movement, movement_grad))
-            filename="squeeze_%d_BLUR.png" % counter
-            try:
-                fig.set_size_inches(4,4)
-                plt.savefig(filename,dpi=100)
-            except:
-                print "Error showing image", exc_info()[0]
-                raise
-
-        del fig 
-        return kVals
+                    #pcs = [[self.PM.averageCoverages[i] for i in p] for p in partitions]
+                    #print pcs
+                    return [partitions, ret_values]
             
     def expandSelection(self, startIndex, vals, stdevCutoff=0.05, maxSpread=0.1):
         """Expand a selection left and right from a staring index in a list of values
@@ -1113,6 +928,8 @@ class CenterFinder:
         if(vals_sorted[-1] != 0):
             vals_sorted /= vals_sorted[-1]        
 
+        #print vals_sorted
+        
         # run through in one direction
         for val in vals_sorted:
             # calculate delta
@@ -1133,6 +950,10 @@ class CenterFinder:
         height = 0
         last_val = 0
         
+        #print "===W==="
+        #print working
+        #print "===E==="
+        
         # run through in the reverse direction
         vals_sorted = vals_sorted[::-1]
         for val in vals_sorted:
@@ -1146,6 +967,9 @@ class CenterFinder:
             working[final_index] += height
             final_index -= 1
             last_val = val
+
+        #print working
+        #print "==EEE=="
 
         # find the original index!
         return sorted_indices[np_argmax(working)]

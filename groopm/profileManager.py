@@ -178,7 +178,7 @@ class ProfileManager:
                 if(verbose):
                     print "    Loading contig names"
                 self.contigNames = self.dataManager.getContigNames(self.dbFileName, indices=self.indices)
-            
+
             if(loadContigLengths):
                 if(verbose):
                     print "    Loading contig lengths"
@@ -379,7 +379,7 @@ class ProfileManager:
 
         for i in range(0,3):
             self.transformedCP[:,i] = (self.transformedCP[:,i] -  min[i])/max[i]
-            
+
         return(min,max)
 
     def makeColourProfile(self):

@@ -121,6 +121,7 @@ class GMDataManager:
     'numBins'       : tables.Int32Col(pos=6)
     'clustered'     : tables.BoolCol(pos=7)           # set to true after clustering is complete
     'complete'      : tables.BoolCol(pos=8)           # set to true after clustering finishing is complete
+    'formatVersion' : tables.Int32Col(pos=9)          # groopm file version
 
     ** Contigs **
     table = 'contigs'

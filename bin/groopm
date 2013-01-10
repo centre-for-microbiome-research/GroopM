@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
@@ -72,7 +72,7 @@ def printHelp():
     groopm core         -> Create core bins
     groopm refine       -> Refine these cores a little
     groopm recruit      -> Add more contigs to the cores
-    groopm extract      -> Extract binned contigs
+    groopm extract      -> Extract binned contigs or reads
     
     Extra features:
     
@@ -121,7 +121,7 @@ if __name__ == '__main__':
                                         help='load saved data and make bin cores',
                                         description='Load saved data and make bin cores')
     core_builder.add_argument('dbname', help="name of the database to open")
-    core_builder.add_argument('-c', '--cutoff', type=int, default=3000, help="cutoff contig size for core creation")
+    core_builder.add_argument('-c', '--cutoff', type=int, default=1500, help="cutoff contig size for core creation")
     core_builder.add_argument('-s', '--size', type=int, default=5, help="minimum number of contigs which define a core")
     core_builder.add_argument('-b', '--bp', type=int, default=1000000, help="cumulative size of contigs which define a core regardless of number of contigs")
     core_builder.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing DB file without prompting")
@@ -153,8 +153,8 @@ if __name__ == '__main__':
     # extract reads and contigs from saved
     bin_extractor = subparsers.add_parser('extract',
                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                        help='extract contigs and reads based on bin affiliations',
-                                        description='Extract contigs and reads based on bin affiliations')
+                                        help='extract contigs or reads based on bin affiliations',
+                                        description='Extract contigs or reads based on bin affiliations')
     bin_extractor.add_argument('dbname', help="name of the database to open")
     bin_extractor.add_argument('data', nargs='+', help="data file(s) to extract from, bam or fasta")
     bin_extractor.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to use (None for all)")
@@ -207,7 +207,7 @@ if __name__ == '__main__':
                                         help='explore and validate bins')
     bin_explorer.add_argument('dbname', help="name of the database to open")
     bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot (None for all)")
-    bin_explorer.add_argument('-c', '--cutoff', default=10000, help="cutoff contig size")
+    bin_explorer.add_argument('-c', '--cutoff', default=5000, help="cutoff contig size")
     bin_explorer.add_argument('-m', '--mode', default="points", help="Exploration mode [ids, points, profile, compare, flyover, unbinned]")
 
     #-------------------------------------------------
