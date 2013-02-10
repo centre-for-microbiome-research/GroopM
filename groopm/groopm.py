@@ -100,9 +100,11 @@ class GroopMOptionsParser():
             print "****************************************************************"
             CE = cluster.ClusterEngine(options.dbname,
                                        force=options.force,
-                                       plot=options.plot
+                                       plot=options.plot,
+                                       minSize=options.size,
+                                       minVol=options.bp
                                        )
-            CE.makeCores(coreCut=options.cutoff, minSize=options.size, minVol=options.bp)
+            CE.makeCores(coreCut=options.cutoff)
 
         elif(options.subparser_name == 'refine'):
             # refine bin cores
@@ -123,7 +125,7 @@ class GroopMOptionsParser():
                 print "**Error: unknown mode:",options.mode
                 return
             BM = binManager.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True, silent=False, transform=transform)
+            BM.loadBins(makeBins=True, silent=False, loadContigNames=False, transform=transform)
             BM.refineWrapper(saveBins=True,
                                plotter=plotter,
                                shuffle=shuffle,

@@ -128,6 +128,7 @@ class Bin:
         # consume all the other bins rowIndices
         if(verbose):
             print "    BIN:",deadBin.id,"will be consumed by BIN:",self.id
+            print deadBin.rowIndices
         self.rowIndices = np.concatenate([self.rowIndices, deadBin.rowIndices])
         self.binSize  = self.rowIndices.shape[0]
         
@@ -215,7 +216,7 @@ class Bin:
         self.kValUpperLimit = 0.0
         self.kValLowerLimit = 0.0
         
-    def makeBinDist(self, transformedCP, averageCoverages, kmerVals, contigLengths):
+    def makeBinDist(self, transformedCP, averageCoverages, kmerVals, contigLengths, covTol=-1, merTol=-1):
         """Determine the distribution of the points in this bin
         
         The distribution is largely normal, except at the boundaries.
@@ -240,7 +241,7 @@ class Bin:
         self.totalBP = sum([contigLengths[i] for i in self.rowIndices])
         
         # set the acceptance ranges
-        self.makeLimits()
+        self.makeLimits(covTol=covTol, merTol=merTol)
 
     def makeOutlierCutoffs(self, averageCoverages, kmerVals):
         """Work out cutoff values for detecting outliers"""
@@ -291,7 +292,6 @@ class Bin:
             self.cValLowerLimit = 0
         self.cValUpperLimit = self.cValMean + covTol * self.cValStdev
 
-
     def getCentroidStats(self, profile):
         """Calculate the centroids of the profile"""
         working_list = np.zeros((self.binSize, np.size(profile[0])))
@@ -314,6 +314,10 @@ class Bin:
     def getAverageCoverageDist(self, averageCoverages):
         """Return the average coverage for all contigs in this bin"""
         return np.array([averageCoverages[i] for i in self.rowIndices])
+
+    def getAverageTransformedCoverageDist(self, coverages):
+        """Return the average transformed coverage for all contigs in this bin"""
+        return np.array([np.mean(coverages[i]) for i in self.rowIndices])
     
     def getInnerVariance(self, profile, mode="kmer"):
         """Work out the variance for the coverage/kmer profile"""
@@ -398,8 +402,13 @@ class Bin:
         self.binSize = self.rowIndices.shape[0]
         return (num_recruited, ris_seen)
     
-    def withinLimits(self, kmerVals, averageCoverages, rowIndex):
+    def withinLimits(self, kmerVals, averageCoverages, rowIndex, verbose=False):
         """Is the contig within the limits of this bin?"""
+        if verbose:
+            print self.kValLowerLimit, kmerVals[rowIndex], self.kValUpperLimit
+            print self.cValLowerLimit, averageCoverages[rowIndex], self.cValUpperLimit
+            print (kmerVals[rowIndex] >= self.kValLowerLimit and kmerVals[rowIndex] <= self.kValUpperLimit and averageCoverages[rowIndex] >= self.cValLowerLimit and averageCoverages[rowIndex] <= self.cValUpperLimit)
+            print "++++"
         return kmerVals[rowIndex] >= self.kValLowerLimit and kmerVals[rowIndex] <= self.kValUpperLimit and averageCoverages[rowIndex] >= self.cValLowerLimit and averageCoverages[rowIndex] <= self.cValUpperLimit
         
     def shuffleMembers(self, adds, removes):

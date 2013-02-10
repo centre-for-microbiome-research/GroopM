@@ -75,10 +75,10 @@ np_seterr(all='raise')
 
 class ClusterEngine:
     """Top level interface for clustering contigs"""
-    def __init__(self, dbFileName, plot=False, force=False, numImgMaps=1):
+    def __init__(self, dbFileName, plot=False, force=False, numImgMaps=1, minSize=5, minVol=1000000):
         # worker classes
         self.PM = ProfileManager(dbFileName) # store our data
-        self.BM = BinManager(pm=self.PM)   # store our bins
+        self.BM = BinManager(pm=self.PM, minSize=minSize, minVol=minVol)
     
         # heat maps
         self.numImgMaps = numImgMaps
@@ -93,8 +93,6 @@ class ClusterEngine:
         self.span = 30                  # amount we can travel about when determining "hot spots"
         
         # misc
-        self.minSize=10                 # Min number of contigs for a bin to be considered legit
-        self.minVol=1000000             # Override on the min size, if we have this many BP
         self.forceWriting = force
         self.debugPlots = plot
         self.imageCounter = 1           # when we print many images
@@ -131,14 +129,11 @@ class ClusterEngine:
 #------------------------------------------------------------------------------
 # CORE CONSTRUCTION AND MANAGEMENT
         
-    def makeCores(self, coreCut, minSize, minVol):
+    def makeCores(self, coreCut):
         """Cluster the contigs to make bin cores"""
         # check that the user is OK with nuking stuff...
         if(not self.promptOnOverwrite()):
             return False
-
-        self.minVol = minVol
-        self.minSize = minSize
 
         # get some data
         timer = gtime.TimeKeeper()
@@ -160,7 +155,9 @@ class ClusterEngine:
 
         # condense cores
         print "Refine cores [begin: %d]" % len(self.BM.bins)
+        #self.BM.plotBins(FNPrefix="BEFORE_OB")
         self.BM.autoRefineBins(iterate=True)
+        
         num_binned = len(self.PM.binnedRowIndicies.keys())
         perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
         print "   ",num_binned,"contigs across",len(self.BM.bins.keys()),"cores (",perc,"% )"
@@ -206,11 +203,20 @@ class ClusterEngine:
                 self.roundNumber += 1
                 sub_round_number = 1
                 for center_row_indices in partitions:
-                    total_BP = sum([self.PM.contigLengths[i] for i in center_row_indices])
-                    num_contigs = len(center_row_indices)
-                    bin_size = num_contigs
-                    #MM__print "Round: %d tBP: %d tC: %d" % (sub_round_number, total_BP, num_contigs)
-                    if self.isGoodBin(total_BP, num_contigs, ms=5):   # Can we trust very small bins?.
+                    # some of these row indices may have been eaten in a call to 
+                    # bin.recruit. We need to fix this now!
+                    tmp_cri = []
+                    total_BP = 0
+                    bin_size = 0
+                    for ri in center_row_indices:
+                        if ri not in self.PM.binnedRowIndicies and ri not in self.PM.restrictedRowIndicies:
+                            tmp_cri.append(ri)
+                            total_BP += self.PM.contigLengths[ri]
+                            bin_size += 1
+                    
+                    center_row_indices = np_array(tmp_cri)
+                    #MM__print "Round: %d tBP: %d tC: %d" % (sub_round_number, total_BP, bin_size)
+                    if self.BM.isGoodBin(total_BP, bin_size):   # Can we trust very small bins?.
                         # time to make a bin
                         bin = self.BM.makeNewBin(rowIndices=center_row_indices)
                         #MM__print "NEW:", total_BP, len(center_row_indices)
@@ -236,7 +242,7 @@ class ClusterEngine:
                             self.plotHeat("HM_%d.%d.png" % (self.roundNumber, sub_round_number), max=max_blur_value, x=max_x, y=max_y)
                             sub_round_number += 1
 
-                        if(self.isGoodBin(self, bin.totalBP, bin_size)):
+                        if(self.BM.isGoodBin(self, bin.totalBP, bin_size)):
                             # Plot?
                             bids_made.append(bin.id)
                             num_bins += 1
@@ -285,17 +291,6 @@ class ClusterEngine:
             for row_index in self.BM.bins[bid].rowIndices:
                 self.PM.binIds[row_index] = bid 
 
-    def isGoodBin(self, totalBP, binSize, ms=0):
-        """Does this bin meet my exacting requirements?"""
-        if(ms == 0):
-            ms = self.minSize               # let the user choose
-        if(totalBP < self.minVol):          # less than the good volume
-            if(binSize > ms):               # but has enough contigs
-                return True
-        else:                               # contains enough bp to pass regardless of number of contigs
-            return True        
-        return False
-    
     def findNewClusterCenters(self, ss=0):
         """Find a putative cluster"""
         
@@ -367,7 +362,7 @@ class ClusterEngine:
             return [[np_array(putative_center_row_indices)], ret_values]
         else:
             total_BP = sum([self.PM.contigLengths[i] for i in putative_center_row_indices])
-            if not self.isGoodBin(total_BP, len(putative_center_row_indices), ms=5):   # Can we trust very small bins?.
+            if not self.BM.isGoodBin(total_BP, len(putative_center_row_indices), ms=5):   # Can we trust very small bins?.
                 # get out of here but keep trying
                 # the calling function should restrict these indices
                 return [[np_array(putative_center_row_indices)], ret_values]
@@ -407,9 +402,6 @@ class ClusterEngine:
                         id += 1
 
                     partitions = [np_array([putative_center_row_indices[i] for i in tmp_partition_hash_2[key]]) for key in tmp_partition_hash_2.keys()]
-
-                    #pcs = [[self.PM.averageCoverages[i] for i in p] for p in partitions]
-                    #print pcs
                     return [partitions, ret_values]
             
     def expandSelection(self, startIndex, vals, stdevCutoff=0.05, maxSpread=0.1):
@@ -518,49 +510,6 @@ class ClusterEngine:
         if(len(working_list) > 0):
             partitions.append(fix_dict.values())       
         return partitions
-
-#------------------------------------------------------------------------------
-# CORE MANAGEMENT 
-
-    def condenseCores(self, auto=False):
-        """Itterative wrapper for the BinManager method"""
-        condensing_round = 0
-        num_cores_condensed = 0
-        while True: # do while loop anyone?
-            condensing_round += 1
-            (num_cores_condensed,continue_merge) = self.BM.condenseBins(verbose=True,
-                                                                        auto=auto      
-                                                                       )
-            if(num_cores_condensed == 0):
-                break
-            else:
-                print "    Core condensing round:", condensing_round, "Incorporated", num_cores_condensed, "cores into larger cores"
-        
-        num_binned = len(self.PM.binnedRowIndicies.keys())
-        perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
-        print "   ",num_binned,"contigs are distributed across",len(self.BM.bins.keys()),"cores (",perc,"% )"
-            
-        return 
-
-    def removeOutliersWrapper(self, mode="kmer"):
-        """remove the outliers for all bins"""
-        print "    Removing outliers"
-        for bid in self.BM.bins:
-            self.removeOutliers(bid, mode=mode)
-
-    def removeOutliers(self, bid, fixBinnedRI=True, mode="kmer"):
-        """remove outliers for a single bin"""
-        dead_row_indices = self.BM.bins[bid].findOutliers(self.PM.transformedCP, self.PM.kmerVals, mode=mode)
-        if(len(dead_row_indices)>0):
-            if(fixBinnedRI):
-                for row_index in dead_row_indices:
-                    self.setRowIndexUnassigned(row_index)
-            self.BM.bins[bid].purge(dead_row_indices,
-                                    self.PM.transformedCP,
-                                    self.PM.averageCoverages,
-                                    self.PM.kmerVals,
-                                    self.PM.contigLengths,
-                                    self.PM.kmerVals)
         
 #------------------------------------------------------------------------------
 # DATA MAP MANAGEMENT 

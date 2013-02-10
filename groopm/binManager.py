@@ -57,7 +57,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
 
-from numpy import sum as np_sum, abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
+from numpy import argmax as np_argmax, arccos as np_cos, dot as np_dot, sum as np_sum, abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
 from numpy.linalg import norm as np_norm 
 import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist
@@ -80,7 +80,7 @@ np_seterr(all='raise')
 
 class BinManager:
     """Class used for manipulating bins"""
-    def __init__(self, dbFileName="", pm=None):
+    def __init__(self, dbFileName="", pm=None, minSize=10, minVol=1000000):
         # data storage
         if(dbFileName != ""):
             self.PM = ProfileManager(dbFileName)
@@ -90,6 +90,11 @@ class BinManager:
         # all about bins
         self.nextFreeBinId = 0                      # increment before use!
         self.bins = {}                              # bid -> Bin
+        
+        # misc
+        self.minSize=minSize           # Min number of contigs for a bin to be considered legit
+        self.minVol=minVol             # Override on the min size, if we have this many BP
+        
 
 #------------------------------------------------------------------------------
 # LOADING / SAVING
@@ -161,7 +166,6 @@ class BinManager:
         # we need to get the largest BinId in use
         if len(bin_members) > 0:
             self.nextFreeBinId = np_max(bin_members.keys())
-        
         return bin_members
 
     def makeBins(self, binMembers, zeroIsBin=False):
@@ -179,7 +183,7 @@ class BinManager:
             print invalid_bids
             exit(-1)      
 
-    def saveBins(self, binAssignments={}):
+    def saveBins(self, binAssignments={}, nuke=False):
         """Save binning results
         
         binAssignments is a hash of LOCAL row indices Vs bin ids
@@ -188,6 +192,8 @@ class BinManager:
         
         We always overwrite the bins table (It is smallish)
         """
+        if nuke:
+            self.PM.dataManager.nukeBins(self.PM.dbFileName)
 
         # save the bin assignments        
         self.PM.setBinAssignments(
@@ -519,20 +525,8 @@ class BinManager:
             print "   ",num_binned,"contigs across",len(self.bins.keys()),"cores"
             
             if saveBins:
-                self.saveBins()
-        if links:
-            # we don't load links by default, so lets do it now
-            print "    Loading links"
-            self.PM.loadLinks()
-            self.refineViaLinks()
-            if saveBins:
-                self.saveBins()
+                self.saveBins(nuke=True)
 
-    def refineViaLinks(self):
-        """Use linking information to refine bins"""
-        bin_links = self.getAllLinks()
-        print bin_links
-                        
     def plotterRefineBins(self):
         """combine similar bins using 3d plots"""
         self.printRefinePlotterInstructions()
@@ -662,79 +656,465 @@ class BinManager:
         # we're done!
         return (max_bid, neighbourList)
 
-    def autoRefineBins(self, iterate=False, verbose=False):
+    def nukeOutliers(self, verbose=False):
+        """Identify and remove small bins which contain mixed genomes
+        
+        Uses Grubbs testing to identify outliers
+        """
+        print "    Identifying possible chimeric cores"
+        bids = self.getBids()
+        # first we need to build a distribution!
+        kval_stdev_distrb = [] 
+        for bid in bids:
+            self.bins[bid].makeBinDist(self.PM.transformedCP, 
+                                       self.PM.averageCoverages, 
+                                       self.PM.kmerVals, 
+                                       self.PM.contigLengths)
+            kval_stdev_distrb.append(self.bins[bid].kValStdev)
+        
+        # now we work out the distribution of stdevs
+        stdstd = np_std(kval_stdev_distrb)
+        stdmean = np_mean(kval_stdev_distrb)
+        dead_bins = []
+        for bid in bids:
+            Z = (self.bins[bid].kValStdev - stdmean)/stdstd
+            if Z > 2 and self.bins[bid].totalBP < 100000:
+                 dead_bins.append(bid)
+                 
+        # delete the bad bins
+        self.deleteBins(dead_bins,
+                        force=True,
+                        freeBinnedRowIndicies=True,
+                        saveBins=False)
+        print "    Identified %d possible chimeras leaving %d cores" % (len(dead_bins), len(self.bins))
+
+    def makeUpperLower(self, vals, tol):
+        """ make upper and lower cutoffs"""
+        mean = np_mean(vals)
+        try:
+            stdev = np_std(vals)
+        except FloatingPointError:
+            stdev = 0
+        return (mean + tol*stdev, mean - tol*stdev)        
+
+    def doObviousMergers(self, verbose=False):
+        """Merge bins which are just crying out to be merged!"""
+        # use very strict params
+        print "    Making obvious mergers"
+        # pay attention to contig lengths when inclusing in bins
+        # use grubbs test
+        GT = GrubbsTester() # we need to perform grubbs test before inclusion
+        
+        tdm = []                # these are used in the neighbor search
+        bid_2_tdm_index = {} 
+        tdm_index_2_bid = {} 
+
+        bids = self.getBids()
+        K = 10                   # number of neighbours to test
+        if K > len(bids):
+            K = len(bids)
+
+        # keep track of what gets merged where
+        merged_bins = {}        # oldId => newId
+        processed_pairs = {}    # keep track of pairs we've analysed
+        bin_c_lengths = {}      # bid => [len,len,...]
+        angles = {}             # store angles between contigs
+        ave_covs = {}           # store average coverages
+
+        index = 0
+        for bid in bids:
+            self.bins[bid].makeBinDist(self.PM.transformedCP, 
+                                       self.PM.averageCoverages, 
+                                       self.PM.kmerVals, 
+                                       self.PM.contigLengths,
+                                       merTol=2.5)  # make the merTol a little larger...
+            # use a 4 dimensional vector [cov, cov, cov, mer]
+            tdm.append(np_append(self.bins[bid].covMeans, [1000*self.bins[bid].kValMean]))
+            
+            bin_c_lengths[bid] = [self.PM.contigLengths[row_index] for row_index in self.bins[bid].rowIndices]
+            
+            bid_2_tdm_index[bid] = index
+            tdm_index_2_bid[index] = bid
+            index += 1
+
+            # we will not process any pair twice.
+            # we also wish to avoid checking if a bin will merge with itself        
+            processed_pairs[self.makeBidKey(bid, bid)] = True
+
+#-----
+# ALL Vs ALL
+        
+        # make a search tree
+        search_tree = kdt(tdm)
+        tdm = np_array(tdm)
+        for bid in bids:
+            # get the base bid and trace the chain
+            # up through mergers...
+            merged_base_bid = bid
+            base_bid = bid
+            while merged_base_bid in merged_bins:
+                merged_base_bid = merged_bins[merged_base_bid]
+            base_bin = self.bins[base_bid]
+            
+            # get the K closest bins
+            neighbor_list = [tdm_index_2_bid[i] for i in search_tree.query(tdm[bid_2_tdm_index[bid]],k=K)[1]]
+
+            if verbose:
+                print "++++++++++"
+                print bid, neighbor_list
+
+            # calculate the angles between all the contigs in
+            # the base bin
+            # we'd like to calculate the angles once only      
+            ang_tol = 1.5  
+            v_min_default = 1000000
+            try:
+                (base_angles, v_min_base) = angles[base_bid]
+            except KeyError:
+                base_angles = self.calculateAngles(base_bin.rowIndices, base_bin.rowIndices)
+                try:                    
+                    v_min_base = np_mean(base_angles) + ang_tol * np_std(base_angles)
+                except FloatingPointError:     
+                    v_min_base = v_min_default
+                angles[base_bid] = (base_angles, v_min_base)
+            
+            # test each neighbor in turn
+            for i in range(1,K):
+                # get the query bid and trace the chain
+                # up through mergers...
+                should_merge = False     # we'll test to see if we should change this value
+                query_bid = neighbor_list[i]
+                merged_query_bid = query_bid
+                while merged_query_bid in merged_bins:
+                    merged_query_bid = merged_bins[merged_query_bid]
+                    
+                seen_key = self.makeBidKey(base_bid, query_bid)
+                if(seen_key not in processed_pairs and
+                   merged_base_bid != merged_query_bid):
+                    if verbose:
+                        print "-----\nbegin comparison %d (%d) %d (%d)" % (base_bid, merged_base_bid, query_bid, merged_query_bid)
+                    processed_pairs[seen_key] = True
+                    query_bin = self.bins[query_bid]
+#-----
+# CHECK ANGLES
+                    # calculate the angles between all the contigs
+                    # in the query bin if not already calcuated
+                    try:
+                        (query_angles, v_min_query) = angles[query_bid]
+                    except KeyError:
+                        query_angles = self.calculateAngles(query_bin.rowIndices, query_bin.rowIndices)
+                        try:                    
+                            v_min_query = np_mean(query_angles) + ang_tol * np_std(query_angles)
+                        except FloatingPointError:     
+                            v_min_query = v_min_default
+                        angles[query_bid] = (query_angles, v_min_query) 
+                    
+                    # now calculate the angles between the base and query...
+                    combined_angles = self.calculateAngles(base_bin.rowIndices, query_bin.rowIndices)
+
+                    # work out the lowest variance in angle distribution
+                    v_min = np_min([v_min_query, v_min_base])
+                    if v_min == v_min_default:    # both containing single contigs!
+                        should_merge = False                      
+
+                    # work out how many of the combined angles are within the 
+                    # variance
+                    gooduns = len([i for i in combined_angles if i < v_min])
+
+                    if (2*gooduns) >= len(combined_angles):
+                        # these guys are in close proximity
+                        should_merge = True
+                    if verbose:
+                        print "ANGLES vmin: %f #good: %d #comb: %d" % (v_min, gooduns, len(combined_angles)), should_merge
+#-----
+# CHECK AVERAGE COVERAGES
+                    if should_merge:
+                        should_merge = False
+                        # get the average coverages for each bin
+                        ave_cov_tol = 3
+                        try:
+                            (base_AC, base_AC_upper, base_AC_lower) = ave_covs[base_bid]
+                        except KeyError:
+                            base_AC = [self.PM.averageCoverages[i] for i in base_bin.rowIndices]
+                            (base_AC_upper, base_AC_lower) = self.makeUpperLower(base_AC, ave_cov_tol)
+                            ave_covs[base_bid] = (base_AC, base_AC_upper, base_AC_lower)
+                        try:
+                            (query_AC, query_AC_upper, query_AC_lower) = ave_covs[query_bid]
+                        except KeyError:
+                            query_AC = [self.PM.averageCoverages[i] for i in query_bin.rowIndices]
+                            (query_AC_upper, query_AC_lower) = self.makeUpperLower(query_AC, ave_cov_tol)
+                            ave_covs[query_bid] = (query_AC, query_AC_upper, query_AC_lower)
+
+                        # make sure that the majority of the average coverages are kinda similar
+                        gooduns1 = len([i for i in base_AC if (i <= query_AC_upper and i >= query_AC_lower)])
+                        gooduns2 = -1
+                        if (2*gooduns1) >= base_bin.binSize:
+                             gooduns2 = len([i for i in query_AC if (i <= base_AC_upper and i >= base_AC_lower)])
+                             if (2*gooduns2) >= query_bin.binSize:
+                                 should_merge = True
+
+                        if verbose:
+                            print "AVE COV q: %d (%d) b: %d (%d)" % (gooduns1, base_bin.binSize, gooduns2, query_bin.binSize), should_merge
+                    else:
+                        continue
+#-----
+# CHECK LENGTHS
+                    if should_merge:
+                        # check to see that the contig lengths 
+                        # from both bins are somewhat similar
+                        #
+                        # Test the smaller bin against the larger
+                        if query_bin.binSize < base_bin.binSize:
+                            lengths_wrong = GT.isMaxOutlier(np_median(bin_c_lengths[query_bid]),
+                                                            bin_c_lengths[base_bid]
+                                                            )
+                        else:
+                            lengths_wrong = GT.isMaxOutlier(np_median(bin_c_lengths[base_bid]),
+                                                            bin_c_lengths[query_bid]
+                                                            )
+                        should_merge = not lengths_wrong
+                        if verbose:
+                            print "LENGTHS", should_merge 
+                    else:
+                        continue
+#-----
+# CHECK MER SIGS
+                    if should_merge:
+                        should_merge=False      
+                        # we just need to check that the kmer sigs make sense
+                        if(query_bin.kValMean <= base_bin.kValUpperLimit and 
+                           query_bin.kValMean >= base_bin.kValLowerLimit and
+                           base_bin.kValMean <= query_bin.kValUpperLimit and 
+                           base_bin.kValMean >= query_bin.kValLowerLimit):
+                            should_merge = True
+                        if verbose:
+                            print "MER1", should_merge, "[", base_bin.kValLowerLimit, query_bin.kValMean, base_bin.kValUpperLimit, "] [", query_bin.kValLowerLimit, base_bin.kValMean, query_bin.kValUpperLimit, "]" 
+                    else:
+                        continue
+
+                    if should_merge:
+                        should_merge=False
+                        # the means make sense. Now to check the 
+                        # individual contigs
+                        upper_lim = query_bin.kValMean + query_bin.kValStdev
+                        lower_lim = query_bin.kValMean - query_bin.kValStdev
+                        num_OK = len([row_index for row_index in base_bin.rowIndices
+                                      if (self.PM.kmerVals[row_index] >= lower_lim and
+                                          self.PM.kmerVals[row_index] <= upper_lim)
+                                      ])
+                        if verbose:
+                            print "MER - base %d (%d)" % (num_OK, base_bin.binSize)
+                                
+                        if (2*num_OK) >= base_bin.binSize:
+                            upper_lim = base_bin.kValMean + base_bin.kValStdev
+                            lower_lim = base_bin.kValMean - base_bin.kValStdev
+                            num_OK = len([row_index for row_index in query_bin.rowIndices
+                                          if (self.PM.kmerVals[row_index] >= lower_lim and
+                                              self.PM.kmerVals[row_index] <= upper_lim)
+                                          ])
+                            if verbose:
+                                print "MER - base %d (%d)" % (num_OK, query_bin.binSize)
+                                    
+                            if (2*num_OK) >= query_bin.binSize:
+                                should_merge=True
+                    else:
+                        continue
+
+                    if should_merge:
+                        if merged_query_bid < merged_base_bid:
+                            if verbose:
+                                print "MERGE!", merged_base_bid, "=>", merged_query_bid
+                            merged_bins[merged_base_bid] = merged_query_bid
+                            # we just nuked the base bid
+                            break
+                        else:
+                            if verbose:
+                                print "MERGE!", merged_query_bid, "=>", merged_base_bid
+                            merged_bins[merged_query_bid] = merged_base_bid
+
+#-----
+# MERGE
+        # now make a bunch of mergers
+        mergers = []
+        processed_bids = {}     # bid => index in mergers
+        for key in merged_bins:
+            try:
+                merge_list_id_1 = processed_bids[key]
+            except KeyError:
+                merge_list_id_1 = -1
+            try:
+                merge_list_id_2 = processed_bids[merged_bins[key]]
+            except KeyError:
+                merge_list_id_2 = -1
+            
+            if merge_list_id_1 == -1:
+                if merge_list_id_2 == -1:
+                    # all new
+                    index = len(mergers)
+                    processed_bids[merged_bins[key]] = index
+                    processed_bids[key] = index
+                    mergers.append([key, merged_bins[key]])
+                else:
+                    processed_bids[key] = merge_list_id_2
+                    mergers[merge_list_id_2].append(key)
+            elif merge_list_id_2 == -1:
+                processed_bids[merged_bins[key]] = merge_list_id_1
+                mergers[merge_list_id_1].append(merged_bins[key])
+            else:
+                mergers[merge_list_id_1] += mergers[merge_list_id_2]
+                for bid in mergers[merge_list_id_2]:
+                    processed_bids[bid] = merge_list_id_1 
+
+        # now merge them
+        num_bins_removed = 0
+        for merge in mergers:
+            if verbose:
+                print merge
+            num_bins_removed += (len(merge) - 1)
+            self.merge(merge, auto=True, newBid=False, saveBins=False, verbose=False, printInstructions=False)
+
+        print "    Removed %d cores leaving %d cores" % (num_bins_removed, len(self.bins))        
+        
+        return len(mergers)
+
+    def autoRefineBins(self,
+                       iterate=False,
+                       mergeObvious=True,
+                       removeDuds=True,
+                       nukeOutliers=True,
+                       verbose=False,
+                       plotAfterOB=True):
         """Automagically refine bins"""
+        
+        # identify and remove outlier bins
+        if nukeOutliers:
+            self.nukeOutliers()
+
+        # do macro bin mergers
+        if mergeObvious:
+            self.doObviousMergers(verbose=True)
+        
+        if plotAfterOB:
+            self.plotBins(FNPrefix="AFTER_OB")
+        
         super_round = 1
         tdm = self.PM.transformedCP
         neighbour_list={} # save looking things up a 1,000,000 times
         search_tree = kdt(tdm)
-        
-        # pay attention to contig lengths when inclusing in bins
+
+        # pay attention to contig lengths when including in bins
         # use grubbs test
         GT = GrubbsTester() # we need to perform grubbs test before inclusion
         
         stable_bids = {} # once a bin is stable it's stable... almost
         re_unstable = {}
+        bin_c_lengths = {}
+
+        # we can get stuck in an infinite loop
+        # where a contig is passed back and forth between a pair of bins. 
+        all_moved_RIs = {}      # when a contig has been moved FROM a bin it can 
+                                # not go BACK to THAT bin
+
+        bids = self.getBids()
+        start_num_bins = len(bids)
+        for bid in bids:
+            self.bins[bid].covTolerance = 3
+            self.bins[bid].kValTolerance = 3     
         while True:
             sr_contigs_reassigned = 0
+            sr_bins_removed = 0
             num_reassigned = -1
             round = 0
             while num_reassigned != 0:
                 num_reassigned = 0
                 reassignment_map = {}
                 moved_RIs = {}
-                
                 # make a lookup of each bins contig length distributions
-                bin_c_lengths = {}
-                for bid in self.getBids():
+                # this is used in the Grubbs testing
+                bids = self.getBids()
+                for bid in bids:
+                    bin_c_lengths[bid] = []
                     self.bins[bid].makeBinDist(self.PM.transformedCP, 
                                                self.PM.averageCoverages, 
                                                self.PM.kmerVals, 
                                                self.PM.contigLengths)
                     for row_index in self.bins[bid].rowIndices:
-                        try:
-                            bin_c_lengths[bid].append(self.PM.contigLengths[row_index])
-                        except KeyError:
-                            bin_c_lengths[bid] = [self.PM.contigLengths[row_index]]
-
-                # destabilize those who've picked up new contigs
-                for bid in re_unstable.keys():
-                    try:
-                        del stable_bids[bid]
-                    except KeyError: pass
-                re_unstable = {} 
+                        bin_c_lengths[bid].append(self.PM.contigLengths[row_index])
                 
-                bids = self.getBids()
+                unstables = {}  # bins we destabilize by assigning contigs TO them
+                num_done_now = 0
                 for bid in bids:
                     bin = self.getBin(bid)
+                    num_done_now = 0
                     if bid in stable_bids:
+                        # We may have added something to the reassignment
+                        # map for this guy already. append to be sure.
                         try:
                             reassignment_map[bid] += list(bin.rowIndices)
                         except KeyError:
                             reassignment_map[bid] = list(bin.rowIndices)
                     else:
-                        stable = True
+                        stable = True   # stable till proven guilty
                         for row_index in bin.rowIndices:
                             (assigned_bid, neighbour_list) = self.getClosestBID(row_index, search_tree, tdm, neighbourList=neighbour_list, verbose=verbose, k=2*bin.binSize-1)
-                            if assigned_bid != bid:
-                                if GT.isMaxOutlier(self.PM.contigLengths[row_index], bin_c_lengths[assigned_bid], verbose=verbose):
-                                    # undo the change
-                                    assigned_bid = bid
-                                else:
-                                    stable = False
-                                    re_unstable[assigned_bid] = True
-                                    num_reassigned += 1
-                                    sr_contigs_reassigned += 1
-                                    moved_RIs[row_index] = assigned_bid
+                            assign_to_new = True    # track this var to see if we will assign or not
+                            # make sure we are reassigning
+                            if assigned_bid == bid:
+                                assign_to_new = False
+                            # make sure the contig isn't way too large for the bin
+                            elif GT.isMaxOutlier(self.PM.contigLengths[row_index], bin_c_lengths[assigned_bid], verbose=verbose):
+                                assign_to_new = False
+                            # we need to check that we are not assigning a contig back
+                            # to a bin it came from
+                            elif row_index in all_moved_RIs:
+                                if assigned_bid in all_moved_RIs[row_index]:
+                                    assign_to_new = False
                             
-                            # keep track of where this guy lives
+                            # we have found the clostest based only on coverage 
+                            # profile. We need to check and see if the kmersig makes
+                            # any sense
+                            elif not self.bins[assigned_bid].withinLimits(self.PM.kmerVals,
+                                                                          self.PM.averageCoverages,
+                                                                          row_index):
+                                assign_to_new = False
+                            
+                            if assign_to_new:
+                                # we are assigning it to a new bid
+                                stable = False
+                                unstables[assigned_bid] = True
+
+                                num_reassigned += 1
+                                num_done_now += 1
+                                sr_contigs_reassigned += 1
+                                # keep this for updating the PMs bin ID hash
+                                moved_RIs[row_index] = assigned_bid
+                                # make note of where this guy came from
+                                if row_index in all_moved_RIs:
+                                    try:
+                                        all_moved_RIs[row_index][bid]+=1
+                                    except KeyError:
+                                        all_moved_RIs[row_index][bid] = 1
+                                else:
+                                    all_moved_RIs[row_index] = {bid: 1}
+                            else:
+                                assigned_bid = bid
+                            
+                            # now go through and put the index where it belongs
                             try:
                                 reassignment_map[assigned_bid].append(row_index)
                             except KeyError:
                                 reassignment_map[assigned_bid] = [row_index]
                                 
-                        if stable: # no changes this round, mark bin as stable
+                        if stable: 
+                            # no changes this round, mark bin as stable
                             stable_bids[bid] = True
+
+                # we need to destabilise any bin who accepted contigs
+                for u_bid in unstables:
+                    try:
+                        del stable_bids[u_bid]
+                    except KeyError:
+                        pass
                 
                 # fix the lookup table
                 for moved_index in moved_RIs:
@@ -750,14 +1130,39 @@ class BinManager:
                         # empty bin
                         bins_removed += 1
                         self.deleteBins([bid], force=True, freeBinnedRowIndicies=False, saveBins=False)
-                
+                        #print "After AR delete:", bid, len(self.bins)
+                sr_bins_removed += bins_removed
                 round += 1
-                if True:#verbose:
-                    print "    Refine round %d: reassigned %d contigs, removed %d cores" % (round, num_reassigned, bins_removed)
-            print "    Refine round %d complete. (%d iterations) Total contigs reassigned: %d" % (super_round, round, sr_contigs_reassigned)
+                if verbose:
+                    print "    Refine sub-round %d: reassigned %d contigs, removed %d cores" % (round, num_reassigned, bins_removed)
+                    
+            print "    Refine round %d. (%d iterations, %d contigs reassigned, %d cores removed)" % (super_round, round, sr_contigs_reassigned, sr_bins_removed)
             if sr_contigs_reassigned == 0:
                 break
             super_round += 1
+
+        print "    Removed %d cores leaving %d cores" % (start_num_bins-len(self.bins), len(self.bins))        
+        
+        if removeDuds:    
+            self.removeDuds()
+
+    def removeDuds(self, ms=20, mv=1000000, verbose=False):
+        """Run this after refining to remove scrappy leftovers"""
+        print "    Removing dud cores (min %d contigs or %d bp)" % (ms, mv)
+        deleters = []
+        for bid in self.getBids():
+            bin = self.bins[bid]
+            if not self.isGoodBin(bin.totalBP, bin.binSize, ms=ms, mv=mv):
+                # delete this chap!
+                deleters.append(bid)
+        if verbose:
+            print "duds", deleters
+        if len(deleters) > 0:
+            self.deleteBins(deleters,
+                            force=True,
+                            freeBinnedRowIndicies=True,
+                            saveBins=False)
+        print "    Removed %d cores leaving %d cores" % (len(deleters), len(self.bins))
             
 #------------------------------------------------------------------------------
 # BIN UTILITIES 
@@ -765,6 +1170,20 @@ class BinManager:
     def getBids(self):
         """Return a sorted list of bin ids"""
         return sorted(self.bins.keys())
+
+    def isGoodBin(self, totalBP, binSize, ms=0, mv=0):
+        """Does this bin meet my exacting requirements?"""
+        if(ms == 0):
+            ms = self.minSize               # let the user choose
+        if(mv == 0):
+            mv = self.minVol                # let the user choose
+        
+        if(totalBP < mv):                   # less than the good volume
+            if(binSize > ms):               # but has enough contigs
+                return True
+        else:                               # contains enough bp to pass regardless of number of contigs
+            return True        
+        return False
 
     def getCentroidProfiles(self, mode="mer"):
         """Return an array containing the centroid stats for each bin"""
@@ -984,6 +1403,8 @@ class BinManager:
             parent_bin = makeNewBin()
             # now merge it with the first in the new list
             dead_bin = self.getBin(bids[0])
+            for row_index in dead_bin.rowIndices:
+                self.PM.binIds[row_index] = parent_bin.id
             parent_bin.consume(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths, dead_bin, verbose=verbose)
             self.deleteBins([bids[0]], force=True)
         else:
@@ -1016,7 +1437,16 @@ class BinManager:
                     ret_val = 2
                     continue_merge=True
             if(continue_merge):
-                parent_bin.consume(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths, dead_bin, verbose=verbose)
+                
+                for row_index in dead_bin.rowIndices:
+                    self.PM.binIds[row_index] = parent_bin.id
+                
+                parent_bin.consume(self.PM.transformedCP,
+                                   self.PM.averageCoverages,
+                                   self.PM.kmerVals,
+                                   self.PM.contigLengths,
+                                   dead_bin,
+                                   verbose=verbose)
                 self.deleteBins([bids[i]], force=True)
                 some_merged = True
 
@@ -1060,10 +1490,12 @@ class BinManager:
             if bid in self.bins:
                 if(freeBinnedRowIndicies):
                     for row_index in self.bins[bid].rowIndices:
-                        if row_index in self.PM.binnedRowIndicies:
+                        try:
                             del self.PM.binnedRowIndicies[row_index]
-                        else:
+                        except KeyError:
                             print bid, row_index, "FUNG"
+                        self.PM.binIds[row_index] = 0
+                            
                         bin_assignment_update[row_index] = 0 
                 del self.bins[bid]
             else:
@@ -1245,38 +1677,6 @@ class BinManager:
 
 #------------------------------------------------------------------------------
 # BIN STATS 
-
-    def scoreContig(self, rowIndex, bid):
-        """Determine how well a particular contig fits with a bin"""
-        return self.getBin(bid).scoreProfile(self.PM.kmerVals[rowIndex], self.PM.transformedCP[rowIndex])
-
-    def measureBinVariance(self, mode='kmer', makeKillList=False, tolerance=1.0, verbose=False):
-        """Get the stats on M's across all bins
-        
-        If specified, will return a list of all bins which
-        fall outside of the average M profile
-        """
-        Ms = {}
-        Ss = {}
-        Rs = {}
-        for bid in self.getBids():
-            if(mode == 'kmer'):
-                (Ms[bid], Ss[bid], Rs[bid]) = self.bins[bid].getInnerVariance(self.PM.kmerVals)
-            elif(mode == 'cov'):
-                (Ms[bid], Ss[bid], Rs[bid]) = self.bins[bid].getInnerVariance(self.PM.transformedCP, mode="cov")
-        
-        # find the mean and stdev 
-        if(not makeKillList):
-            return (np_mean(np_array(Ms.values())), np_std(np_array(Ms.values())), np_median(np_array(Ss.values())), np_std(np_array(Ss.values())))
-        
-        else:
-            cutoff = np_mean(np_array(Ms.values())) + tolerance * np_std(np_array(Ms.values()))  
-            kill_list = []
-            for bid in Ms:
-                if(Ms[bid] > cutoff):
-                    kill_list.append(bid)
-            return (kill_list, cutoff)
-
     def findCoreCentres(self, krange=None, getKVals=False):
         """Find the point representing the centre of each core"""
         print "    Finding bin centers"
@@ -1326,6 +1726,57 @@ class BinManager:
         if getKVals:
             return (bin_centroid_points, bin_centroid_colours, bin_centroid_kvals, bids)
         return (bin_centroid_points, bin_centroid_colours, bids)
+
+    def calculateAngles(self, rowSet1, rowSet2):
+        """work out the angles between a set of contigs"""
+        angles = []
+        for i in rowSet1:
+            for j in rowSet2:
+                if i != j:
+                    angles.append(self.getAngleBetween(i, j))
+        return angles
+
+    def getAngleBetween(self, rowIndex1, rowIndex2):
+        """Find the angle between two contig's coverage vectors"""
+        u = self.PM.covProfiles[rowIndex1]
+        v = self.PM.covProfiles[rowIndex2]
+        
+        try:
+            ac = np_arccos(np_dot(u,v)/np_norm(u)/np_norm(v))
+        except FloatingPointError:
+            return 0
+        return ac
+
+    def scoreContig(self, rowIndex, bid):
+        """Determine how well a particular contig fits with a bin"""
+        return self.getBin(bid).scoreProfile(self.PM.kmerVals[rowIndex], self.PM.transformedCP[rowIndex])
+
+    def measureBinVariance(self, mode='kmer', makeKillList=False, tolerance=1.0, verbose=False):
+        """Get the stats on M's across all bins
+        
+        If specified, will return a list of all bins which
+        fall outside of the average M profile
+        """
+        Ms = {}
+        Ss = {}
+        Rs = {}
+        for bid in self.getBids():
+            if(mode == 'kmer'):
+                (Ms[bid], Ss[bid], Rs[bid]) = self.bins[bid].getInnerVariance(self.PM.kmerVals)
+            elif(mode == 'cov'):
+                (Ms[bid], Ss[bid], Rs[bid]) = self.bins[bid].getInnerVariance(self.PM.transformedCP, mode="cov")
+        
+        # find the mean and stdev 
+        if(not makeKillList):
+            return (np_mean(np_array(Ms.values())), np_std(np_array(Ms.values())), np_median(np_array(Ss.values())), np_std(np_array(Ss.values())))
+        
+        else:
+            cutoff = np_mean(np_array(Ms.values())) + tolerance * np_std(np_array(Ms.values()))  
+            kill_list = []
+            for bid in Ms:
+                if(Ms[bid] > cutoff):
+                    kill_list.append(bid)
+            return (kill_list, cutoff)
 
     def analyseBinKVariance(self, outlierTrim=0.1, plot=False):
         """Measure within and between bin variance of kmer sigs
@@ -1538,143 +1989,143 @@ class GrubbsTester:
     """Data and methods for performing Grubbs test
     
     cutoff values taken from qgrubs from R package outliers
-    using command: qgrubbs(0.95, c(3:1002), 10)
+    using command: qgrubbs(0.99, c(3:1002), 10)
     """
     def __init__(self):
         # cutoff values for n degress of freedom 
         # If you have 8 sample points then self.cutoffs[6]
         # is what you want!
-        self.critVs = np_array([1.153118,1.462500,1.671386,1.822120,1.938135,2.031652,2.109562,2.176068,
-                                2.233908,2.284953,2.330540,2.371654,2.409038,2.443272,2.474810,2.504017,
-                                2.531193,2.556581,2.580388,2.602784,2.623916,2.643910,2.662873,2.680899,
-                                2.698071,2.714459,2.730127,2.745132,2.759523,2.773345,2.786639,2.799440,
-                                2.811782,2.823693,2.835202,2.846331,2.857105,2.867542,2.877664,2.887485,
-                                2.897023,2.906293,2.915308,2.924081,2.932623,2.940946,2.949060,2.956975,
-                                2.964699,2.972240,2.979608,2.986808,2.993848,3.000735,3.007474,3.014072,
-                                3.020533,3.026863,3.033067,3.039150,3.045115,3.050968,3.056711,3.062349,
-                                3.067885,3.073323,3.078665,3.083916,3.089077,3.094152,3.099143,3.104053,
-                                3.108885,3.113640,3.118321,3.122929,3.127468,3.131939,3.136344,3.140684,
-                                3.144962,3.149179,3.153337,3.157437,3.161481,3.165470,3.169405,3.173289,
-                                3.177122,3.180905,3.184640,3.188327,3.191968,3.195565,3.199117,3.202627,
-                                3.206094,3.209520,3.212906,3.216253,3.219562,3.222832,3.226066,3.229264,
-                                3.232427,3.235555,3.238649,3.241710,3.244738,3.247735,3.250700,3.253635,
-                                3.256540,3.259415,3.262261,3.265079,3.267870,3.270632,3.273368,3.276078,
-                                3.278762,3.281421,3.284054,3.286663,3.289248,3.291810,3.294348,3.296863,
-                                3.299356,3.301827,3.304276,3.306704,3.309110,3.311496,3.313862,3.316208,
-                                3.318534,3.320840,3.323128,3.325397,3.327647,3.329879,3.332093,3.334290,
-                                3.336469,3.338631,3.340776,3.342905,3.345017,3.347113,3.349193,3.351258,
-                                3.353307,3.355340,3.357359,3.359363,3.361352,3.363327,3.365288,3.367235,
-                                3.369167,3.371087,3.372992,3.374885,3.376764,3.378631,3.380484,3.382325,
-                                3.384154,3.385970,3.387774,3.389566,3.391347,3.393116,3.394873,3.396618,
-                                3.398353,3.400076,3.401789,3.403491,3.405181,3.406862,3.408532,3.410191,
-                                3.411840,3.413480,3.415109,3.416728,3.418338,3.419938,3.421528,3.423109,
-                                3.424681,3.426244,3.427797,3.429341,3.430877,3.432404,3.433922,3.435431,
-                                3.436932,3.438424,3.439908,3.441384,3.442851,3.444311,3.445762,3.447206,
-                                3.448642,3.450070,3.451490,3.452903,3.454308,3.455706,3.457096,3.458479,
-                                3.459855,3.461224,3.462586,3.463940,3.465288,3.466629,3.467963,3.469290,
-                                3.470611,3.471925,3.473232,3.474533,3.475828,3.477116,3.478398,3.479674,
-                                3.480943,3.482206,3.483464,3.484715,3.485960,3.487199,3.488433,3.489661,
-                                3.490883,3.492099,3.493309,3.494514,3.495714,3.496908,3.498096,3.499279,
-                                3.500457,3.501629,3.502797,3.503958,3.505115,3.506267,3.507413,3.508555,
-                                3.509691,3.510823,3.511949,3.513071,3.514188,3.515300,3.516407,3.517510,
-                                3.518608,3.519701,3.520790,3.521874,3.522953,3.524028,3.525099,3.526165,
-                                3.527227,3.528284,3.529337,3.530386,3.531430,3.532471,3.533507,3.534539,
-                                3.535567,3.536590,3.537610,3.538626,3.539637,3.540645,3.541649,3.542648,
-                                3.543644,3.544636,3.545625,3.546609,3.547590,3.548567,3.549540,3.550509,
-                                3.551475,3.552437,3.553396,3.554351,3.555303,3.556251,3.557195,3.558136,
-                                3.559073,3.560007,3.560938,3.561865,3.562789,3.563710,3.564627,3.565541,
-                                3.566452,3.567359,3.568263,3.569164,3.570062,3.570957,3.571848,3.572737,
-                                3.573622,3.574504,3.575384,3.576260,3.577133,3.578003,3.578870,3.579734,
-                                3.580596,3.581454,3.582309,3.583162,3.584012,3.584859,3.585703,3.586544,
-                                3.587382,3.588218,3.589051,3.589881,3.590709,3.591533,3.592355,3.593175,
-                                3.593992,3.594806,3.595617,3.596426,3.597232,3.598036,3.598837,3.599636,
-                                3.600432,3.601226,3.602017,3.602805,3.603592,3.604375,3.605157,3.605935,
-                                3.606712,3.607486,3.608258,3.609027,3.609794,3.610559,3.611321,3.612081,
-                                3.612839,3.613594,3.614347,3.615098,3.615847,3.616593,3.617338,3.618080,
-                                3.618819,3.619557,3.620293,3.621026,3.621757,3.622486,3.623213,3.623938,
-                                3.624661,3.625381,3.626100,3.626816,3.627531,3.628243,3.628954,3.629662,
-                                3.630368,3.631073,3.631775,3.632476,3.633174,3.633871,3.634565,3.635258,
-                                3.635949,3.636637,3.637324,3.638009,3.638693,3.639374,3.640053,3.640731,
-                                3.641407,3.642080,3.642753,3.643423,3.644091,3.644758,3.645423,3.646086,
-                                3.646747,3.647407,3.648065,3.648721,3.649375,3.650028,3.650679,3.651328,
-                                3.651976,3.652621,3.653266,3.653908,3.654549,3.655188,3.655826,3.656462,
-                                3.657096,3.657729,3.658360,3.658989,3.659617,3.660243,3.660868,3.661491,
-                                3.662112,3.662732,3.663351,3.663968,3.664583,3.665197,3.665809,3.666420,
-                                3.667029,3.667637,3.668243,3.668848,3.669451,3.670053,3.670654,3.671253,
-                                3.671850,3.672446,3.673041,3.673634,3.674226,3.674816,3.675405,3.675992,
-                                3.676578,3.677163,3.677746,3.678328,3.678909,3.679488,3.680066,3.680642,
-                                3.681218,3.681791,3.682364,3.682935,3.683505,3.684073,3.684641,3.685206,
-                                3.685771,3.686334,3.686896,3.687457,3.688016,3.688574,3.689131,3.689687,
-                                3.690241,3.690794,3.691346,3.691897,3.692446,3.692995,3.693541,3.694087,
-                                3.694632,3.695175,3.695717,3.696258,3.696798,3.697336,3.697874,3.698410,
-                                3.698945,3.699479,3.700011,3.700543,3.701073,3.701602,3.702130,3.702657,
-                                3.703183,3.703708,3.704231,3.704754,3.705275,3.705795,3.706314,3.706832,
-                                3.707349,3.707865,3.708380,3.708893,3.709406,3.709917,3.710428,3.710937,
-                                3.711445,3.711953,3.712459,3.712964,3.713468,3.713971,3.714473,3.714974,
-                                3.715474,3.715973,3.716471,3.716967,3.717463,3.717958,3.718452,3.718945,
-                                3.719437,3.719928,3.720417,3.720906,3.721394,3.721881,3.722367,3.722852,
-                                3.723336,3.723819,3.724301,3.724782,3.725263,3.725742,3.726220,3.726697,
-                                3.727174,3.727649,3.728124,3.728597,3.729070,3.729542,3.730013,3.730483,
-                                3.730952,3.731420,3.731887,3.732354,3.732819,3.733284,3.733747,3.734210,
-                                3.734672,3.735133,3.735593,3.736052,3.736511,3.736968,3.737425,3.737881,
-                                3.738336,3.738790,3.739243,3.739695,3.740147,3.740598,3.741048,3.741497,
-                                3.741945,3.742392,3.742839,3.743284,3.743729,3.744173,3.744617,3.745059,
-                                3.745501,3.745942,3.746382,3.746821,3.747259,3.747697,3.748134,3.748570,
-                                3.749005,3.749440,3.749873,3.750306,3.750739,3.751170,3.751601,3.752030,
-                                3.752459,3.752888,3.753315,3.753742,3.754168,3.754594,3.755018,3.755442,
-                                3.755865,3.756287,3.756709,3.757130,3.757550,3.757969,3.758388,3.758806,
-                                3.759223,3.759639,3.760055,3.760470,3.760884,3.761298,3.761711,3.762123,
-                                3.762535,3.762945,3.763355,3.763765,3.764174,3.764581,3.764989,3.765395,
-                                3.765801,3.766207,3.766611,3.767015,3.767418,3.767821,3.768223,3.768624,
-                                3.769024,3.769424,3.769823,3.770222,3.770620,3.771017,3.771413,3.771809,
-                                3.772204,3.772599,3.772993,3.773386,3.773779,3.774171,3.774562,3.774953,
-                                3.775343,3.775732,3.776121,3.776509,3.776897,3.777284,3.777670,3.778056,
-                                3.778441,3.778825,3.779209,3.779592,3.779975,3.780357,3.780738,3.781119,
-                                3.781499,3.781879,3.782258,3.782636,3.783014,3.783391,3.783768,3.784144,
-                                3.784519,3.784894,3.785268,3.785642,3.786015,3.786387,3.786759,3.787130,
-                                3.787501,3.787871,3.788241,3.788610,3.788978,3.789346,3.789713,3.790080,
-                                3.790446,3.790812,3.791177,3.791541,3.791905,3.792269,3.792632,3.792994,
-                                3.793356,3.793717,3.794077,3.794437,3.794797,3.795156,3.795514,3.795872,
-                                3.796230,3.796587,3.796943,3.797299,3.797654,3.798009,3.798363,3.798717,
-                                3.799070,3.799422,3.799775,3.800126,3.800477,3.800828,3.801178,3.801527,
-                                3.801876,3.802225,3.802573,3.802920,3.803267,3.803614,3.803960,3.804305,
-                                3.804650,3.804995,3.805338,3.805682,3.806025,3.806367,3.806709,3.807051,
-                                3.807392,3.807732,3.808072,3.808412,3.808751,3.809090,3.809428,3.809765,
-                                3.810102,3.810439,3.810775,3.811111,3.811446,3.811781,3.812115,3.812449,
-                                3.812782,3.813115,3.813448,3.813779,3.814111,3.814442,3.814772,3.815103,
-                                3.815432,3.815761,3.816090,3.816418,3.816746,3.817073,3.817400,3.817727,
-                                3.818053,3.818378,3.818703,3.819028,3.819352,3.819676,3.819999,3.820322,
-                                3.820645,3.820967,3.821288,3.821610,3.821930,3.822250,3.822570,3.822890,
-                                3.823209,3.823527,3.823845,3.824163,3.824480,3.824797,3.825114,3.825430,
-                                3.825745,3.826060,3.826375,3.826689,3.827003,3.827317,3.827630,3.827942,
-                                3.828255,3.828566,3.828878,3.829189,3.829499,3.829810,3.830119,3.830429,
-                                3.830738,3.831046,3.831354,3.831662,3.831969,3.832276,3.832583,3.832889,
-                                3.833195,3.833500,3.833805,3.834110,3.834414,3.834718,3.835021,3.835324,
-                                3.835627,3.835929,3.836231,3.836532,3.836833,3.837134,3.837434,3.837734,
-                                3.838034,3.838333,3.838632,3.838930,3.839228,3.839526,3.839823,3.840120,
-                                3.840417,3.840713,3.841009,3.841304,3.841599,3.841894,3.842188,3.842482,
-                                3.842776,3.843069,3.843362,3.843654,3.843946,3.844238,3.844529,3.844820,
-                                3.845111,3.845401,3.845691,3.845981,3.846270,3.846559,3.846847,3.847136,
-                                3.847423,3.847711,3.847998,3.848285,3.848571,3.848857,3.849143,3.849428,
-                                3.849713,3.849998,3.850282,3.850566,3.850850,3.851133,3.851416,3.851699,
-                                3.851981,3.852263,3.852545,3.852826,3.853107,3.853388,3.853668,3.853948,
-                                3.854228,3.854507,3.854786,3.855064,3.855343,3.855621,3.855898,3.856175,
-                                3.856452,3.856729,3.857005,3.857281,3.857557,3.857832,3.858107,3.858382,
-                                3.858656,3.858930,3.859204,3.859478,3.859751,3.860023,3.860296,3.860568,
-                                3.860840,3.861111,3.861383,3.861653,3.861924,3.862194,3.862464,3.862734,
-                                3.863003,3.863272,3.863541,3.863809,3.864077,3.864345,3.864613,3.864880,
-                                3.865147,3.865413,3.865679,3.865945,3.866211,3.866476,3.866741,3.867006,
-                                3.867271,3.867535,3.867799,3.868062,3.868325,3.868588,3.868851,3.869113,
-                                3.869375,3.869637,3.869899,3.870160,3.870421,3.870681,3.870942,3.871202,
-                                3.871462,3.871721,3.871980,3.872239,3.872498,3.872756,3.873014,3.873272,
-                                3.873529,3.873786,3.874043,3.874300,3.874556,3.874812,3.875068,3.875324,
-                                3.875579,3.875834,3.876088,3.876343,3.876597,3.876851,3.877104,3.877357]
+        self.critVs = np_array([1.154637,1.492500,1.748857,1.944245,2.097304,2.220833,2.323148,2.409725,
+                                2.484279,2.549417,2.607020,2.658480,2.704855,2.746963,2.785445,2.820817,
+                                2.853495,2.883821,2.912078,2.938503,2.963296,2.986628,3.008645,3.029473,
+                                3.049223,3.067989,3.085855,3.102897,3.119180,3.134761,3.149694,3.164026,
+                                3.177798,3.191049,3.203813,3.216121,3.228002,3.239482,3.250585,3.261332,
+                                3.271744,3.281839,3.291634,3.301145,3.310386,3.319372,3.328114,3.336624,
+                                3.344914,3.352993,3.360872,3.368558,3.376061,3.383388,3.390546,3.397543,
+                                3.404385,3.411078,3.417628,3.424041,3.430321,3.436474,3.442505,3.448417,
+                                3.454215,3.459902,3.465484,3.470963,3.476342,3.481626,3.486816,3.491917,
+                                3.496930,3.501859,3.506706,3.511474,3.516164,3.520780,3.525324,3.529797,
+                                3.534201,3.538539,3.542812,3.547022,3.551171,3.555260,3.559292,3.563266,
+                                3.567186,3.571051,3.574865,3.578627,3.582340,3.586004,3.589620,3.593190,
+                                3.596715,3.600196,3.603634,3.607030,3.610384,3.613698,3.616973,3.620209,
+                                3.623407,3.626569,3.629695,3.632785,3.635840,3.638862,3.641851,3.644807,
+                                3.647731,3.650624,3.653486,3.656319,3.659122,3.661896,3.664642,3.667360,
+                                3.670050,3.672714,3.675352,3.677964,3.680551,3.683113,3.685650,3.688164,
+                                3.690654,3.693121,3.695565,3.697986,3.700386,3.702764,3.705121,3.707457,
+                                3.709773,3.712068,3.714344,3.716600,3.718836,3.721054,3.723253,3.725434,
+                                3.727597,3.729742,3.731869,3.733979,3.736072,3.738149,3.740209,3.742253,
+                                3.744281,3.746293,3.748289,3.750270,3.752237,3.754188,3.756125,3.758047,
+                                3.759955,3.761849,3.763729,3.765595,3.767448,3.769287,3.771114,3.772928,
+                                3.774728,3.776516,3.778292,3.780056,3.781807,3.783546,3.785274,3.786990,
+                                3.788694,3.790387,3.792069,3.793740,3.795400,3.797049,3.798687,3.800315,
+                                3.801932,3.803540,3.805137,3.806723,3.808300,3.809868,3.811425,3.812973,
+                                3.814511,3.816040,3.817560,3.819071,3.820572,3.822065,3.823549,3.825024,
+                                3.826490,3.827948,3.829397,3.830838,3.832271,3.833696,3.835112,3.836521,
+                                3.837921,3.839314,3.840699,3.842076,3.843446,3.844808,3.846163,3.847510,
+                                3.848850,3.850183,3.851509,3.852827,3.854139,3.855444,3.856742,3.858033,
+                                3.859317,3.860595,3.861866,3.863131,3.864389,3.865640,3.866886,3.868125,
+                                3.869358,3.870585,3.871805,3.873020,3.874229,3.875431,3.876628,3.877819,
+                                3.879005,3.880184,3.881358,3.882526,3.883689,3.884846,3.885998,3.887144,
+                                3.888285,3.889421,3.890551,3.891677,3.892797,3.893911,3.895021,3.896126,
+                                3.897226,3.898321,3.899411,3.900496,3.901576,3.902651,3.903722,3.904788,
+                                3.905849,3.906906,3.907958,3.909005,3.910048,3.911087,3.912121,3.913150,
+                                3.914176,3.915197,3.916213,3.917226,3.918234,3.919238,3.920238,3.921233,
+                                3.922225,3.923212,3.924196,3.925175,3.926151,3.927122,3.928090,3.929054,
+                                3.930014,3.930970,3.931922,3.932871,3.933815,3.934756,3.935694,3.936627,
+                                3.937558,3.938484,3.939407,3.940326,3.941242,3.942155,3.943064,3.943969,
+                                3.944871,3.945770,3.946665,3.947557,3.948445,3.949331,3.950213,3.951091,
+                                3.951967,3.952839,3.953708,3.954574,3.955437,3.956297,3.957154,3.958007,
+                                3.958858,3.959705,3.960550,3.961391,3.962229,3.963065,3.963898,3.964727,
+                                3.965554,3.966378,3.967199,3.968017,3.968833,3.969645,3.970455,3.971262,
+                                3.972066,3.972868,3.973667,3.974463,3.975256,3.976047,3.976836,3.977621,
+                                3.978404,3.979184,3.979962,3.980738,3.981510,3.982280,3.983048,3.983813,
+                                3.984576,3.985336,3.986094,3.986849,3.987602,3.988353,3.989101,3.989847,
+                                3.990590,3.991331,3.992070,3.992806,3.993541,3.994272,3.995002,3.995729,
+                                3.996454,3.997177,3.997898,3.998616,3.999332,4.000046,4.000758,4.001468,
+                                4.002175,4.002880,4.003584,4.004285,4.004984,4.005681,4.006376,4.007069,
+                                4.007759,4.008448,4.009135,4.009820,4.010502,4.011183,4.011862,4.012539,
+                                4.013213,4.013886,4.014557,4.015226,4.015893,4.016558,4.017222,4.017883,
+                                4.018543,4.019200,4.019856,4.020510,4.021162,4.021812,4.022461,4.023108,
+                                4.023752,4.024395,4.025037,4.025676,4.026314,4.026950,4.027585,4.028217,
+                                4.028848,4.029477,4.030105,4.030730,4.031354,4.031977,4.032597,4.033217,
+                                4.033834,4.034450,4.035064,4.035676,4.036287,4.036896,4.037504,4.038110,
+                                4.038715,4.039318,4.039919,4.040519,4.041117,4.041714,4.042309,4.042903,
+                                4.043495,4.044085,4.044674,4.045262,4.045848,4.046433,4.047016,4.047597,
+                                4.048178,4.048756,4.049334,4.049909,4.050484,4.051057,4.051628,4.052198,
+                                4.052767,4.053334,4.053900,4.054465,4.055028,4.055590,4.056150,4.056709,
+                                4.057267,4.057823,4.058378,4.058932,4.059484,4.060035,4.060585,4.061133,
+                                4.061680,4.062226,4.062771,4.063314,4.063856,4.064396,4.064935,4.065474,
+                                4.066010,4.066546,4.067080,4.067613,4.068145,4.068676,4.069205,4.069733,
+                                4.070260,4.070786,4.071310,4.071834,4.072356,4.072877,4.073396,4.073915,
+                                4.074432,4.074949,4.075464,4.075977,4.076490,4.077002,4.077512,4.078022,
+                                4.078530,4.079037,4.079543,4.080047,4.080551,4.081054,4.081555,4.082056,
+                                4.082555,4.083053,4.083550,4.084046,4.084541,4.085035,4.085528,4.086019,
+                                4.086510,4.087000,4.087488,4.087976,4.088462,4.088948,4.089432,4.089915,
+                                4.090398,4.090879,4.091359,4.091839,4.092317,4.092794,4.093271,4.093746,
+                                4.094220,4.094693,4.095166,4.095637,4.096107,4.096577,4.097045,4.097513,
+                                4.097979,4.098445,4.098909,4.099373,4.099836,4.100297,4.100758,4.101218,
+                                4.101677,4.102135,4.102592,4.103048,4.103503,4.103958,4.104411,4.104864,
+                                4.105315,4.105766,4.106216,4.106665,4.107113,4.107560,4.108006,4.108452,
+                                4.108896,4.109340,4.109783,4.110225,4.110666,4.111106,4.111545,4.111984,
+                                4.112421,4.112858,4.113294,4.113729,4.114163,4.114597,4.115029,4.115461,
+                                4.115892,4.116322,4.116751,4.117180,4.117608,4.118034,4.118460,4.118886,
+                                4.119310,4.119734,4.120157,4.120579,4.121000,4.121421,4.121840,4.122259,
+                                4.122677,4.123095,4.123511,4.123927,4.124342,4.124757,4.125170,4.125583,
+                                4.125995,4.126406,4.126817,4.127226,4.127635,4.128044,4.128451,4.128858,
+                                4.129264,4.129669,4.130074,4.130478,4.130881,4.131284,4.131685,4.132086,
+                                4.132487,4.132886,4.133285,4.133683,4.134081,4.134477,4.134873,4.135269,
+                                4.135663,4.136057,4.136451,4.136843,4.137235,4.137626,4.138017,4.138407,
+                                4.138796,4.139184,4.139572,4.139959,4.140346,4.140732,4.141117,4.141501,
+                                4.141885,4.142268,4.142651,4.143033,4.143414,4.143794,4.144174,4.144554,
+                                4.144932,4.145310,4.145688,4.146064,4.146440,4.146816,4.147191,4.147565,
+                                4.147938,4.148311,4.148684,4.149055,4.149427,4.149797,4.150167,4.150536,
+                                4.150905,4.151273,4.151640,4.152007,4.152373,4.152739,4.153104,4.153468,
+                                4.153832,4.154195,4.154558,4.154920,4.155282,4.155643,4.156003,4.156363,
+                                4.156722,4.157080,4.157438,4.157796,4.158153,4.158509,4.158865,4.159220,
+                                4.159574,4.159928,4.160282,4.160635,4.160987,4.161339,4.161690,4.162041,
+                                4.162391,4.162740,4.163089,4.163438,4.163786,4.164133,4.164480,4.164826,
+                                4.165172,4.165517,4.165862,4.166206,4.166550,4.166893,4.167235,4.167577,
+                                4.167919,4.168260,4.168600,4.168940,4.169280,4.169619,4.169957,4.170295,
+                                4.170632,4.170969,4.171306,4.171641,4.171977,4.172311,4.172646,4.172980,
+                                4.173313,4.173646,4.173978,4.174310,4.174641,4.174972,4.175302,4.175632,
+                                4.175962,4.176290,4.176619,4.176947,4.177274,4.177601,4.177927,4.178253,
+                                4.178579,4.178904,4.179228,4.179552,4.179876,4.180199,4.180522,4.180844,
+                                4.181166,4.181487,4.181808,4.182128,4.182448,4.182767,4.183086,4.183405,
+                                4.183723,4.184040,4.184357,4.184674,4.184990,4.185306,4.185621,4.185936,
+                                4.186250,4.186564,4.186878,4.187191,4.187503,4.187815,4.188127,4.188438,
+                                4.188749,4.189060,4.189370,4.189679,4.189988,4.190297,4.190605,4.190913,
+                                4.191220,4.191527,4.191834,4.192140,4.192446,4.192751,4.193056,4.193360,
+                                4.193664,4.193968,4.194271,4.194574,4.194876,4.195178,4.195479,4.195781,
+                                4.196081,4.196381,4.196681,4.196981,4.197280,4.197578,4.197877,4.198175,
+                                4.198472,4.198769,4.199066,4.199362,4.199658,4.199953,4.200248,4.200543,
+                                4.200837,4.201131,4.201424,4.201718,4.202010,4.202303,4.202594,4.202886,
+                                4.203177,4.203468,4.203758,4.204048,4.204338,4.204627,4.204916,4.205204,
+                                4.205493,4.205780,4.206068,4.206355,4.206641,4.206927,4.207213,4.207499,
+                                4.207784,4.208068,4.208353,4.208637,4.208920,4.209204,4.209487,4.209769,
+                                4.210051,4.210333,4.210615,4.210896,4.211176,4.211457,4.211737,4.212016,
+                                4.212296,4.212575,4.212853,4.213132,4.213409,4.213687,4.213964,4.214241,
+                                4.214517,4.214794,4.215069,4.215345,4.215620,4.215895,4.216169,4.216443,
+                                4.216717,4.216990,4.217263,4.217536,4.217808,4.218080,4.218352,4.218623,
+                                4.218894,4.219165,4.219436,4.219706,4.219975,4.220245,4.220514,4.220782,
+                                4.221051,4.221319,4.221586,4.221854,4.222121,4.222388,4.222654,4.222920,
+                                4.223186,4.223451,4.223716,4.223981,4.224246,4.224510,4.224774,4.225037,
+                                4.225300,4.225563,4.225826,4.226088,4.226350,4.226611,4.226873,4.227134,
+                                4.227394,4.227655,4.227915,4.228175,4.228434,4.228693,4.228952,4.229211,
+                                4.229469,4.229727,4.229984,4.230242,4.230499,4.230755,4.231012,4.231268,
+                                4.231524,4.231779,4.232034,4.232289,4.232544,4.232798,4.233052,4.233306,
+                                4.233559,4.233813,4.234065,4.234318,4.234570,4.234822,4.235074,4.235325,
+                                4.235576,4.235827,4.236078,4.236328,4.236578,4.236827,4.237077,4.237326,
+                                4.237575,4.237823,4.238071,4.238319,4.238567,4.238815,4.239062,4.239308,
+                                4.239555,4.239801,4.240047,4.240293,4.240538,4.240784,4.241028,4.241273,
+                                4.241517,4.241761,4.242005,4.242249,4.242492,4.242735,4.242978,4.243220,
+                                4.243462,4.243704,4.243946,4.244187,4.244428,4.244669,4.244910,4.245150,
+                                4.245390,4.245630,4.245869,4.246108,4.246347,4.246586,4.246825,4.247063]
                                )
 
     def isMaxOutlier(self, maxVal, compVals, verbose=False):
         """Test if the maxVal is an outlier 
         
-        maxVal should NOT be included in allVals
+        maxVal should NOT be included in compVals
         if len(compVals) - 1 > 1000 use the 1000 cutoff anyway
         """
         # get Z score for the maxValue 
