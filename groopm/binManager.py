@@ -57,7 +57,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
 
-from numpy import argmax as np_argmax, arccos as np_cos, dot as np_dot, sum as np_sum, abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
+from numpy import shape as np_shape, around as np_around, argmax as np_argmax, arccos as np_cos, dot as np_dot, sum as np_sum, abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
 from numpy.linalg import norm as np_norm 
 import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist
@@ -70,6 +70,7 @@ from profileManager import ProfileManager
 from bin import Bin
 import groopmExceptions as ge
 from groopmUtils import makeSurePathExists
+from ellipsoid import EllipsoidTool
 
 np_seterr(all='raise')     
 
@@ -264,7 +265,6 @@ class BinManager:
         # now fix all the rowIndices in all the other bins
         for bid in self.getBids():
             self.bins[bid].rowIndices = self.fixRowIndexLists(original_length, np_sort(self.bins[bid].rowIndices), rem_list)
-
 
     def fixRowIndexLists(self, originalLength, oldList, remList):
         """Fix up row index lists which reference into the
@@ -599,7 +599,15 @@ class BinManager:
                 return
         return
 
-    def getClosestBID(self, rowIndex, searchTree, tdm, neighbourList={}, k=101, verbose=False):
+    def getClosestBID(self,
+                      searchIndex,
+                      searchTree,
+                      tdm,
+                      gt2riLookup,
+                      neighbourList={},
+                      k=101,
+                      verbose=False
+                      ):
         """Find the bin ID which would best describe the placement of the contig
         
         The neighbourlist is a hash of type:
@@ -613,21 +621,24 @@ class BinManager:
             k = 21
         if k > 101:
             k = 101
-        
+        if k > len(tdm):
+            k = len(tdm)
+
         try:
-            t_list = neighbourList[rowIndex]
+            t_list = neighbourList[searchIndex]
             if len(t_list) != k:
                 # must have made a change, we'll fix it here
-                t_list = searchTree.query(tdm[rowIndex],k=k)[1]
-                neighbourList[rowIndex] = t_list
+                t_list = searchTree.query(tdm[searchIndex],k=k)[1]
+                neighbourList[searchIndex] = t_list
         except KeyError:
             # first time, we need to do the search
-            t_list = searchTree.query(tdm[rowIndex],k=k)[1]
-            neighbourList[rowIndex] = t_list
+            t_list = searchTree.query(tdm[searchIndex],k=k)[1]
+            neighbourList[searchIndex] = t_list
             
         # calculate the distribution of neighbouring bins
         refined_t_list = {}
-        for row_index in t_list: 
+        for index in t_list:
+            row_index = gt2riLookup[index]
             try:
                 cbid = self.PM.binIds[row_index]
                 if cbid != 0: # don't want these guys
@@ -649,12 +660,12 @@ class BinManager:
                 max_count = refined_t_list[cbid]
                 max_bid = cbid
         if verbose:
-            print self.PM.contigNames[rowIndex], "**",max_bid,max_count,"**"                        
+            print self.PM.contigNames[searchIndex], "**",max_bid,max_count,"**"                        
             for cbid in refined_t_list:
                 print "[", cbid, ",", refined_t_list[cbid], "]",
             print
         # we're done!
-        return (max_bid, neighbourList)
+        return (max_bid, neighbourList, refined_t_list)
 
     def nukeOutliers(self, verbose=False):
         """Identify and remove small bins which contain mixed genomes
@@ -688,14 +699,18 @@ class BinManager:
                         saveBins=False)
         print "    Identified %d possible chimeras leaving %d cores" % (len(dead_bins), len(self.bins))
 
-    def makeUpperLower(self, vals, tol):
+    def makeUpperLower(self, vals, tol, decimals=0):
         """ make upper and lower cutoffs"""
         mean = np_mean(vals)
         try:
             stdev = np_std(vals)
         except FloatingPointError:
             stdev = 0
-        return (mean + tol*stdev, mean - tol*stdev)        
+        if decimals == 0:
+            return (mean + tol*stdev, mean - tol*stdev)
+        else:
+            return (np_around(mean + tol*stdev,decimals=decimals),
+                    np_around(mean - tol*stdev,decimals=decimals))
 
     def doObviousMergers(self, verbose=False):
         """Merge bins which are just crying out to be merged!"""
@@ -836,25 +851,33 @@ class BinManager:
                             (base_AC, base_AC_upper, base_AC_lower) = ave_covs[base_bid]
                         except KeyError:
                             base_AC = [self.PM.averageCoverages[i] for i in base_bin.rowIndices]
-                            (base_AC_upper, base_AC_lower) = self.makeUpperLower(base_AC, ave_cov_tol)
+                            (base_AC_upper, base_AC_lower) = self.makeUpperLower(base_AC, ave_cov_tol, decimals=3)
                             ave_covs[base_bid] = (base_AC, base_AC_upper, base_AC_lower)
                         try:
                             (query_AC, query_AC_upper, query_AC_lower) = ave_covs[query_bid]
                         except KeyError:
                             query_AC = [self.PM.averageCoverages[i] for i in query_bin.rowIndices]
-                            (query_AC_upper, query_AC_lower) = self.makeUpperLower(query_AC, ave_cov_tol)
+                            (query_AC_upper, query_AC_lower) = self.makeUpperLower(query_AC, ave_cov_tol, decimals=3)
                             ave_covs[query_bid] = (query_AC, query_AC_upper, query_AC_lower)
 
                         # make sure that the majority of the average coverages are kinda similar
                         gooduns1 = len([i for i in base_AC if (i <= query_AC_upper and i >= query_AC_lower)])
                         gooduns2 = -1
-                        if (2*gooduns1) >= base_bin.binSize:
+                        if (3*gooduns1) >= base_bin.binSize:
                              gooduns2 = len([i for i in query_AC if (i <= base_AC_upper and i >= base_AC_lower)])
-                             if (2*gooduns2) >= query_bin.binSize:
+                             if (3*gooduns2) >= query_bin.binSize:
                                  should_merge = True
 
                         if verbose:
                             print "AVE COV q: %d (%d) b: %d (%d)" % (gooduns1, base_bin.binSize, gooduns2, query_bin.binSize), should_merge
+                            if should_merge == False:
+                                print base_AC_lower, query_bin.cValMean, base_AC_upper, query_AC_lower, base_bin.cValMean, query_AC_upper
+                                
+                                if(query_bin.cValMean >= base_AC_lower and
+                                   query_bin.cValMean <= base_AC_upper and
+                                   base_bin.cValMean >= query_AC_lower and
+                                   base_bin.cValMean <= query_AC_upper):
+                                    should_merge = True
                     else:
                         continue
 #-----
@@ -905,7 +928,7 @@ class BinManager:
                         if verbose:
                             print "MER - base %d (%d)" % (num_OK, base_bin.binSize)
                                 
-                        if (2*num_OK) >= base_bin.binSize:
+                        if (3*num_OK) >= base_bin.binSize:
                             upper_lim = base_bin.kValMean + base_bin.kValStdev
                             lower_lim = base_bin.kValMean - base_bin.kValStdev
                             num_OK = len([row_index for row_index in query_bin.rowIndices
@@ -915,7 +938,7 @@ class BinManager:
                             if verbose:
                                 print "MER - base %d (%d)" % (num_OK, query_bin.binSize)
                                     
-                            if (2*num_OK) >= query_bin.binSize:
+                            if (3*num_OK) >= query_bin.binSize:
                                 should_merge=True
                     else:
                         continue
@@ -937,13 +960,19 @@ class BinManager:
         # now make a bunch of mergers
         mergers = []
         processed_bids = {}     # bid => index in mergers
-        for key in merged_bins:
+        for bid in merged_bins:
+            
+            # trace this guy until the end
+            merging_bid = merged_bins[bid]
+            while merging_bid in merged_bins:
+                merging_bid = merged_bins[merging_bid]
+            
             try:
-                merge_list_id_1 = processed_bids[key]
+                merge_list_id_1 = processed_bids[bid]
             except KeyError:
                 merge_list_id_1 = -1
             try:
-                merge_list_id_2 = processed_bids[merged_bins[key]]
+                merge_list_id_2 = processed_bids[merging_bid]
             except KeyError:
                 merge_list_id_2 = -1
             
@@ -951,19 +980,17 @@ class BinManager:
                 if merge_list_id_2 == -1:
                     # all new
                     index = len(mergers)
-                    processed_bids[merged_bins[key]] = index
-                    processed_bids[key] = index
-                    mergers.append([key, merged_bins[key]])
+                    processed_bids[merging_bid] = index
+                    processed_bids[bid] = index
+                    mergers.append([bid, merging_bid])
                 else:
-                    processed_bids[key] = merge_list_id_2
-                    mergers[merge_list_id_2].append(key)
+                    processed_bids[bid] = merge_list_id_2
+                    mergers[merge_list_id_2].append(bid)
             elif merge_list_id_2 == -1:
-                processed_bids[merged_bins[key]] = merge_list_id_1
-                mergers[merge_list_id_1].append(merged_bins[key])
+                processed_bids[merging_bid] = merge_list_id_1
+                mergers[merge_list_id_1].append(merging_bid)
             else:
-                mergers[merge_list_id_1] += mergers[merge_list_id_2]
-                for bid in mergers[merge_list_id_2]:
-                    processed_bids[bid] = merge_list_id_1 
+                print "gonna hurt!", bid, merging_bid, merged_bins[bid], mergers[merge_list_id_1], mergers[merge_list_id_2]
 
         # now merge them
         num_bins_removed = 0
@@ -985,41 +1012,253 @@ class BinManager:
                        verbose=False,
                        plotAfterOB=True):
         """Automagically refine bins"""
+
+#-----
+# Prelim culling
         
         # identify and remove outlier bins
         if nukeOutliers:
             self.nukeOutliers()
 
-        # do macro bin mergers
-        if mergeObvious:
-            self.doObviousMergers(verbose=True)
+#-----
+# Make search trees
+        # search-based data structures
+        neighbour_lists = {} # save looking things up a 1,000,000 times
+        graduated_tdms = {}
+        graduated_searches = {}
+        gt_2_ri_lookup = {}
+        ri_2_gt_lookup = {}
         
-        if plotAfterOB:
-            self.plotBins(FNPrefix="AFTER_OB")
-        
-        super_round = 1
-        tdm = self.PM.transformedCP
-        neighbour_list={} # save looking things up a 1,000,000 times
-        search_tree = kdt(tdm)
+        # make 10 separate search trees based on kmer sigs
+        for i in range(10):
+            graduated_tdms[i] = []
+            gt_2_ri_lookup[i] = {}
+            ri_2_gt_lookup[i] = {}
+            neighbour_lists[i] = {}
+            
+        for row_index in range(np_size(self.PM.indices)):
+            if self.PM.binIds[row_index] != 0:
+                tdm_index = int(self.PM.kmerVals[row_index]*10)
+                lower = np_max([tdm_index-1, 0])
+                upper = np_min([tdm_index+2, 10])
+                for i in range(lower, upper):
+                    gt_index = len(graduated_tdms[i])
+                    ri_2_gt_lookup[i][row_index] = gt_index 
+                    gt_2_ri_lookup[i][gt_index] = row_index 
+                    graduated_tdms[i].append(self.PM.transformedCP[row_index])
+
+        for i in range(10):
+            #print i, len(graduated_tdms[i])
+            graduated_searches[i] = kdt(graduated_tdms[i])
 
         # pay attention to contig lengths when including in bins
         # use grubbs test
         GT = GrubbsTester() # we need to perform grubbs test before inclusion
         
+        # keep track of what gets merged where
+        merged_bins = {}        # oldId => newId
+        processed_pairs = {}    # keep track of pairs we've analysed
+        bin_c_lengths = {}
+
+        bids = self.getBids()
+
+        ET = EllipsoidTool()
+
+        sorted_Ks = np_argsort(self.PM.kmerVals)
+        bin_e_volumes = {}
+        seen_bids = {}
+        index = 0
+        for RI in sorted_Ks:
+            try:
+                seen_bids[self.PM.binIds[RI]][1] = index
+            except KeyError:
+                seen_bids[self.PM.binIds[RI]] = [index, index]
+            index += 1 
+
+        for bid in bids:
+            processed_pairs[self.makeBidKey(bid, bid)] = True            
+
+            # work out the volume of the minimum bounding ellipsoid
+            bin_points = np_array([self.PM.transformedCP[i] for i in self.bins[bid].rowIndices])
+            (center, radii, rotation) = ET.getMinVolEllipse(bin_points)
+            bin_e_volumes[bid] = ET.getEllipsoidVolume(radii)
+            self.bins[bid].covTolerance = 3
+            self.bins[bid].kValTolerance = 3
+            self.bins[bid].lowestK = seen_bids[bid][0]
+            self.bins[bid].highestK = seen_bids[bid][1]
+            #print bid, seen_bids[bid]
+            self.bins[bid].makeBinDist(self.PM.transformedCP, 
+                                       self.PM.averageCoverages, 
+                                       self.PM.kmerVals, 
+                                       self.PM.contigLengths)
+            bin_c_lengths[bid] = [self.PM.contigLengths[row_index] for row_index in self.bins[bid].rowIndices]
+
+        for bid in bids:
+            # get the bin daisy chain
+            merged_base_bid = bid
+            while merged_base_bid in merged_bins:
+                merged_base_bid = merged_bins[merged_base_bid]
+            
+            print "BID: %d" % bid
+            bin = self.getBin(bid)
+            bid_totals = {}
+            totals = 0.0
+#-----
+# GET CLOSEST BINS
+
+            for row_index in bin.rowIndices:
+                tdm_index = np_min([int(self.PM.kmerVals[row_index]*10),9])
+                (assigned_bid,
+                 neighbour_lists[tdm_index],
+                 scores
+                 ) = self.getClosestBID(ri_2_gt_lookup[tdm_index][row_index],
+                                        graduated_searches[tdm_index],
+                                        graduated_tdms[tdm_index],
+                                        gt_2_ri_lookup[tdm_index],
+                                        neighbourList=neighbour_lists[tdm_index],
+                                        verbose=verbose,
+                                        k=2*bin.binSize-1
+                                        )
+                for sbid in scores:
+                    try:
+                       bid_totals[sbid] += scores[sbid]
+                    except KeyError:
+                       bid_totals[sbid] = scores[sbid]
+                    totals += scores[sbid]                            
+
+            tmp = bid_totals.items()
+            tmp.sort(key=lambda x: x[1], reverse=True)
+            for (sbid,others) in tmp:
+#-----
+# TIME WASTERS
+                # process each BID pair once only (takes care of self comparisons too!)
+                if self.makeBidKey(bid, sbid) in processed_pairs:
+                    continue
+                processed_pairs[self.makeBidKey(bid, sbid)] = True
+
+                # get the daisy chain of this query bid
+                merged_query_bid = sbid
+                while merged_query_bid in merged_bins:
+                    merged_query_bid = merged_bins[merged_query_bid]
+
+                # no point self comparing
+                if merged_query_bid != merged_base_bid:
+                    continue
+#-----
+# COVERAGE OVERLAP
+                # we only want to check out guys who have at least 
+                # some overlap
+                perc = float(np_sum(others))/totals
+                if perc < 0.01:
+                    continue
+#-----
+# KMER OVERLAP
+                
+                # check to see if the kmer values overlap sufficiently or not
+                olap_amounts = bin.overlappingKVals(self.PM.kmerVals, self.bins[sbid])
+                if not (olap_amounts[0] and (olap_amounts[1] > 0.4 or olap_amounts[2] > 0.4)):
+                    continue
+#-----
+# CONTIG LENGTH SANITY
+                # Test the smaller bin against the larger
+                if query_bin.binSize < base_bin.binSize:
+                    lengths_wrong = GT.isMaxOutlier(np_median(bin_c_lengths[query_bid]),
+                                                    bin_c_lengths[base_bid]
+                                                    )
+                else:
+                    lengths_wrong = GT.isMaxOutlier(np_median(bin_c_lengths[base_bid]),
+                                                    bin_c_lengths[query_bid]
+                                                    )
+                if lengths_wrong:
+                    continue
+                    
+#-----
+# MINIMUM BOUNDING ELLIPSOID
+                comb_points = np_array([self.PM.transformedCP[i] for i in 
+                                        np_concatenate((self.bins[sbid].rowIndices,
+                                                        self.bins[bid].rowIndices))
+                                        ])
+                (ccenter, cradii, crotation) = ET.getMinVolEllipse(comb_points)
+                comb_vol = ET.getEllipsoidVolume(cradii)
+                if np_max([bin_e_volumes[bid], bin_e_volumes[sbid]])*4 < comb_vol:
+                    continue
+                
+                # We only get here if we're going to merge the bins
+                if merged_query_bid < merged_base_bid:
+                    merged_bins[merged_base_bid] = merged_query_bid
+                    # we just nuked the base bid
+                    break
+                else:
+                    merged_bins[merged_query_bid] = merged_base_bid
+#-----
+# MERGE
+        # now make a bunch of mergers
+        mergers = []
+        processed_bids = {}     # bid => index in mergers
+        for bid in merged_bins:
+            
+            # trace this guy until the end
+            merging_bid = merged_bins[bid]
+            while merging_bid in merged_bins:
+                merging_bid = merged_bins[merging_bid]
+            
+            try:
+                merge_list_id_1 = processed_bids[bid]
+            except KeyError:
+                merge_list_id_1 = -1
+            try:
+                merge_list_id_2 = processed_bids[merging_bid]
+            except KeyError:
+                merge_list_id_2 = -1
+            
+            if merge_list_id_1 == -1:
+                if merge_list_id_2 == -1:
+                    # all new
+                    index = len(mergers)
+                    processed_bids[merging_bid] = index
+                    processed_bids[bid] = index
+                    mergers.append([bid, merging_bid])
+                else:
+                    processed_bids[bid] = merge_list_id_2
+                    mergers[merge_list_id_2].append(bid)
+            elif merge_list_id_2 == -1:
+                processed_bids[merging_bid] = merge_list_id_1
+                mergers[merge_list_id_1].append(merging_bid)
+            else:
+                print "gonna hurt!", bid, merging_bid, merged_bins[bid], mergers[merge_list_id_1], mergers[merge_list_id_2]
+
+        # now merge them
+        num_bins_removed = 0
+        for merge in mergers:
+            if verbose:
+                print merge
+            num_bins_removed += (len(merge) - 1)
+            self.merge(merge, auto=True, newBid=False, saveBins=False, verbose=False, printInstructions=False)
+
+        print "    Removed %d cores leaving %d cores" % (num_bins_removed, len(self.bins))        
+
+#----------------------------------------------------------------------------
+#----------------------------------------------------------------------------
+#----------------------------------------------------------------------------
+#----------------------------------------------------------------------------
+
         stable_bids = {} # once a bin is stable it's stable... almost
         re_unstable = {}
-        bin_c_lengths = {}
 
         # we can get stuck in an infinite loop
         # where a contig is passed back and forth between a pair of bins. 
         all_moved_RIs = {}      # when a contig has been moved FROM a bin it can 
                                 # not go BACK to THAT bin
-
-        bids = self.getBids()
+        
+        bins_changed = {}
+        bin_c_lengths = {}       
         start_num_bins = len(bids)
         for bid in bids:
             self.bins[bid].covTolerance = 3
-            self.bins[bid].kValTolerance = 3     
+            self.bins[bid].kValTolerance = 3
+            bins_changed[bid] = 1       
+        
+        super_round = 1
         while True:
             sr_contigs_reassigned = 0
             sr_bins_removed = 0
@@ -1033,14 +1272,16 @@ class BinManager:
                 # this is used in the Grubbs testing
                 bids = self.getBids()
                 for bid in bids:
-                    bin_c_lengths[bid] = []
-                    self.bins[bid].makeBinDist(self.PM.transformedCP, 
-                                               self.PM.averageCoverages, 
-                                               self.PM.kmerVals, 
-                                               self.PM.contigLengths)
-                    for row_index in self.bins[bid].rowIndices:
-                        bin_c_lengths[bid].append(self.PM.contigLengths[row_index])
+                    if bid in bins_changed:
+                        bin_c_lengths[bid] = []
+                        self.bins[bid].makeBinDist(self.PM.transformedCP, 
+                                                   self.PM.averageCoverages, 
+                                                   self.PM.kmerVals, 
+                                                   self.PM.contigLengths)
+                        for row_index in self.bins[bid].rowIndices:
+                            bin_c_lengths[bid].append(self.PM.contigLengths[row_index])
                 
+                bins_changed = {}
                 unstables = {}  # bins we destabilize by assigning contigs TO them
                 num_done_now = 0
                 for bid in bids:
@@ -1056,7 +1297,18 @@ class BinManager:
                     else:
                         stable = True   # stable till proven guilty
                         for row_index in bin.rowIndices:
-                            (assigned_bid, neighbour_list) = self.getClosestBID(row_index, search_tree, tdm, neighbourList=neighbour_list, verbose=verbose, k=2*bin.binSize-1)
+                            tdm_index = np_min([int(self.PM.kmerVals[row_index]*10),9])
+                            (assigned_bid,
+                             neighbour_lists[tdm_index],
+                             scores
+                             ) = self.getClosestBID(ri_2_gt_lookup[tdm_index][row_index],
+                                                    graduated_searches[tdm_index],
+                                                    graduated_tdms[tdm_index],
+                                                    gt_2_ri_lookup[tdm_index],
+                                                    neighbourList=neighbour_lists[tdm_index],
+                                                    verbose=verbose,
+                                                    k=2*bin.binSize-1
+                                                    )
                             assign_to_new = True    # track this var to see if we will assign or not
                             # make sure we are reassigning
                             if assigned_bid == bid:
@@ -1070,14 +1322,14 @@ class BinManager:
                                 if assigned_bid in all_moved_RIs[row_index]:
                                     assign_to_new = False
                             
-                            # we have found the clostest based only on coverage 
+                            # we have found the closest based only on coverage 
                             # profile. We need to check and see if the kmersig makes
                             # any sense
                             elif not self.bins[assigned_bid].withinLimits(self.PM.kmerVals,
                                                                           self.PM.averageCoverages,
                                                                           row_index):
                                 assign_to_new = False
-                            
+                                
                             if assign_to_new:
                                 # we are assigning it to a new bid
                                 stable = False
@@ -1096,6 +1348,10 @@ class BinManager:
                                         all_moved_RIs[row_index][bid] = 1
                                 else:
                                     all_moved_RIs[row_index] = {bid: 1}
+                                
+                                bins_changed[bid] = 1
+                                bins_changed[assigned_bid] = 1
+                                
                             else:
                                 assigned_bid = bid
                             

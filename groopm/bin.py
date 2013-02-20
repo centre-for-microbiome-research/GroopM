@@ -72,6 +72,18 @@ np.seterr(all='raise')
 ###############################################################################
 ###############################################################################
 ###############################################################################
+# lookup for calculating overlaps
+GMolapTable = {(1,0,2,3): (True, 2, 0),
+               (0,1,3,2): (True, 3, 1),
+               (0,1,2,3): (True, 2, 1),
+               (1,0,3,2): (True, 3, 0),
+               (0,2,1,3): (False, None, None),
+               (1,3,0,2): (False, None, None)}
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
 
 class Bin:
     """Class for managing collections of contigs
@@ -107,6 +119,8 @@ class Bin:
         self.kValStdev = 0.0
         self.kValUpperLimit = 0.0
         self.kValLowerLimit = 0.0
+        self.lowestK = 0.0
+        self.highestK = 0.0
 
 #------------------------------------------------------------------------------
 # Tools used for comparing / condensing 
@@ -141,7 +155,7 @@ class Bin:
         This is the norm of the vector containing z distances for both profiles
         """
         #print self.covStdevs, self.binSize
-        covZ = np.mean(np.abs(transformedCP - self.covMeans)/self.covStdevs)
+        covZ = np.abs(np.mean(np.abs(transformedCP - self.covMeans)/self.covStdevs))
         merZ = np.abs(kmerVal - self.kValMean)/self.kValStdev 
         return (covZ,merZ)
 
@@ -184,20 +198,6 @@ class Bin:
             
         # fix the stats on our bin
         self.makeBinDist(transformedCP, averageCoverages, kmerVals, contigLengths)
-
-    def identifyOutliers(self, averageCoverages, kmerVals):
-        """identify and remove outliers
-        
-        Assume bin dist has been made
-        """
-        outliers = []
-        (c_lower_cut, c_upper_cut, k_lower_cut, k_upper_cut) = self.makeOutlierCutoffs(averageCoverages, kmerVals)
-        for row_index in self.rowIndices:
-            if(averageCoverages[row_index] > c_upper_cut or averageCoverages[row_index] < c_lower_cut):
-                outliers.append(row_index)
-            elif(kmerVals[row_index] > k_upper_cut or kmerVals[row_index] < k_lower_cut):
-                outliers.append(row_index)
-        return outliers
         
 #------------------------------------------------------------------------------
 # Stats and properties 
@@ -234,8 +234,8 @@ class Bin:
         self.kValStdev = np.std(kvals)
 
         cvals = self.getAverageCoverageDist(averageCoverages)
-        self.cValMean = np.mean(cvals)
-        self.cValStdev = np.std(cvals)
+        self.cValMean = np.around(np.mean(cvals), decimals=3)
+        self.cValStdev = np.around(np.std(cvals), decimals=3)
 
         # work out the total size
         self.totalBP = sum([contigLengths[i] for i in self.rowIndices])
@@ -243,30 +243,6 @@ class Bin:
         # set the acceptance ranges
         self.makeLimits(covTol=covTol, merTol=merTol)
 
-    def makeOutlierCutoffs(self, averageCoverages, kmerVals):
-        """Work out cutoff values for detecting outliers"""
-        g = 2.2
-        kvals = np.array(sorted([kmerVals[i] for i in self.rowIndices]))
-        k_median = np.median(kvals)
-        k_lower = [kvals[i] for i in range(len(kvals)) if kvals[i] <= k_median]
-        k_upper = [kvals[i] for i in range(len(kvals)) if kvals[i] >= k_median]
-        kq1 = np.median(k_lower)
-        kq3 = np.median(k_upper)
-        k_diff = kq3 - kq1 
-        k_lower_cut = kq1 - (g * k_diff)
-        k_upper_cut = kq3 + (g * k_diff)
-        
-        cvals = np.array(sorted([averageCoverages[i] for i in self.rowIndices]))
-        c_median = np.median(cvals)
-        c_lower = [cvals[i] for i in range(len(cvals)) if cvals[i] <= c_median]
-        c_upper = [cvals[i] for i in range(len(cvals)) if cvals[i] >= c_median]
-        cq1 = np.median(c_lower)
-        cq3 = np.median(c_upper)
-        c_diff = cq3 - cq1 
-        c_lower_cut = cq1 - (g * c_diff)
-        c_upper_cut = cq3 + (g * c_diff)
-        return (c_lower_cut, c_upper_cut, k_lower_cut, k_upper_cut)
-        
     def makeLimits(self, covTol=-1, merTol=-1):
         """Set inclusion limits based on mean, variance and tolerance settings"""
         if(-1 == covTol):
@@ -401,6 +377,21 @@ class Bin:
         self.makeBinDist(transformedCP, averageCoverages, kmerVals, contigLengths)
         self.binSize = self.rowIndices.shape[0]
         return (num_recruited, ris_seen)
+
+    def overlappingKVals(self, kmerVals, bin):
+        """Do the kmer val ranges of these bins overlap?"""
+        trial_list = [self.lowestK, bin.lowestK, self.highestK, bin.highestK]
+        lookup = tuple(np.argsort(trial_list))
+        try:
+            (olap, A, B) = GMolapTable[lookup]
+            if olap: # one bin contains the other
+                olap_amount = float(trial_list[A] - trial_list[B])
+                return (True, olap_amount/float(self.highestK - self.lowestK), olap_amount/float(bin.highestK - bin.lowestK))
+            else:
+                return (False, 0, 0)
+        except KeyError:
+            print "OI", self.id, bin.id, lookup
+        
     
     def withinLimits(self, kmerVals, averageCoverages, rowIndex, verbose=False):
         """Is the contig within the limits of this bin?"""
