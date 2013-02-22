@@ -65,7 +65,7 @@ class EllipsoidTool:
     """Some stuff for playing with ellipsoids"""
     def __init__(self): pass
     
-    def getMinVolEllipse(self, P=None, tolerance=0.01):
+    def getMinVolEllipse(self, P, tolerance=0.01, retA=False):
         """ Find the minimum volume ellipsoid which holds all the points
         
         Based on work by Nima Moshtagh
@@ -95,9 +95,27 @@ class EllipsoidTool:
         u = np.array([1.0 / N for i in range(N)]) # first iteration
     
         # Khachiyan Algorithm
+        singular = False
         while err > tolerance:
             V = np.dot(Q, np.dot(np.diag(u), QT))
-            M = np.diag(np.dot(QT , np.dot(linalg.inv(V), Q)))    # M the diagonal vector of an NxN matrix
+            try:
+                M = np.diag(np.dot(QT , np.dot(linalg.inv(V), Q)))    # M the diagonal vector of an NxN matrix
+            except linalg.linalg.LinAlgError:
+                # most likely a singular matrix
+                # permute the values a little and then we'll try again
+                from random import random, randint
+                PP = np.copy(P)
+                for i in range(N):
+                    if randint(0,3) == 0:
+                        j = randint(0,2)
+                        if randint(0,1) != 0:
+                            PP[i,j] += random()
+                        else:
+                            PP[i,j] -= random()
+                (A, center, radii, rotation) = self.getMinVolEllipse(PP, retA=True)
+                singular = True
+                break
+                
             j = np.argmax(M)
             maximum = M[j]
             step_size = (maximum - d - 1.0) / ((d + 1.0) * (maximum - 1.0))
@@ -106,26 +124,103 @@ class EllipsoidTool:
             err = np.linalg.norm(new_u - u)
             u = new_u
 
-        # center of the ellipse 
-        center = np.dot(P.T, u)
+        if not singular:
+            # center of the ellipse 
+            center = np.dot(P.T, u)
+        
+            # the A matrix for the ellipse
+            A = linalg.inv(
+                           np.dot(P.T, np.dot(np.diag(u), P)) - 
+                           np.array([[a * b for b in center] for a in center])
+                           ) / d
     
-        # the A matrix for the ellipse
-        A = linalg.inv(
-                       np.dot(P.T, np.dot(np.diag(u), P)) - 
-                       np.array([[a * b for b in center] for a in center])
-                       ) / d
-                       
         # Get the values we'd like to return
         U, s, rotation = linalg.svd(A)
         radii = 1.0/np.sqrt(s)
         
-        return (center, radii, rotation)
+        if retA:
+            return (A, center, radii, rotation)
+        else:
+            return (center, radii, rotation)
 
     def getEllipsoidVolume(self, radii):
         """Calculate the volume of the blob"""
-        return 0.75*np.pi*radii[0]*radii[1]*radii[2]
+        if len(radii) == 2:
+            return np.pi*radii[0]*radii[1]
+        else:
+            return 0.75*np.pi*radii[0]*radii[1]*radii[2]
 
-    def plotEllipsoid(self, center, radii, rotation, ax=None, plotAxes=False, cageColor='b', cageAlpha=0.2):
+    def doesIntersect3D(self, A, cA, B, cB):
+        """Rough test to see if ellipsoids A and B intersect
+        
+        Not perfect, should work for "well overlapping" ones
+        We assume that the volume of B is less than (or =) volume of A
+        """
+        #To make things simple, we just check if the points on a wire frame of
+        #B lie within A
+        U, s, rotation = linalg.svd(B)
+        try:
+            radii_B = 1.0/np.sqrt(s)
+        except FloatingPointError:
+            # the given matrix B was made on a group of only one point
+            # we need only check if the one point (the center)
+            # in in A
+            p_c = cB - cA
+            return np.dot(p_c.T, np.dot(A, p_c)) <= 1
+        
+        u = np.linspace(0.0, 2.0 * np.pi, 100)
+        v = np.linspace(0.0, np.pi, 100)
+        # cartesian coordinates that correspond to the spherical angles:
+        x = radii_B[0] * np.outer(np.cos(u), np.sin(v))
+        y = radii_B[1] * np.outer(np.sin(u), np.sin(v))
+        z = radii_B[2] * np.outer(np.ones_like(u), np.cos(v))
+        # rotate accordingly
+        for i in range(len(x)):
+            for j in range(len(x)):
+                # make a point on the wireFrame
+                wire_point = np.dot([x[i,j],y[i,j],z[i,j]], rotation) + cB
+                # test if it's inside
+                # work out (p-c)'A(p-c) and see if it's <= 1
+                p_c = wire_point - cA
+                if np.dot(p_c.T, np.dot(A, p_c)) <= 1:
+                    return True
+        return False
+
+    def doesIntersect2D(self, A, cA, B, cB):
+        """Rough test to see if ellipsoids A and B intersect
+        
+        Not perfect, should work for "well overlapping" ones
+        We assume that the volume of B is less than (or =) volume of A
+        """
+        #To make things simple, we just check if the points on a wire frame of
+        #B lie within A
+        U, s, rotation = linalg.svd(B)
+        try:
+            radii_B = 1.0/np.sqrt(s)
+        except FloatingPointError:
+            # the given matrix B was made on a group of only one point
+            # we need only check if the one point (the center)
+            # in in A
+            p_c = cB - cA
+            return np.dot(p_c.T, np.dot(A, p_c)) <= 1
+
+        u = np.linspace(0.0, 2.0 * np.pi, 100)
+
+        # cartesian coordinates that correspond to the spherical angles:
+        x = radii_B[0] * np.cos(u)
+        y = radii_B[1] * np.sin(u)
+        # rotate accordingly
+        for i in range(len(x)):
+            # make a point on the wireFrame
+            edge_point = np.dot([x[i],y[i]], rotation) + cB
+            # test if it's inside
+            # work out (p-c)'A(p-c) and see if it's <= 1
+            p_c = edge_point - cA
+            if np.dot(p_c.T, np.dot(A, p_c)) <= 1:
+                return True
+        return False
+
+    def plotEllipsoid(self, center, radii, rotation, ax=None, plotAxes=False, cageColor='b', cageAlpha=0.2, label=None):
         """Plot an ellipsoid"""
         make_ax = ax == None
         if make_ax:
@@ -163,6 +258,61 @@ class EllipsoidTool:
     
         # plot ellipsoid
         ax.plot_wireframe(x, y, z,  rstride=4, cstride=4, color=cageColor, alpha=cageAlpha)
+
+        if label is not None:        
+            ax.text(center[0], 
+                    center[1], 
+                    center[2], 
+                    label, 
+                    color=[0,0,0],
+                    weight='bold'
+                    )
+        
+        if make_ax:
+            plt.show()
+            plt.close(fig)
+            del fig
+
+    def plotEllipse(self, center, radii, rotation, ax=None, plotAxes=False, cageColor='b', cageAlpha=0.2, label=None):
+        """plot an ellipse"""
+        make_ax = ax == None
+        if make_ax:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            
+        u = np.linspace(0.0, 2.0 * np.pi, 100)
+        
+        # cartesian coordinates that correspond to the spherical angles:
+        x = radii[0] * np.cos(u)
+        y = radii[1] * np.sin(u)
+        
+        # rotate accordingly
+        for i in range(len(x)):
+            [x[i],y[i]] = np.dot([x[i],y[i]], rotation) + center
+    
+        if plotAxes:
+            # make some purdy axes
+            axes = np.array([[radii[0],0.0],[0.0,radii[1]]])
+            # rotate accordingly
+            for i in range(len(axes)):
+                axes[i] = np.dot(axes[i], rotation)
+    
+            # plot axes
+            for p in axes:
+                X3 = np.linspace(-p[0], p[0], 100) + center[0]
+                Y3 = np.linspace(-p[1], p[1], 100) + center[1]
+                ax.plot(X3, Y3, color=cageColor)
+    
+        # plot ellipsoid
+        ax.plot(x, y, color=cageColor, alpha=cageAlpha)
+
+        if label is not None:        
+            ax.text(center[0], 
+                    center[1], 
+                    label, 
+                    color=[0,0,0],
+                    weight='bold'
+                    )
         
         if make_ax:
             plt.show()

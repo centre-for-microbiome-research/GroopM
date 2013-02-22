@@ -154,9 +154,8 @@ class ClusterEngine:
         print "    %s" % timer.getTimeStamp()
 
         # condense cores
-        print "Refine cores [begin: %d]" % len(self.BM.bins)
-        #self.BM.plotBins(FNPrefix="BEFORE_OB")
-        self.BM.autoRefineBins(iterate=True)
+        #print "Refine cores [begin: %d]" % len(self.BM.bins)
+        #self.BM.autoRefineBins(iterate=True)
         
         num_binned = len(self.PM.binnedRowIndicies.keys())
         perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
@@ -225,7 +224,7 @@ class ClusterEngine:
 
                         # Plot?
                         if(self.debugPlots):          
-                            bin.plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName="Image_"+str(self.imageCounter))
+                            bin.plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, self.PM.contigLengths, fileName="Image_"+str(self.imageCounter))
                             self.imageCounter += 1
 
                         # recruit more contigs
@@ -247,7 +246,7 @@ class ClusterEngine:
                             bids_made.append(bin.id)
                             num_bins += 1
                             if(self.debugPlots):          
-                                bin.plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName="P_BIN_%d"%(bin.id))
+                                bin.plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, self.PM.contigLengths, fileName="P_BIN_%d"%(bin.id))
 
                             # append this bins list of mapped rowIndices to the main list
                             self.updatePostBin(bin)

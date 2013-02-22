@@ -130,6 +130,7 @@ class GroopMOptionsParser():
                                plotter=plotter,
                                shuffle=shuffle,
                                links=links,
+                               ignoreRanges=options.no_transform
                                )
 
         elif(options.subparser_name == 'recruit'):
@@ -232,8 +233,8 @@ class GroopMOptionsParser():
             bids = []
             if options.bids is not None:
                 bids = options.bids
-            BM.loadBins(makeBins=True, silent=False, bids=bids)
-            BM.plotBins(FNPrefix=options.tag, sideBySide=options.sidebyside, folder=options.folder)
+            BM.loadBins(makeBins=True, silent=False, bids=bids, loadContigNames=False)
+            BM.plotBins(FNPrefix=options.tag, sideBySide=options.sidebyside, plotEllipsoid=True, folder=options.folder)
             
         return 0
     

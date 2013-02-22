@@ -66,6 +66,8 @@ from scipy.stats import kstest
 
 import time
 
+from ellipsoid import EllipsoidTool
+
 np.seterr(all='raise')
 
 ###############################################################################
@@ -270,11 +272,7 @@ class Bin:
 
     def getCentroidStats(self, profile):
         """Calculate the centroids of the profile"""
-        working_list = np.zeros((self.binSize, np.size(profile[0])))
-        outer_index = 0
-        for row_index in self.rowIndices:
-            working_list[outer_index] = profile[row_index]
-            outer_index += 1
+        working_list = np.array([profile[i] for i in self.rowIndices])
         # return the mean and stdev 
         # we divide by std so we need to make sure it's never 0
         tmp_stds = np.std(working_list,axis=0)
@@ -313,7 +311,53 @@ class Bin:
         if centroid is None:
             centroid = self.covMeans
         return np.linalg.norm(Csig-centroid)
+
+    def getBoundingEllipsoid(self, transformedCP, ET=None, retA=False):
+        """Return the minimum bounding ellipsoid
         
+        returns (center, radii, rotation) or (A, center, radii, rotation) 
+        """
+        bin_points = np.array([transformedCP[i] for i in self.rowIndices])
+        if len(bin_points) > 1:
+            if ET is None:
+                ET = EllipsoidTool()
+            try:
+                return ET.getMinVolEllipse(bin_points, retA=retA)
+            except:
+                print bin_points
+                raise
+        else: # minimum bounding elipse of a point is 0 
+            if retA:
+                return (np.zeros((3,3)), transformedCP[self.rowIndices[0]], np.zeros((3)), np.eye(3))
+            else:
+                return (transformedCP[self.rowIndices[0]], np.zeros((3)), np.eye(3))
+
+    def getBoundingCEllipsoidVol(self, transformedCP, ET=None, retA=False):
+        """Return the volume of the minimum bounding coverage ellipsoid"""
+        if ET is None:
+            ET = EllipsoidTool()
+        (A, center, radii, rotation) = self.getBoundingEllipsoid(transformedCP, ET=ET, retA=True)
+        if retA:
+            return ((A, center), ET.getEllipsoidVolume(radii))
+        else:
+            return ET.getEllipsoidVolume(radii)
+        
+    def getBoundingKEllipseArea(self, KPCAs, ET=None, retA=False):
+        """Return the area of the minimum bounding kmer PCA ellipse"""
+        if len(KPCAs) > 1:
+            if ET is None:
+                ET = EllipsoidTool()
+            (A, center, radii, rotation) = ET.getMinVolEllipse(KPCAs, retA=True)
+            if retA:
+                return ((A, center), ET.getEllipsoidVolume(radii))
+            else:
+                return ET.getEllipsoidVolume(radii)
+        else: # minimum bounding ellipse of a point is 0 
+            if retA:
+                return ((np.zeros((2,2)), KPCAs[0]), 0)
+            else:
+                return 0
+            
 #------------------------------------------------------------------------------
 # Grow the bin 
     
@@ -380,6 +424,22 @@ class Bin:
 
     def overlappingKVals(self, kmerVals, bin):
         """Do the kmer val ranges of these bins overlap?"""
+        
+        # single contig bins hurt everyone!
+        if self.lowestK == self.highestK:
+            if(bin.lowestK <= self.highestK and
+               bin.highestK >= self.highestK):
+                return (True, 1.0, 0.0)
+            else:
+                return (False,0,0)
+
+        if bin.lowestK == bin.highestK:
+            if(self.lowestK <= bin.highestK and
+               self.highestK >= bin.highestK):
+                return (True, 0.0, 1.0)
+            else:
+                return (False,0,0)
+        
         trial_list = [self.lowestK, bin.lowestK, self.highestK, bin.highestK]
         lookup = tuple(np.argsort(trial_list))
         try:
@@ -482,10 +542,10 @@ class Bin:
         del fig
             
         
-    def plotBin(self, transformedCP, contigColours, kmerVals, fileName=""):
+    def plotBin(self, transformedCP, contigColours, kmerVals, contigLengths, fileName="", ET=None):
         """Plot a single bin"""
         fig = plt.figure()
-        title = self.plotOnAx(fig, 1, 1, 1, transformedCP, contigColours, fileName=fileName)
+        title = self.plotOnFig(fig, 1, 1, 1, transformedCP, contigColours, contigLengths, fileName=fileName, ET=ET)
         plt.title(title)
         if(fileName != ""):
             try:
@@ -503,24 +563,35 @@ class Bin:
         plt.close(fig)
         del fig
 
-    def plotOnAx(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigColours, fileName=""):
-        """Plot a bin in a given subplot"""
+    def plotOnFig(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigColours, contigLengths, fileName="", ET=None):
+        ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
+        return self.plotOnAx(ax, transformedCP, contigColours, contigLengths, fileName=fileName, ET=ET)
+        
+    def plotOnAx(self, ax, transformedCP, contigColours, contigLengths, fileName="", plotCentroid=True, ET=None, printID=False):
+        """Plot a bin in a given subplot
+        
+        If you pass through an EllipsoidTool then it will plot the minimum bounding ellipsoid as well!
+        """
         disp_vals = np.array([])
         disp_cols = np.array([])
+        disp_lens = np.array([])
         num_points = 0
         for row_index in self.rowIndices:
             num_points += 1
             disp_vals = np.append(disp_vals, transformedCP[row_index])
             disp_cols = np.append(disp_cols, contigColours[row_index])
+            disp_lens = np.append(disp_lens, np.sqrt(contigLengths[row_index]))
 
         # make a black mark at the max values
         self.makeLimits()
-        px = int(self.covMeans[0])
-        py = int(self.covMeans[1])
-        pz = int(self.covMeans[2])
-        num_points += 1
-        disp_vals = np.append(disp_vals, [px,py,pz])
-        disp_cols = np.append(disp_cols, colorsys.hsv_to_rgb(0,0,0))
+        px = self.covMeans[0]
+        py = self.covMeans[1]
+        pz = self.covMeans[2]
+        if plotCentroid and printID == False:
+            num_points += 1
+            disp_vals = np.append(disp_vals, [px,py,pz])
+            disp_cols = np.append(disp_cols, colorsys.hsv_to_rgb(0,0,0))
+            disp_lens = np.append(disp_lens, 100)
         
         # fix these
         self.makeLimits()
@@ -529,16 +600,49 @@ class Bin:
         disp_vals = np.reshape(disp_vals, (num_points, 3))
         disp_cols = np.reshape(disp_cols, (num_points, 3))
 
-        ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
-        ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors=disp_cols, c=disp_cols, marker='.')
+        ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors=disp_cols, c=disp_cols, s=disp_lens, marker='.')
+        
+        if ET != None:
+            (center, radii, rotation) = self.getBoundingEllipsoid(transformedCP, ET=ET)
+            centroid_colour = np.mean([contigColours[row_index] for row_index in self.rowIndices],
+                                      axis=0)
+            if printID:
+                ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_colour, label=self.id)
+            else:
+                ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_colour)
+        
         from locale import format, setlocale, LC_ALL # purdy commas
         setlocale(LC_ALL, "")
-        title = str.join(" ", ["Bin:",str(self.id),":",str(self.binSize),"contigs : ",format('%d', self.totalBP, True),"BP\n",
-                               "Coverage centroid: (",str(px), str(py), "[",str(self.covLowerLimits[2]),"-",str(self.covUpperLimits[2]),"])\n",
-                               "Kmers: mean: %.4f stdev: %.4f" % (self.kValMean, self.kValStdev),"\n",
-                               
-                               ])
+        title = str.join(" ", ["Bin: %d : %d contigs : %s BP\n" %(self.id,self.binSize,format('%d', self.totalBP, True)),
+                               "Coverage centroid: %d %d [%d -> %d]\n" % (px,py,self.covLowerLimits[2],self.covUpperLimits[2]),
+                               "Kmers: mean: %.4f stdev: %.4f\n" % (self.kValMean, self.kValStdev)]
+                         )
         return title
+
+    def plotMersOnAx(self, ax, kPCA1, kPCA2, contigColours, contigLengths, fileName="", ET=None, printID=False):
+        """Plot a bins kmer sig PCAs in a given subplot
+        
+        If you pass through an EllipsoidTool then it will plot the minimum bounding ellipse as well!
+        """
+        disp_vals = np.array(zip([kPCA1[i] for i in self.rowIndices],
+                                 [kPCA2[i] for i in self.rowIndices]))
+        disp_cols = np.array([contigColours[i] for i in self.rowIndices])
+        disp_lens = np.array([np.sqrt(contigLengths[i]) for i in self.rowIndices])
+
+        # reshape
+        disp_vals = np.reshape(disp_vals, (len(self.rowIndices), 2))
+        disp_cols = np.reshape(disp_cols, (len(self.rowIndices), 3))
+
+        ax.scatter(disp_vals[:,0], disp_vals[:,1], edgecolors=disp_cols, c=disp_cols, s=disp_lens, marker='.')
+        
+        if ET != None:
+            (center, radii, rotation) = ET.getMinVolEllipse(disp_vals)
+            centroid_colour = np.mean([contigColours[row_index] for row_index in self.rowIndices],
+                                      axis=0)
+            if printID:
+                ET.plotEllipse(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_colour, label=self.id)
+            else:
+                ET.plotEllipse(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_colour)
 
     def printBin(self, contigNames, contigLengths, outFormat="summary", separator="\t", stream=sys.stdout):
         """print this bin info in csvformat"""

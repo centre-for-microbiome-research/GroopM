@@ -513,11 +513,12 @@ class BinManager:
                       saveBins=False,
                       plotter=False,
                       shuffle=False,
-                      links=False
+                      links=False,
+                      ignoreRanges=False
                       ):
         """Iterative wrapper for the refine function"""
         if plotter:
-            self.plotterRefineBins()
+            self.plotterRefineBins(ignoreRanges=ignoreRanges)
         if shuffle:
             print "Start automatic bin refinement"
             self.autoRefineBins(iterate=True)
@@ -527,18 +528,19 @@ class BinManager:
             if saveBins:
                 self.saveBins(nuke=True)
 
-    def plotterRefineBins(self):
+    def plotterRefineBins(self, ignoreRanges=False):
         """combine similar bins using 3d plots"""
+        ET = EllipsoidTool()
         self.printRefinePlotterInstructions()
-        self.plotBinIds()
+        self.plotBinIds(ignoreRanges=ignoreRanges)
         continue_merge = True
         while(continue_merge):
             user_option = self.promptOnPlotterRefine()
             if(user_option == 'R'):
-                self.plotBinIds()
+                self.plotBinIds(ignoreRanges=ignoreRanges)
             
             elif(user_option == 'P'):
-                self.plotBinPoints()
+                self.plotBinPoints(ignoreRanges=ignoreRanges)
             
             elif(user_option == 'M'):
                 # merge bins
@@ -552,25 +554,32 @@ class BinManager:
                 krange=0
                 while(not have_range):
                     try:
-                        krange = int(raw_input(" Enter kmer range (0-9):"))
+                        krange = int(raw_input(" Enter kmer range (0-9): "))
                         have_range = True
                     except ValueError:
                         print "You need to enter an integer value!"
-                self.plotBinIds(krange=krange)
+                self.plotBinIds(krange=krange, ignoreRanges=ignoreRanges)
                 
             elif(user_option == 'B'):
-                # print single bin
+                # print subset of bins
                 have_bid = False
+                bids = []
                 while(not have_bid):
+                    have_bid = True
                     try:
-                        bid = int(raw_input(" Enter bid to plot:"))
-                        if bid not in self.bins:
-                            print "ERROR: Bin %d not found!" % bid
+                        usr_bids = raw_input(" Enter bid(s) to plot: ")
+                        bids = [int(i) for i in usr_bids.split(" ")]
+                        if bids == [-1]:
+                            bids = self.getBids()
                         else:
-                            have_bid = True
+                            for bid in bids:
+                                if bid not in self.bins:
+                                    print "ERROR: Bin %d not found!" % bid
+                                    have_bid &= False
                     except ValueError:
                         print "You need to enter an integer value!"
-                self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals)
+
+                self.plotSelectBins(bids, plotMers=True, ET=ET)
                 
             elif(user_option == 'S'):
                 # split bins
@@ -578,7 +587,7 @@ class BinManager:
                 have_parts = False
                 while(not have_bid):
                     try:
-                        bid = int(raw_input(" Enter bid to split:"))
+                        bid = int(raw_input(" Enter bid to split: "))
                         if bid not in self.bins:
                             print "ERROR: Bin %d not found!" % bid
                         else:
@@ -587,14 +596,91 @@ class BinManager:
                         print "You need to enter an integer value!"
                 while(not have_parts):
                     try:
-                        parts = int(raw_input(" Enter number of parts to split into:"))
+                        parts = int(raw_input(" Enter number of parts to split into: "))
                         if(parts < 2):
                             print "ERROR: Need to choose 2 or more parts"
                         else:
                             have_parts = True
                     except ValueError:
                         print "You need to enter an integer value!"
-                self.split(bid, parts, mode='kmer', auto=False, saveBins=True, printInstructions=False)   
+                self.split(bid, parts, mode='kmer', auto=False, saveBins=True, printInstructions=False)
+            elif(user_option == 'V'):
+                """plot in vicinity of a bin"""
+                have_bid = False
+                have_radius = False
+                while(not have_bid):
+                    try:
+                        bid = int(raw_input(" Enter bid of interest: "))
+                        if bid not in self.bins:
+                            print "ERROR: Bin %d not found!" % bid
+                        else:
+                            have_bid = True
+                    except ValueError:
+                        print "You need to enter an integer value!"
+                while(not have_radius):
+                    try:
+                        usr_radius = raw_input(" Enter radius to select from [default 100]: ")
+                        if usr_radius == "":
+                            radius = 100
+                        else:
+                            radius = int(usr_radius)
+                        have_radius = True
+                    except ValueError:
+                        print "You need to enter an integer value!"
+                
+                # we need to find all points in an area about the centroid of
+                # this bin
+                self.bins[bid].makeBinDist(self.PM.transformedCP,
+                                           self.PM.averageCoverages,
+                                           self.PM.kmerVals,
+                                           self.PM.contigLengths)
+                # now go point shopping
+                disp_vals = np_array([])
+                disp_cols = np_array([])
+                disp_lens = np_array([])
+                num_points = 0
+                seen_bids = {}
+                for row_index in range(len(self.PM.indices)):
+                    if np_norm(self.PM.transformedCP[row_index] - 
+                              self.bins[bid].covMeans) <= 100:
+                        num_points += 1
+                        disp_vals = np_append(disp_vals, self.PM.transformedCP[row_index])
+                        disp_lens = np_append(disp_lens, np_sqrt(self.PM.contigLengths[row_index]))
+                        disp_cols = np_append(disp_cols, self.PM.contigColours[row_index])
+                        try:
+                            seen_bids[self.PM.binIds[row_index]].append(1)
+                        except KeyError:
+                            seen_bids[self.PM.binIds[row_index]] = [1]
+                            
+                # reshape
+                disp_vals = np_reshape(disp_vals, (num_points, 3))
+                disp_cols = np_reshape(disp_cols, (num_points, 3))
+                
+                print " Points are located in bins:"
+                for seen_bid in seen_bids:
+                    print "    %d - %d occurances" % (seen_bid, len(seen_bids[seen_bid]))
+                
+                fig = plt.figure()
+                ax = fig.add_subplot(1,1,1, projection='3d')
+                ax.scatter(disp_vals[:,0],
+                           disp_vals[:,1],
+                           disp_vals[:,2],
+                           edgecolors=disp_cols,
+                           c=disp_cols,
+                           s=disp_lens,
+                           marker='.')
+                self.bins[bid].plotOnAx(ax,
+                               self.PM.transformedCP,
+                               self.PM.contigColours,
+                               self.PM.contigLengths,
+                               ET=ET)
+                try:
+                    plt.show()
+                except:
+                    print "Error showing image:", sys.exc_info()[0]
+                    raise
+                plt.close(fig)
+                del fig
             else:
                 return
         return
@@ -1004,68 +1090,41 @@ class BinManager:
         
         return len(mergers)
 
-    def autoRefineBins(self,
-                       iterate=False,
-                       mergeObvious=True,
-                       removeDuds=True,
-                       nukeOutliers=True,
-                       verbose=False,
-                       plotAfterOB=True):
-        """Automagically refine bins"""
 
-#-----
-# Prelim culling
+    def mergeObvious(self, verbose=False):
+        """Merge bins which are just crying out to be merged!"""
         
-        # identify and remove outlier bins
-        if nukeOutliers:
-            self.nukeOutliers()
-
-#-----
-# Make search trees
-        # search-based data structures
-        neighbour_lists = {} # save looking things up a 1,000,000 times
-        graduated_tdms = {}
-        graduated_searches = {}
-        gt_2_ri_lookup = {}
-        ri_2_gt_lookup = {}
-        
-        # make 10 separate search trees based on kmer sigs
-        for i in range(10):
-            graduated_tdms[i] = []
-            gt_2_ri_lookup[i] = {}
-            ri_2_gt_lookup[i] = {}
-            neighbour_lists[i] = {}
-            
-        for row_index in range(np_size(self.PM.indices)):
-            if self.PM.binIds[row_index] != 0:
-                tdm_index = int(self.PM.kmerVals[row_index]*10)
-                lower = np_max([tdm_index-1, 0])
-                upper = np_min([tdm_index+2, 10])
-                for i in range(lower, upper):
-                    gt_index = len(graduated_tdms[i])
-                    ri_2_gt_lookup[i][row_index] = gt_index 
-                    gt_2_ri_lookup[i][gt_index] = row_index 
-                    graduated_tdms[i].append(self.PM.transformedCP[row_index])
-
-        for i in range(10):
-            #print i, len(graduated_tdms[i])
-            graduated_searches[i] = kdt(graduated_tdms[i])
-
-        # pay attention to contig lengths when including in bins
+        print "    Making obvious mergers"
+        # pay attention to contig lengths when inclusing in bins
         # use grubbs test
         GT = GrubbsTester() # we need to perform grubbs test before inclusion
-        
+
+        # Use overlapping ellipsoids to determine co-locality        
+        ET = EllipsoidTool()
+
+        tdm = []                # these are used in the neighbor search
+        bid_2_tdm_index = {} 
+        tdm_index_2_bid = {} 
+
+        bids = self.getBids()
+        K = 10                   # number of neighbours to test
+        if K > len(bids):
+            K = len(bids)
+
         # keep track of what gets merged where
         merged_bins = {}        # oldId => newId
         processed_pairs = {}    # keep track of pairs we've analysed
-        bin_c_lengths = {}
+        bin_c_lengths = {}      # bid => [len,len,...]
+        bin_c_ellipsoid_volumes = {}    # volume of the minimum bounding COVERAGE ellipsoid
+        bin_c_ellipsoids = {}           # the matrix A representing the bins COVERAGE ellipsiod
+        bin_k_ellipse_areas = {}        # area of the minimum bounding KMER ellipse
+        bin_k_ellipses = {}             # the matrix A representing the bins KMER ellipse
 
-        bids = self.getBids()
+#-----
+# PREP DATA STRUCTURES
 
-        ET = EllipsoidTool()
-
+        # sort all contigs in ascending order of kSigPC
         sorted_Ks = np_argsort(self.PM.kmerVals)
-        bin_e_volumes = {}
         seen_bids = {}
         index = 0
         for RI in sorted_Ks:
@@ -1075,89 +1134,139 @@ class BinManager:
                 seen_bids[self.PM.binIds[RI]] = [index, index]
             index += 1 
 
+        index = 0
         for bid in bids:
-            processed_pairs[self.makeBidKey(bid, bid)] = True            
+            bin = self.bins[bid]
+            bin.makeBinDist(self.PM.transformedCP,
+                            self.PM.averageCoverages, 
+                            self.PM.kmerVals, 
+                            self.PM.contigLengths,
+                            merTol=2.5)  # make the merTol a little larger...
+            # use a 4 dimensional vector [cov, cov, cov, mer]
+            tdm.append(np_append(bin.covMeans, [1000*bin.kValMean]))
 
-            # work out the volume of the minimum bounding ellipsoid
-            bin_points = np_array([self.PM.transformedCP[i] for i in self.bins[bid].rowIndices])
-            (center, radii, rotation) = ET.getMinVolEllipse(bin_points)
-            bin_e_volumes[bid] = ET.getEllipsoidVolume(radii)
-            self.bins[bid].covTolerance = 3
-            self.bins[bid].kValTolerance = 3
-            self.bins[bid].lowestK = seen_bids[bid][0]
-            self.bins[bid].highestK = seen_bids[bid][1]
-            #print bid, seen_bids[bid]
-            self.bins[bid].makeBinDist(self.PM.transformedCP, 
-                                       self.PM.averageCoverages, 
-                                       self.PM.kmerVals, 
-                                       self.PM.contigLengths)
-            bin_c_lengths[bid] = [self.PM.contigLengths[row_index] for row_index in self.bins[bid].rowIndices]
+            # work out the volume of the minimum bounding coverage ellipsoid and kmer ellipse
+            (bin_c_ellipsoids[bid], bin_c_ellipsoid_volumes[bid]) = bin.getBoundingCEllipsoidVol(self.PM.transformedCP, ET=ET, retA=True)
+            BP = np_array(zip([self.PM.kmerVals[i] for i in bin.rowIndices],
+                              [self.PM.kmerVals2[i] for i in bin.rowIndices])
+                          )
+            (bin_k_ellipses[bid], bin_k_ellipse_areas[bid]) = bin.getBoundingKEllipseArea(BP,
+                                                                                          ET=ET,
+                                                                                          retA=True)
+            # store the start / end location of this guy on the kmer scale
+            bin.lowestK = seen_bids[bid][0]
+            bin.highestK = seen_bids[bid][1]
 
+            bin_c_lengths[bid] = [self.PM.contigLengths[row_index] for row_index in bin.rowIndices]
+            
+            bid_2_tdm_index[bid] = index
+            tdm_index_2_bid[index] = bid
+            index += 1
+
+            # we will not process any pair twice.
+            # we also wish to avoid checking if a bin will merge with itself        
+            processed_pairs[self.makeBidKey(bid, bid)] = True
+
+#-----
+# ALL Vs ALL
+        
+        # make a search tree
+        search_tree = kdt(tdm)
+        tdm = np_array(tdm)
         for bid in bids:
-            # get the bin daisy chain
+            #verbose = bid == 23 or bid == 24 or bid == 48 or bid == 49 or bid == 50 or bid == 30 or bid == 66
+
+            # get the base bid and trace the chain
+            # up through mergers...
             merged_base_bid = bid
+            base_bid = bid
             while merged_base_bid in merged_bins:
                 merged_base_bid = merged_bins[merged_base_bid]
+            base_bin = self.bins[base_bid]
             
-            print "BID: %d" % bid
-            bin = self.getBin(bid)
-            bid_totals = {}
-            totals = 0.0
-#-----
-# GET CLOSEST BINS
+            # get the K closest bins
+            neighbor_list = [tdm_index_2_bid[i] for i in search_tree.query(tdm[bid_2_tdm_index[bid]],k=K)[1]]
 
-            for row_index in bin.rowIndices:
-                tdm_index = np_min([int(self.PM.kmerVals[row_index]*10),9])
-                (assigned_bid,
-                 neighbour_lists[tdm_index],
-                 scores
-                 ) = self.getClosestBID(ri_2_gt_lookup[tdm_index][row_index],
-                                        graduated_searches[tdm_index],
-                                        graduated_tdms[tdm_index],
-                                        gt_2_ri_lookup[tdm_index],
-                                        neighbourList=neighbour_lists[tdm_index],
-                                        verbose=verbose,
-                                        k=2*bin.binSize-1
-                                        )
-                for sbid in scores:
-                    try:
-                       bid_totals[sbid] += scores[sbid]
-                    except KeyError:
-                       bid_totals[sbid] = scores[sbid]
-                    totals += scores[sbid]                            
+            if verbose:
+                print "++++++++++"
+                print bid, neighbor_list
 
-            tmp = bid_totals.items()
-            tmp.sort(key=lambda x: x[1], reverse=True)
-            for (sbid,others) in tmp:
-#-----
-# TIME WASTERS
-                # process each BID pair once only (takes care of self comparisons too!)
-                if self.makeBidKey(bid, sbid) in processed_pairs:
-                    continue
-                processed_pairs[self.makeBidKey(bid, sbid)] = True
+            # test each neighbor in turn
+            for i in range(1,K):
+                # get the query bid and trace the chain
+                # up through mergers...
+                query_bid = neighbor_list[i]
+                
+                #verbose = base_bid == 23 and query_bid == 24 or base_bid == 48 and query_bid == 49 or base_bid == 48 and query_bid == 50 or base_bid == 49 and query_bid == 50 or base_bid == 30 and query_bid == 66
+                
 
-                # get the daisy chain of this query bid
-                merged_query_bid = sbid
+
+                merged_query_bid = query_bid
                 while merged_query_bid in merged_bins:
                     merged_query_bid = merged_bins[merged_query_bid]
-
-                # no point self comparing
-                if merged_query_bid != merged_base_bid:
-                    continue
-#-----
-# COVERAGE OVERLAP
-                # we only want to check out guys who have at least 
-                # some overlap
-                perc = float(np_sum(others))/totals
-                if perc < 0.01:
-                    continue
-#-----
-# KMER OVERLAP
                 
-                # check to see if the kmer values overlap sufficiently or not
-                olap_amounts = bin.overlappingKVals(self.PM.kmerVals, self.bins[sbid])
-                if not (olap_amounts[0] and (olap_amounts[1] > 0.4 or olap_amounts[2] > 0.4)):
+                if verbose:
+                    print "++++++++++"
+                    print base_bid, query_bid, merged_base_bid, merged_query_bid 
+#-----
+# TIME WASTERS
+                    
+                # process each BID pair once only (takes care of self comparisons too!)
+                seen_key = self.makeBidKey(base_bid, query_bid)
+                if(seen_key in processed_pairs or
+                   merged_base_bid == merged_query_bid):
+                    if verbose:
+                        print "TW"
                     continue
+                processed_pairs[seen_key] = True
+                
+                query_bin = self.bins[query_bid]
+#-----
+# KMER ELLIPSE OVERLAP
+                if (bin_k_ellipse_areas[base_bid] <= bin_k_ellipse_areas[query_bid]):
+                    INTT = ET.doesIntersect2D(bin_k_ellipses[query_bid][0],
+                                              bin_k_ellipses[query_bid][1],
+                                              bin_k_ellipses[base_bid][0],
+                                              bin_k_ellipses[base_bid][1])
+                else:
+                    INTT = ET.doesIntersect2D(bin_k_ellipses[base_bid][0],
+                                              bin_k_ellipses[base_bid][1],
+                                              bin_k_ellipses[query_bid][0],
+                                              bin_k_ellipses[query_bid][1])
+                if verbose:
+                    
+                    fig = plt.figure()
+                    ax = fig.add_subplot(1, 1, 1)
+                    base_bin.plotMersOnAx(ax,
+                                          self.PM.kmerVals,
+                                          self.PM.kmerVals2,
+                                          self.PM.contigColours,
+                                          self.PM.contigLengths,
+                                          ET=ET)
+                    query_bin.plotMersOnAx(ax,
+                                           self.PM.kmerVals,
+                                           self.PM.kmerVals2,
+                                           self.PM.contigColours,
+                                           self.PM.contigLengths,
+                                           ET=ET)
+                    plt.title("MERGE: %d -> %d (%d)" % (base_bid, query_bid, INTT))                
+                    plt.show()
+                    plt.close(fig)
+                    del fig
+
+                if not INTT:
+                    if verbose:
+                        print "KINTT" 
+                    continue
+                    
+                if False:
+                    # check to see if the kmer values overlap sufficiently or not
+                    olap_amounts = base_bin.overlappingKVals(self.PM.kmerVals, query_bin)
+                    if not (olap_amounts[0] and (olap_amounts[1] > 0.4 or olap_amounts[2] > 0.4)):
+                        if verbose:
+                            print "OL", olap_amounts 
+                            print base_bin.lowestK, base_bin.highestK, query_bin.lowestK, query_bin.highestK
+                        continue
 #-----
 # CONTIG LENGTH SANITY
                 # Test the smaller bin against the larger
@@ -1170,17 +1279,49 @@ class BinManager:
                                                     bin_c_lengths[query_bid]
                                                     )
                 if lengths_wrong:
+                    if verbose:
+                        print "LW"
                     continue
                     
 #-----
-# MINIMUM BOUNDING ELLIPSOID
-                comb_points = np_array([self.PM.transformedCP[i] for i in 
-                                        np_concatenate((self.bins[sbid].rowIndices,
-                                                        self.bins[bid].rowIndices))
-                                        ])
-                (ccenter, cradii, crotation) = ET.getMinVolEllipse(comb_points)
-                comb_vol = ET.getEllipsoidVolume(cradii)
-                if np_max([bin_e_volumes[bid], bin_e_volumes[sbid]])*4 < comb_vol:
+# MINIMUM BOUNDING COVERAGE ELLIPSOID
+                if False:
+                    comb_points = np_array([self.PM.transformedCP[i] for i in 
+                                            np_concatenate((base_bin.rowIndices,
+                                                            query_bin.rowIndices))
+                                            ])
+                    (ccenter, cradii, crotation) = ET.getMinVolEllipse(comb_points)
+                    comb_vol = ET.getEllipsoidVolume(cradii)
+                    if np_max([bin_c_ellipsoid_volumes[base_bid], bin_c_ellipsoid_volumes[query_bid]])*4 < comb_vol:
+                        if verbose:
+                            print "EV", bin_c_ellipsoid_volumes[base_bid], bin_c_ellipsoid_volumes[query_bid], comb_vol
+                        continue
+
+                # determine if intersection exists
+                if bin_c_ellipsoid_volumes[base_bid] <= bin_c_ellipsoid_volumes[query_bid]:
+                    intersects = ET.doesIntersect3D(bin_c_ellipsoids[query_bid][0],
+                                                    bin_c_ellipsoids[query_bid][1],
+                                                    bin_c_ellipsoids[base_bid][0],
+                                                    bin_c_ellipsoids[base_bid][1])
+                else:
+                    intersects = ET.doesIntersect3D(bin_c_ellipsoids[base_bid][0],
+                                                    bin_c_ellipsoids[base_bid][1],
+                                                    bin_c_ellipsoids[query_bid][0],
+                                                    bin_c_ellipsoids[query_bid][1]) 
+
+                if verbose:
+                    fig = plt.figure()
+                    ax = fig.add_subplot(1, 1, 1, projection='3d')
+                    base_bin.plotOnAx(ax, self.PM.transformedCP, self.PM.contigColours, self.PM.contigLengths, ET=ET)                
+                    query_bin.plotOnAx(ax, self.PM.transformedCP, self.PM.contigColours, self.PM.contigLengths, ET=ET)
+                    plt.title("MERGE: %d -> %d (%d)" % (base_bid, query_bid, INTT))                
+                    plt.show()
+                    plt.close(fig)
+                    del fig
+
+                if not intersects:
+                    if verbose:
+                        print "CINTT"
                     continue
                 
                 # We only get here if we're going to merge the bins
@@ -1230,17 +1371,85 @@ class BinManager:
         # now merge them
         num_bins_removed = 0
         for merge in mergers:
-            if verbose:
+            self.plotSelectBins(merge, plotMers=True, ET=ET)
+            if True:#verbose:
                 print merge
-            num_bins_removed += (len(merge) - 1)
-            self.merge(merge, auto=True, newBid=False, saveBins=False, verbose=False, printInstructions=False)
+            #num_bins_removed += (len(merge) - 1)
+            #self.merge(merge, auto=True, newBid=False, saveBins=False, verbose=False, printInstructions=False)
 
         print "    Removed %d cores leaving %d cores" % (num_bins_removed, len(self.bins))        
 
-#----------------------------------------------------------------------------
-#----------------------------------------------------------------------------
-#----------------------------------------------------------------------------
-#----------------------------------------------------------------------------
+    def autoRefineBins(self,
+                       iterate=False,
+                       mergeObvious=True,
+                       removeDuds=True,
+                       nukeOutliers=True,
+                       verbose=False,
+                       plotAfterOB=True):
+        """Automagically refine bins"""
+
+#-----
+# PRELIM CULLING
+        
+        # identify and remove outlier bins
+        if nukeOutliers:
+            self.nukeOutliers()
+
+        if mergeObvious:
+            self.mergeObvious()
+
+        if plotAfterOB:
+            bids = self.getBids()
+            for bid in bids:
+                self.bins[bid].makeBinDist(self.PM.transformedCP, 
+                                           self.PM.averageCoverages, 
+                                           self.PM.kmerVals, 
+                                           self.PM.contigLengths)
+            self.plotBins(FNPrefix="AFTER_OB", ET=EllipsoidTool())
+
+        return
+#-----
+# MAKE SEARCH TREES
+        # search-based data structures
+        neighbour_lists = {} # save looking things up a 1,000,000 times
+        graduated_tdms = {}
+        graduated_searches = {}
+        gt_2_ri_lookup = {}
+        ri_2_gt_lookup = {}
+        
+        # make 10 separate search trees based on kmer sigs
+        for i in range(10):
+            graduated_tdms[i] = []
+            gt_2_ri_lookup[i] = {}
+            ri_2_gt_lookup[i] = {}
+            neighbour_lists[i] = {}
+            
+        for row_index in range(np_size(self.PM.indices)):
+            if self.PM.binIds[row_index] != 0:
+                tdm_index = int(self.PM.kmerVals[row_index]*10)
+                lower = np_max([tdm_index-1, 0])
+                upper = np_min([tdm_index+2, 10])
+                for i in range(lower, upper):
+                    gt_index = len(graduated_tdms[i])
+                    ri_2_gt_lookup[i][row_index] = gt_index 
+                    gt_2_ri_lookup[i][gt_index] = row_index 
+                    graduated_tdms[i].append(self.PM.transformedCP[row_index])
+
+        for i in range(10):
+            #print i, len(graduated_tdms[i])
+            graduated_searches[i] = kdt(graduated_tdms[i])
+
+        # pay attention to contig lengths when including in bins
+        # use grubbs test
+        GT = GrubbsTester() # we need to perform grubbs test before inclusion
+        
+        # keep track of what gets merged where
+        merged_bins = {}        # oldId => newId
+        processed_pairs = {}    # keep track of pairs we've analysed
+        bin_c_lengths = {}
+
+        bids = self.getBids()
+
 
         stable_bids = {} # once a bin is stable it's stable... almost
         re_unstable = {}
@@ -1812,15 +2021,16 @@ class BinManager:
     def promptOnPlotterRefine(self, minimal=False):
         """Find out what the user wishes to do next when refining bins"""
         input_not_ok = True
-        valid_responses = ['R','P','B','M','S','K','Q']
+        valid_responses = ['R','P','B','V','M','S','K','Q']
         vrs = ",".join([str.lower(str(x)) for x in valid_responses])
         while(input_not_ok):
             if(minimal):
                 option = raw_input(" What next? ("+vrs+") : ")
             else:
                 option = raw_input(" How do you want to continue?\n" \
-                                   " r = replot ids, p = replot points, b = plot single bin," \
-                                   " m = merge, s = split, k = set kmer range, q = quit\n" \
+                                   " r = replot ids, p = replot points, b = plot one or more bins,\n" \
+                                   " v = plot in vincinity of bin, m = merge, s = split,\n" \
+                                   " k = set kmer range, q = quit\n" \
                                    " What next? ("+vrs+") : ")
             if(option.upper() in valid_responses):
                 return option.upper()
@@ -2150,8 +2360,65 @@ class BinManager:
         for bid in self.getBids():
             self.bins[bid].plotProfileDistributions(self.PM.transformedCP, self.PM.kmerSigs, fileName="PROFILE_"+str(bid))
 
-    def plotBins(self, FNPrefix="BIN", sideBySide=False, folder=''):
+    def plotSelectBins(self, bids, plotMers=False, fileName="", plotEllipsoid=False, ET=None):
+        """Plot a selection of bids in a window"""
+        if plotEllipsoid and ET == None:
+            ET = EllipsoidTool()
+            
+        fig = plt.figure()
+        
+        # we need to do some fancy-schmancy stuff at times!
+        if plotMers:
+            num_cols = 2
+        else:
+            num_cols = 1
+            
+        ax = fig.add_subplot(1,num_cols,1, projection='3d')
+        for bid in bids:
+            self.bins[bid].plotOnAx(ax,
+                           self.PM.transformedCP,
+                           self.PM.contigColours,
+                           self.PM.contigLengths,
+                           ET=ET,
+                           printID=True
+                           )
+        if plotMers:
+            ax.set_title('Coverage')
+            ax = fig.add_subplot(1, 2, 2)
+            for bid in bids:
+                self.bins[bid].plotMersOnAx(ax,
+                                            self.PM.kmerVals,
+                                            self.PM.kmerVals2,
+                                            self.PM.contigColours,
+                                            self.PM.contigLengths,
+                                            ET=ET,
+                                            printID=True
+                                            )
+            ax.set_title('Kmer sig PCA')
+                
+        if(fileName != ""):
+            try:
+                fig.set_size_inches(6,6)
+                plt.savefig(fileName,dpi=300)
+            except:
+                print "Error saving image:", fileName, exc_info()[0]
+                raise
+        else:
+            try:
+                plt.show()
+            except:
+                print "Error showing image:", exc_info()[0]
+                raise
+            
+        plt.close(fig)
+        del fig
+        
+
+    def plotBins(self, FNPrefix="BIN", sideBySide=False, folder='', plotEllipsoid=False, ET=None):
         """Make plots of all the bins"""
+        if plotEllipsoid and ET == None:
+            ET = EllipsoidTool()
+        
         if folder != '':
             makeSurePathExists(folder)
             
@@ -2164,12 +2431,13 @@ class BinManager:
             print "Plotting bins"
             for bid in self.getBids():
                 if folder != '':
-                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName=osp_join(folder, FNPrefix+"_"+str(bid)))
+                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, self.PM.contigLengths, fileName=osp_join(folder, FNPrefix+"_"+str(bid)), ET=ET)
                 else:
-                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, FNPrefix+"_"+str(bid))
+                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, self.PM.contigLengths, FNPrefix+"_"+str(bid), ET=ET)
 
     def plotSideBySide(self, bids, fileName="", tag=""):
         """Plot two bins side by side in 3d"""
+        ET = EllipsoidTool()
         fig = plt.figure()
         # we need to work out how to shape the plots
         num_plots = len(bids)
@@ -2177,7 +2445,7 @@ class BinManager:
         plot_cols = np_ceil(float(num_plots)/plot_rows)
         plot_num = 1
         for bid in bids:
-            title = self.bins[bid].plotOnAx(fig, plot_rows, plot_cols, plot_num, self.PM.transformedCP, self.PM.contigColours, fileName=fileName)
+            title = self.bins[bid].plotOnFig(fig, plot_rows, plot_cols, plot_num, self.PM.transformedCP, self.PM.contigColours, self.PM.contigLengths, ET=ET, fileName=fileName)
             plot_num += 1
             plt.title(title)
         if(fileName != ""):
@@ -2196,7 +2464,7 @@ class BinManager:
         plt.close(fig)
         del fig
 
-    def plotBinIds(self, krange=None):
+    def plotBinIds(self, krange=None, ignoreRanges=False):
         """Render 3d image of core ids"""
         (bin_centroid_points, bin_centroid_colours, bids) = self.findCoreCentres(krange=krange)
         fig = plt.figure()
@@ -2211,9 +2479,10 @@ class BinManager:
                     )
             outer_index += 1
         
-        ax.set_xlim3d(0, 1000)
-        ax.set_ylim3d(0, 1000)
-        ax.set_zlim3d(0, 1000)
+        if not ignoreRanges:
+            ax.set_xlim3d(0, 1000)
+            ax.set_ylim3d(0, 1000)
+            ax.set_zlim3d(0, 1000)
         try:
             plt.show()
             plt.close(fig)
@@ -2222,12 +2491,18 @@ class BinManager:
             raise
         del fig
 
-    def plotBinPoints(self):
+    def plotBinPoints(self, ignoreRanges=False):
         """Render the image for validating cores"""
         (bin_centroid_points, bin_centroid_colours, bids) = self.findCoreCentres()
         fig = plt.figure()
-        ax2 = fig.add_subplot(111, projection='3d')
-        ax2.scatter(bin_centroid_points[:,0], bin_centroid_points[:,1], bin_centroid_points[:,2], edgecolors=bin_centroid_colours, c=bin_centroid_colours)
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(bin_centroid_points[:,0], bin_centroid_points[:,1], bin_centroid_points[:,2], edgecolors=bin_centroid_colours, c=bin_centroid_colours)
+
+        if not ignoreRanges:
+            ax.set_xlim3d(0, 1000)
+            ax.set_ylim3d(0, 1000)
+            ax.set_zlim3d(0, 1000)
+        
         try:
             plt.show()
             plt.close(fig)

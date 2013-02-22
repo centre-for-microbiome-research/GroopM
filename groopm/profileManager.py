@@ -94,7 +94,8 @@ class ProfileManager:
         self.transformedCP = np_array([])   # the munged data points
         self.averageCoverages = np_array([]) # average coverage across all stoits
         self.kmerSigs = np_array([])        # raw kmer signatures
-        self.kmerVals = np_array([])        # PCA'd kmer sigs
+        self.kmerVals = np_array([])        # PCA'd kmer sigs PC1
+        self.kmerVals2 = np_array([])       # PCA'd kmer sigs PC2
 
         self.contigNames = np_array([])
         self.contigLengths = np_array([])
@@ -144,9 +145,9 @@ class ProfileManager:
         try:
             self.numStoits = self.getNumStoits()
             self.condition = condition
-            if(verbose):
-                print "    Loading indices (", condition,")"
             self.indices = self.dataManager.getConditionalIndicies(self.dbFileName, condition=condition)
+            if(verbose):
+                print "    Loaded indices with condition:", condition
             self.numContigs = len(self.indices)
             
             if(not silent):
@@ -163,12 +164,15 @@ class ProfileManager:
             if(loadKmerSigs):
                 if(verbose):
                     print "    Loading kmer sigs"
-                self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indices=self.indices)
-
+                #self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indices=self.indices)
+                PCAs = self.dataManager.getKmerPCAs(self.dbFileName, indices=self.indices)
+                self.kmerVals = PCAs[:,0]
+                self.kmerVals2 = PCAs[:,1]
+                
                 if(makeColours):
                     if(verbose):
                         print "    Creating colour profiles"
-                    self.makeColourProfile()
+                    
                     # use HSV to RGB to generate colours
                     S = 1       # SAT and VAL remain fixed at 1. Reduce to make
                     V = 1       # Pastels if that's your preference...
@@ -224,7 +228,7 @@ class ProfileManager:
         self.contigNames = np_delete(self.contigNames, deadRowIndicies, axis=0)
         self.contigLengths = np_delete(self.contigLengths, deadRowIndicies, axis=0)
         self.contigColours = np_delete(self.contigColours, deadRowIndicies, axis=0)
-        self.kmerSigs = np_delete(self.kmerSigs, deadRowIndicies, axis=0)
+        #self.kmerSigs = np_delete(self.kmerSigs, deadRowIndicies, axis=0)
         self.kmerVals = np_delete(self.kmerVals, deadRowIndicies, axis=0)
         self.binIds = np_delete(self.binIds, deadRowIndicies, axis=0)
         
@@ -381,25 +385,6 @@ class ProfileManager:
             self.transformedCP[:,i] = (self.transformedCP[:,i] -  min[i])/max[i]
 
         return(min,max)
-
-    def makeColourProfile(self):
-        """Make a colour profile based on ksig information"""
-        working_data = np_array(self.kmerSigs, copy=True) 
-        Center(working_data,verbose=0)
-        p = PCA(working_data)
-        components = p.pc()
-        
-        # now make the colour profile based on PC1
-        self.kmerVals = np_array([float(i) for i in components[:,0]])
-        
-        # normalise to fit between 0 and 1
-        self.kmerVals -= np_min(self.kmerVals)
-        self.kmerVals /= np_max(self.kmerVals)
-        if(False):
-            plt.figure(1)
-            plt.subplot(111)
-            plt.plot(components[:,0], components[:,1], 'r.')
-            plt.show()
         
     def rotateVectorAndScale(self, point, las, centerVector, delta_max=0.25):
         """

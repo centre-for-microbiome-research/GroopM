@@ -293,11 +293,12 @@ class BinExplorer:
 
     def plotCoresVsContigs(self, binCentroidPoints, binCentroidColours, azim=0, elev=0, fileName='', dpi=300, format='png'):
         """Render the image for validating cores"""
+        disp_lens = np.array([np.sqrt(self.PM2.contigLengths[i]) for i in range(len(self.PM.indices))])
         if(fileName==""):
             # plot on screen for user
             fig = plt.figure()
             ax1 = fig.add_subplot(121, projection='3d')
-            ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors=self.PM2.contigColours, c=self.PM2.contigColours, s=2, marker='.')
+            ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors=self.PM2.contigColours, c=self.PM2.contigColours, s=disp_lens, marker='.')
             ax2 = fig.add_subplot(122, projection='3d')
             ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColours, c=binCentroidColours)
             try:
@@ -312,7 +313,7 @@ class BinExplorer:
             f_name2 = fileName + "_2"
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors='none', c=self.PM2.contigColours, s=2, marker='.')
+            ax.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors='none', c=self.PM2.contigColours, marker='.')
             ax.azim = azim
             ax.elev = elev
             ax.set_xlim3d(0,self.PM2.scaleFactor)
