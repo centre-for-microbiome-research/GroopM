@@ -42,10 +42,11 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
+__current_GMDB_version__ = 1
 
 ###############################################################################
 
@@ -60,6 +61,7 @@ import pysam
 # GroopM imports
 import groopmExceptions as ge
 import groopmTimekeeper as gtime
+from PCA import PCA, Center
 
 np.seterr(all='raise')     
 
@@ -82,16 +84,21 @@ class GMDataManager:
     ------------------------
     **Kmer Signature**
     table = 'kms'
-    'mer1' : tables.FloatCol(pos=1)
-    'mer2' : tables.FloatCol(pos=2)
-    'mer3' : tables.FloatCol(pos=3)
+    'mer1' : tables.FloatCol(pos=0)
+    'mer2' : tables.FloatCol(pos=1)
+    'mer3' : tables.FloatCol(pos=2)
     ...
+    
+    **Kmer Vals**
+    table = 'kpca'
+    'pc1' : tables.FloatCol(pos=0)
+    'pc2' : tables.FloatCol(pos=1)
     
     **Coverage profile**
     table = 'coverage'
-    'stoit1' : tables.FloatCol(pos=1)
-    'stoit2' : tables.FloatCol(pos=2)
-    'stoit3' : tables.FloatCol(pos=3)
+    'stoit1' : tables.FloatCol(pos=0)
+    'stoit2' : tables.FloatCol(pos=1)
+    'stoit3' : tables.FloatCol(pos=2)
     ...
 
     ------------------------
@@ -121,7 +128,7 @@ class GMDataManager:
     'numBins'       : tables.Int32Col(pos=6)
     'clustered'     : tables.BoolCol(pos=7)           # set to true after clustering is complete
     'complete'      : tables.BoolCol(pos=8)           # set to true after clustering finishing is complete
-    'formatVersion' : tables.Int32Col(pos=9)          # groopm file version
+    'formatVersion' : tables.Int32Col(pos=9)       # groopm file version
 
     ** Contigs **
     table = 'contigs'
@@ -198,13 +205,24 @@ class GMDataManager:
                     print "Could not parse contig file:",contigsFile,exc_info()[0]
                     raise
 
+                # store the raw calculated kmer sigs in one table
                 try:
                     KMER_table = h5file.createTable(profile_group, 'kms', db_desc, "Kmer signature", expectedrows=len(contigNames))
                 except:
                     print "Error creating KMERSIG table:", exc_info()[0]
                     raise
+                
+                # compute the PCA of the ksigs and store these too
+                db_desc = {'pc1' : tables.FloatCol(pos=0),
+                           'pc2' : tables.FloatCol(pos=1) }               
                 try:
-                    conParser.storeSigs(ksig_data, KMER_table)
+                    KPCA_table = h5file.createTable(profile_group, 'kpca', db_desc, "Kmer signature PCAs", expectedrows=len(contigNames))
+                except:
+                    print "Error creating KMERVALS table:", exc_info()[0]
+                    raise
+
+                try:
+                    conParser.storeSigs(ksig_data, KMER_table, KPCA_table)
                 except:
                     print "Could not load kmer sigs:",contigsFile,exc_info()[0]
                     raise
@@ -288,11 +306,19 @@ class GMDataManager:
                            'numCons' : tables.Int32Col(pos=5),
                            'numBins' : tables.Int32Col(dflt=0, pos=6),
                            'clustered' : tables.BoolCol(dflt=False, pos=7),                  # set to true after clustering is complete
-                           'complete' : tables.BoolCol(dflt=False, pos=8)                    # set to true after clustering finishing is complete
+                           'complete' : tables.BoolCol(dflt=False, pos=8),                   # set to true after clustering finishing is complete
+                           'formatVersion' : tables.Int32Col(pos=9)
                            }
                 try:
                     META_table = h5file.createTable(meta_group, 'meta', db_desc, "Descriptive data", expectedrows=1)
-                    self.initMeta(META_table, str.join(',',stoitColNames), len(stoitColNames), str.join(',',kse.kmerCols), kmerSize, len(kse.kmerCols), len(contigNames))
+                    self.initMeta(META_table,
+                                  str.join(',',stoitColNames),
+                                  len(stoitColNames),
+                                  str.join(',',kse.kmerCols),
+                                  kmerSize,
+                                  len(kse.kmerCols),
+                                  len(contigNames),
+                                  __current_GMDB_version__)
                 except:
                     print "Error creating META table:", exc_info()[0]
                     raise
@@ -332,7 +358,7 @@ class GMDataManager:
         table.flush()
         return cid_2_indices 
     
-    def initMeta(self, table, stoitColNames, numStoits, merColNames, merSize, numMers, numCons):
+    def initMeta(self, table, stoitColNames, numStoits, merColNames, merSize, numMers, numCons, format):
         """Initialise the meta-data table"""
         META_row = table.row
         META_row['stoitColNames'] = stoitColNames
@@ -341,6 +367,7 @@ class GMDataManager:
         META_row['merSize'] = merSize
         META_row['numMers'] = numMers
         META_row['numCons'] = numCons
+        META_row['formatVersion'] = format
         META_row.append()
         table.flush()
 
@@ -363,6 +390,111 @@ class GMDataManager:
             else:
                 print "Error, unrecognised choice '"+option.upper()+"'"
                 minimal = True
+
+#------------------------------------------------------------------------------
+# DB UPGRADE 
+
+    def checkAndUpgradeDB(self, dbFileName):
+        """Check the DB and upgrade if necessary"""
+        # get the DB format version
+        this_DB_version = self.getGMFormat(dbFileName)
+        if __current_GMDB_version__ == this_DB_version:
+            print "    GroopM DB version up to date"
+            return 
+        
+        # now, if we get here then we need to do some work
+        upgrade_tasks = {}
+        upgrade_tasks[(0,1)] = self.upgrageDB_0_to_1 
+
+        # we need to apply upgrades in order!
+        # keep applying the upgrades as long as we need to        
+        while this_DB_version < __current_GMDB_version__:
+            task = (this_DB_version, this_DB_version+1)
+            upgrade_tasks[task](dbFileName)
+            this_DB_version += 1 
+        
+    def upgrageDB_0_to_1(self, dbFileName):
+        """Upgrade a GM db from version 0 to version 1"""
+        print "*******************************************************************************\n"
+        print "              *** Upgrading GM DB from version 0 to version 1 ***" 
+        print ""
+        print "                            please be patient..."
+        print ""    
+        # the change in this version is that we'll be saving the first 
+        # two kmerSig PCA's in a separate table
+        print "    Calculating and storing the kmerSig PCAs"
+
+        # get the raw kmersigs
+        kmer_sigs = self.getKmerSigs(dbFileName)
+        
+        # make the table we'll store the stuff in
+        try:
+            with tables.openFile(dbFileName, mode='a', rootUEP="/profile") as profile_group:
+                db_desc = {'pc1' : tables.FloatCol(pos=0),
+                           'pc2' : tables.FloatCol(pos=1) }               
+                try:
+                    KPCA_table = profile_group.createTable('/',
+                                                           'kpca',
+                                                           db_desc,
+                                                           "Kmer signature PCAs",
+                                                           expectedrows=np.shape(kmer_sigs)[0]
+                                                           )
+                except:
+                    print "Error creating KMERVALS table:", exc_info()[0]
+                    raise
+        
+                CP = ContigParser()
+                CP.storeSigPCAs(kmer_sigs, KPCA_table)
+        except:
+            print "Error opening DB:",dbFileName, exc_info()[0]
+            raise
+        
+        # update the formatVersion field and we're done
+        self.updateGMDBFormat(dbFileName, 1)
+        print "*******************************************************************************"
+
+    def updateGMDBFormat(self, dbFileName, version):
+        """Update the GMDB format version"""
+        num_stoits = self.getNumStoits(dbFileName)
+        mer_col_names = self.getMerColNames(dbFileName)
+        mer_size = self.getMerSize(dbFileName)
+        num_mers = self.getNumMers(dbFileName)
+        num_cons = self.getNumCons(dbFileName)
+        stoit_col_names = self.getStoitColNames(dbFileName)
+        try:
+            with tables.openFile(dbFileName, mode='a', rootUEP="/meta") as meta_group:
+                # nuke any previous failed attempts
+                try:
+                    meta_group.removeNode('/', 'tmp_meta')
+                except:
+                    pass
+                # make a new tmp table
+                # Create a new group under "/" (root) for storing profile information
+                db_desc = {'stoitColNames' : tables.StringCol(512, pos=0),
+                           'numStoits' : tables.Int32Col(pos=1),
+                           'merColNames' : tables.StringCol(4096,pos=2),
+                           'merSize' : tables.Int32Col(pos=2),
+                           'numMers' : tables.Int32Col(pos=4),
+                           'numCons' : tables.Int32Col(pos=5),
+                           'numBins' : tables.Int32Col(dflt=0, pos=6),
+                           'clustered' : tables.BoolCol(dflt=False, pos=7),                  # set to true after clustering is complete
+                           'complete' : tables.BoolCol(dflt=False, pos=8),                   # set to true after clustering finishing is complete
+                           'formatVersion' : tables.Int32Col(pos=9)
+                           }
+
+                META_table = meta_group.createTable('/', 'tmp_meta', db_desc, "Descriptive data", expectedrows=1)
+                self.initMeta(META_table,
+                              stoit_col_names,
+                              num_stoits,
+                              mer_col_names,
+                              mer_size,
+                              num_mers,
+                              num_cons,
+                              version)
+                meta_group.renameNode('/', 'meta', 'tmp_meta', overwrite=True)
+        except:
+            print "Error opening DB:",dbFileName, exc_info()[0]
+            raise
 
 #------------------------------------------------------------------------------
 # GET LINKS 
@@ -397,6 +529,9 @@ class GMDataManager:
 
     def getConditionalIndicies(self, dbFileName, condition=''):
         """return the indices into the db which meet the condition"""
+        # check the DB out and see if we need to change anything about it
+        self.checkAndUpgradeDB(dbFileName)
+        
         if('' == condition):
             condition = "cid != ''" # no condition breaks everything!
         try:
@@ -439,6 +574,7 @@ class GMDataManager:
             num_mers = self.getNumMers(dbFileName)
             num_cons = self.getNumCons(dbFileName)
             stoit_col_names = self.getStoitColNames(dbFileName)
+            formatVersion = self.getGMFormat(dbFileName)
         except:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
@@ -486,11 +622,19 @@ class GMDataManager:
                            'numCons' : tables.Int32Col(pos=5),
                            'numBins' : tables.Int32Col(dflt=0, pos=6),
                            'clustered' : tables.BoolCol(dflt=False, pos=7),                  # set to true after clustering is complete
-                           'complete' : tables.BoolCol(dflt=False, pos=8)                    # set to true after clustering finishing is complete
+                           'complete' : tables.BoolCol(dflt=False, pos=8),                   # set to true after clustering finishing is complete
+                           'formatVersion' : tables.Int32Col(pos=9)                           
                            }
 
                 META_table = meta_group.createTable('/', 'tmp_meta', db_desc, "Descriptive data", expectedrows=1)
-                self.initMeta(META_table, stoit_col_names, num_stoits, mer_col_names, mer_size, num_mers, num_cons)
+                self.initMeta(META_table,
+                              stoit_col_names,
+                              num_stoits,
+                              mer_col_names,
+                              mer_size,
+                              num_mers,
+                              num_cons,
+                              formatVersion)
                 meta_group.renameNode('/', 'meta', 'tmp_meta', overwrite=True)
                                 
         except:
@@ -625,6 +769,20 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
+    def getKmerPCAs(self, dbFileName, condition='', indices=np.array([])):
+        """Load kmer sig PCAs"""
+        try:
+            with tables.openFile(dbFileName, mode='r') as h5file:
+                if(np.size(indices) != 0):
+                    return np.array([list(h5file.root.profile.kpca[x]) for x in indices])
+                else:
+                    if('' == condition):
+                        condition = "cid != ''" # no condition breaks everything!
+                    return np.array([list(h5file.root.profile.kpca[x.nrow]) for x in h5file.root.meta.contigs.where(condition)])
+        except:
+            print "Error opening DB:",dbFileName, exc_info()[0]
+            raise
+
     def getMetaField(self, dbFileName, fieldName):
         """return the value of fieldName in the metadata tables"""
         try:
@@ -634,6 +792,19 @@ class GMDataManager:
         except:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
+
+    def getGMFormat(self, dbFileName):
+        """return the format version of this GM file"""
+        # this guy needs to be a bit different to the other meta methods
+        # becuase earlier versions of GM didn't include a format parameter
+        with tables.openFile(dbFileName, mode='r') as h5file:
+            # theres only one value
+            try:
+                this_DB_version = h5file.root.meta.meta.read()['formatVersion'][0]
+            except ValueError:
+                # this happens when an oldskool formatless DB is loaded
+                this_DB_version = 0
+        return this_DB_version
 
     def getNumStoits(self, dbFileName):
         """return the value of numStoits in the metadata tables"""
@@ -833,15 +1004,58 @@ class ContigParser:
             con_names[cid] = tmp_storage[cid][1]
         return (tmp_storage, con_names)
         
-    def storeSigs(self, data, table):
-        for cid in sorted(data.keys()):     
+    def storeSigs(self, data, kSigTable, kPCATable):
+        """Store the kmersigs and calculate the PCA at the same time"""
+        k_PCA_data = np.array([])
+        rows = 0
+        for cid in sorted(data.keys()):
+            rows += 1
+            cols = 0
+            new_sig = np.array([])     
             # make a new row
-            KMER_row = table.row
+            KMER_row = kSigTable.row
             # punch in the data
-            for mer in data[cid][0].keys():
+            for mer in sorted(data[cid][0].keys()):
+                cols += 1
                 KMER_row[mer] = data[cid][0][mer]
+                new_sig = np.append(new_sig, data[cid][0][mer])
             KMER_row.append()
-        table.flush()
+            k_PCA_data = np.append(k_PCA_data, new_sig)
+        kSigTable.flush()
+        
+        # store the PCA'd kmersigs
+        k_PCA_data = np.reshape(k_PCA_data, (rows,cols))
+        self.storeSigPCAs(k_PCA_data, kPCATable)
+        
+    def storeSigPCAs(self, data, kPCATable):
+        """Store PCA'd kmer sig data
+        
+        data is a two dimensional numpy array which is ordered
+        by cid in the same fashion as for all stored data
+        """
+        # do the PCA analysis
+        Center(data,verbose=0)
+        p = PCA(data)
+        components = p.pc()
+        
+        # now make the colour profile based on PC1
+        PC1 = np.array([float(i) for i in components[:,0]])
+        PC2 = np.array([float(i) for i in components[:,1]])
+        
+        # normalise to fit between 0 and 1
+        PC1 -= np.min(PC1)
+        PC1 /= np.max(PC1)
+        PC2 -= np.min(PC2)
+        PC2 /= np.max(PC2)
+        
+        # store in the table
+        for i in range(len(PC1)):
+            KPCA_row = kPCATable.row
+            # punch in the data
+            KPCA_row['pc1'] = PC1[i]
+            KPCA_row['pc2'] = PC2[i]
+            KPCA_row.append()
+        kPCATable.flush()
 
     def getWantedSeqs(self, contigFile, wanted, storage={}):
         """Do the heavy lifting of parsing"""
