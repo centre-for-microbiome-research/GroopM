@@ -229,6 +229,8 @@ if __name__ == '__main__':
     bin_plotter.add_argument('dbname', help="name of the database to open")
     bin_plotter.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot (None for all)")
     bin_plotter.add_argument('-s', '--sidebyside', action="store_true", default=False, help="plot bins in 3d side by side instead of to file")
+    bin_plotter.add_argument('-T', '--together', action="store_true", default=False, help="plot bins in 3d in one figure")
+    bin_plotter.add_argument('-k', '--kmers', action="store_true", default=False, help="include kmers in figure [only used for option 'T']")    
     bin_plotter.add_argument('-t', '--tag', default="BIN", help="tag to add to output filename")
     bin_plotter.add_argument('-f', '--folder', default="", help="save plots in folder")    
         
@@ -245,13 +247,18 @@ if __name__ == '__main__':
     # do what we came here to do
     try:
         GM_parser = groopm.GroopMOptionsParser()
-        if(False):
+        if(True):
+            import cProfile
+            cProfile.run('GM_parser.parseOptions(args)', 'prof')
+            ##########################################
+            ##########################################
+            # Use this in python console!
             #import pstats
             #p = pstats.Stats('prof')
             #p.sort_stats('cumulative').print_stats(10)
             #p.sort_stats('time').print_stats(10)
-            import cProfile
-            cProfile.run('GM_parser.parseOptions(args)', 'prof')
+            ##########################################
+            ##########################################            
         else:        
             GM_parser.parseOptions(args)
     except:

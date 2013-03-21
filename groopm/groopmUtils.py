@@ -182,9 +182,14 @@ class BinExplorer:
 
     def plotFlyOver(self, fps=10.0, totalTime=120.0):
         """Plot a flyover of the data with bins being removed"""
-        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.BM.loadBins(makeBins=True,
+                         silent=False,
+                         bids=self.bids,
+                         loadContigLengths=False,
+                         loadContigNames=False
+                        )
         print "Plotting flyover"
-        all_bids = self.bins.keys()
+        all_bids = self.BM.getBids()
 
         # control image form and output
         current_azim = 45.0
@@ -198,12 +203,11 @@ class BinExplorer:
         
         print "Need",total_frames,"frames:"
         # we need to know when to remove each bin
-        bid_remove_rate = total_frames / float(len(all_bids))
-        bid_remove_indexer = 1.0
-        bid_remove_counter = 0.0
+        bid_remove_rate = float(len(all_bids)) / total_frames
+        bids_removed = 0
         current_bid_index = 0
         current_bid = all_bids[current_bid_index]
-        
+        restricted_bids = []
         fig = plt.figure()
         while(current_frame < total_frames):
             print "Frame",int(current_frame)
@@ -215,22 +219,17 @@ class BinExplorer:
                                          dpi=200,
                                          showAxis=True,
                                          format='jpeg',
-                                         fig=fig
+                                         fig=fig,
+                                         restrictedBids = restricted_bids
                                          )
             current_frame += 1
             current_azim += azim_increment
             current_elev += elev_increment
-
-            bid_remove_counter += 1.0
-            if(bid_remove_counter >= (bid_remove_rate*bid_remove_indexer)):
-                # time to remove a bin!
-                self.removeBinAndIndicies(current_bid)
-                bid_remove_indexer+=1
+            print bid_remove_rate*current_frame, current_frame, "BR:",bids_removed, int(bid_remove_rate*current_frame) 
+            while bids_removed < int(bid_remove_rate*current_frame):
+                restricted_bids.append(all_bids[current_bid_index])
                 current_bid_index += 1
-                if(current_bid_index < len(all_bids)):
-                    current_bid = all_bids[current_bid_index]
-                else:
-                    return
+                bids_removed += 1                
 
     def plotBinProfiles(self):
         """Plot the distributions of kmer and coverage signatures"""
@@ -270,9 +269,9 @@ class BinExplorer:
                          min=min,
                          max=max)
         print "Creating side by side plots"
-        (bin_centroid_points, bin_centroid_colours, bin_ids) = self.BM.findCoreCentres()
-        self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colours)
-        #self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colours, azim=11, elev=43, fileName="forGene")
+        (bin_centroid_points, bin_centroid_colors, bin_ids) = self.BM.findCoreCentres()
+        self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colors)
+        #self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colors, azim=11, elev=43, fileName="forGene")
 
     def plotIds(self):
         """Make a 3d plot of the bins but use IDs instead of points
@@ -291,16 +290,16 @@ class BinExplorer:
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
 
-    def plotCoresVsContigs(self, binCentroidPoints, binCentroidColours, azim=0, elev=0, fileName='', dpi=300, format='png'):
+    def plotCoresVsContigs(self, binCentroidPoints, binCentroidColors, azim=0, elev=0, fileName='', dpi=300, format='png'):
         """Render the image for validating cores"""
         disp_lens = np.array([np.sqrt(self.PM2.contigLengths[i]) for i in range(len(self.PM.indices))])
         if(fileName==""):
             # plot on screen for user
             fig = plt.figure()
             ax1 = fig.add_subplot(121, projection='3d')
-            ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors=self.PM2.contigColours, c=self.PM2.contigColours, s=disp_lens, marker='.')
+            ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors=self.PM2.contigColors, c=self.PM2.contigColours, s=disp_lens, marker='.')
             ax2 = fig.add_subplot(122, projection='3d')
-            ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColours, c=binCentroidColours)
+            ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColors, c=binCentroidColours)
             try:
                 plt.show()
                 plt.close(fig)
@@ -313,7 +312,7 @@ class BinExplorer:
             f_name2 = fileName + "_2"
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors='none', c=self.PM2.contigColours, marker='.')
+            ax.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors='none', c=self.PM2.contigColors, marker='.')
             ax.azim = azim
             ax.elev = elev
             ax.set_xlim3d(0,self.PM2.scaleFactor)
@@ -342,7 +341,7 @@ class BinExplorer:
                         binCentroidPoints[outer_index,1], 
                         binCentroidPoints[outer_index,2], 
                         str(int(bid)), 
-                        color=binCentroidColours[outer_index]
+                        color=binCentroidColors[outer_index]
                         )
                 outer_index += 1
             

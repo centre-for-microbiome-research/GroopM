@@ -125,13 +125,16 @@ class GroopMOptionsParser():
                 print "**Error: unknown mode:",options.mode
                 return
             BM = binManager.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True, silent=False, loadContigNames=False, transform=transform)
+            BM.loadBins(makeBins=True,
+                        silent=False,
+                        loadContigNames=False,
+                        transform=transform,
+                        loadRawKmers=True)
             BM.refineWrapper(saveBins=True,
                                plotter=plotter,
                                shuffle=shuffle,
                                links=links,
-                               ignoreRanges=options.no_transform
-                               )
+                               ignoreRanges=options.no_transform)
 
         elif(options.subparser_name == 'recruit'):
             # make bin cores
@@ -191,7 +194,7 @@ class GroopMOptionsParser():
             print "****************************************************************"
             BM = binManager.BinManager(dbFileName=options.dbname)
             BM.loadBins(makeBins=True, silent=True, bids=options.bids)
-            BM.deleteBins(options.bids, force=options.force, saveBins=True, freeBinnedRowIndicies=True)
+            BM.deleteBins(options.bids, force=options.force, saveBins=True, freeBinnedRowIndices=True)
 
         elif(options.subparser_name == 'explore'):
             # make bin cores
@@ -234,7 +237,10 @@ class GroopMOptionsParser():
             if options.bids is not None:
                 bids = options.bids
             BM.loadBins(makeBins=True, silent=False, bids=bids, loadContigNames=False)
-            BM.plotBins(FNPrefix=options.tag, sideBySide=options.sidebyside, plotEllipsoid=True, folder=options.folder)
+            if options.together:
+                BM.plotSelectBins(bids, plotMers=options.kmers, plotEllipsoid=True)
+            else:
+                BM.plotBins(FNPrefix=options.tag, sideBySide=options.sidebyside, plotEllipsoid=True, folder=options.folder)
             
         return 0
     

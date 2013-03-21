@@ -511,7 +511,7 @@ class GMDataManager:
         
         if indices == []:
             # get all!
-            indices = self.getConditionalIndicies(dbFileName)
+            indices = self.getConditionalIndices(dbFileName)
         
         links_hash = {}
         if full_record != []:
@@ -527,7 +527,7 @@ class GMDataManager:
 #------------------------------------------------------------------------------
 # GET / SET DATA TABLES - PROFILES 
 
-    def getConditionalIndicies(self, dbFileName, condition=''):
+    def getConditionalIndices(self, dbFileName, condition=''):
         """return the indices into the db which meet the condition"""
         # check the DB out and see if we need to change anything about it
         self.checkAndUpgradeDB(dbFileName)
@@ -1038,7 +1038,7 @@ class ContigParser:
         p = PCA(data)
         components = p.pc()
         
-        # now make the colour profile based on PC1
+        # now make the color profile based on PC1
         PC1 = np.array([float(i) for i in components[:,0]])
         PC2 = np.array([float(i) for i in components[:,1]])
         
@@ -1173,7 +1173,7 @@ class BamParser:
 
     def __init__(self): pass
     
-    def parse(self, bamFiles, stoitColNames, covTable, contigNames, cid2Indicies):
+    def parse(self, bamFiles, stoitColNames, covTable, contigNames, cid2Indices):
         """Parse multiple bam files and store the results in the main DB
         
         table: a table in an open h5 file like "CID,COV_1,...,COV_n,length"
@@ -1208,8 +1208,8 @@ class BamParser:
         for cid in links:
             for link in links[cid]:
                 try:
-                    rowwise_links.append([cid2Indicies[cid],          # contig 1 
-                                          cid2Indicies[link[0]],      # contig 2
+                    rowwise_links.append([cid2Indices[cid],          # contig 1 
+                                          cid2Indices[link[0]],      # contig 2
                                           int(link[1]),               # numReads
                                           int(link[2]),               # linkType
                                           int(link[3])                # gap

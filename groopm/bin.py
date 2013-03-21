@@ -74,18 +74,6 @@ np.seterr(all='raise')
 ###############################################################################
 ###############################################################################
 ###############################################################################
-# lookup for calculating overlaps
-GMolapTable = {(1,0,2,3): (True, 2, 0),
-               (0,1,3,2): (True, 3, 1),
-               (0,1,2,3): (True, 2, 1),
-               (1,0,3,2): (True, 3, 0),
-               (0,2,1,3): (False, None, None),
-               (1,3,0,2): (False, None, None)}
-
-###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
 
 class Bin:
     """Class for managing collections of contigs
@@ -109,6 +97,7 @@ class Bin:
         self.covStdevs = np.zeros((3))
         self.covLowerLimits = np.zeros((3)) # lower and upper limits based on tolerance
         self.covUpperLimits = np.zeros((3))
+        self.rawCovMeans = np.array([])
         
         # AVERAGE COVERAGE
         self.cValMean = 0.0
@@ -121,8 +110,10 @@ class Bin:
         self.kValStdev = 0.0
         self.kValUpperLimit = 0.0
         self.kValLowerLimit = 0.0
-        self.lowestK = 0.0
-        self.highestK = 0.0
+        
+        # contig lengths
+        self.lengthMean = 0.0
+        self.lengthStd = 0.0
 
 #------------------------------------------------------------------------------
 # Tools used for comparing / condensing 
@@ -136,6 +127,26 @@ class Bin:
         else:
             return 1
 
+#------------------------------------------------------------------------------
+# Sort row indices
+    
+    def sortIndicesByAngle(self, covProfiles):
+        """Sort row indices in increasing position angle from the coverage mean"""
+        # find the mean coverage profile
+        mcp = np.mean([covProfiles[i] for i in self.rowIndices], axis=0)
+        # work out al the angles
+        angle_indices = np.argsort(np.array([self.getAngleBetweenVectors(covProfiles[i], mcp) for i in self.rowIndices]))
+        # now update the indices
+        self.rowIndices = np.array([self.rowIndices[i] for i in angle_indices])
+
+    def getAngleBetweenVectors(self, u, v):
+        """Find the angle between two contig's coverage vectors"""
+        try:
+            ac = np.arccos(np.dot(u,v)/np.linalg.norm(u)/np.linalg.norm(v))
+        except FloatingPointError:
+            return 0
+        return ac
+            
 #------------------------------------------------------------------------------
 # Grow and shrink 
     
@@ -190,12 +201,12 @@ class Bin:
                 return False
         return True
 
-    def purge(self, deadIndicies, transformedCP, averageCoverages, kmerVals, contigLengths):
+    def purge(self, deadIndices, transformedCP, averageCoverages, kmerVals, contigLengths):
         """Delete some rowIndices and remake stats"""
         old_ri = self.rowIndices
         self.rowIndices = np.array([])
         for i in old_ri:
-            if i not in deadIndicies:
+            if i not in deadIndices:
                 self.rowIndices = np.append(self.rowIndices, i)
             
         # fix the stats on our bin
@@ -230,6 +241,7 @@ class Bin:
 
         # get the centroids
         (self.covMeans, self.covStdevs) = self.getCentroidStats(transformedCP)
+        (self.lengthMean, self.lengthStd) = self.getCentroidStats(contigLengths)
         
         kvals = [kmerVals[i] for i in self.rowIndices]
         self.kValMean = np.mean(kvals)
@@ -277,8 +289,10 @@ class Bin:
         # we divide by std so we need to make sure it's never 0
         tmp_stds = np.std(working_list,axis=0)
         mean_std = np.mean(tmp_stds)
-        std = np.array([x if x != 0 else mean_std for x in tmp_stds])
-        #return (np.mean(working_list,axis=0), std)
+        try:
+            std = np.array([x if x != 0 else mean_std for x in tmp_stds])
+        except:
+            std = mean_std
         return (np.median(working_list,axis=0), std)
         
     def getkmerValDist(self, kmerVals):
@@ -361,7 +375,7 @@ class Bin:
 #------------------------------------------------------------------------------
 # Grow the bin 
     
-    def recruit(self, transformedCP, averageCoverages, kmerVals, contigLengths, im2RowIndicies, binnedRowIndicies, restrictedRowIndicies, verbose=False):
+    def recruit(self, transformedCP, averageCoverages, kmerVals, contigLengths, im2RowIndices, binnedRowIndices, restrictedRowIndices, verbose=False):
         """Iteratively grow the bin"""
         # save these
         pt = self.covTolerance
@@ -373,7 +387,7 @@ class Bin:
         num_recruited = 1
         RIs = []
         while(num_recruited > 0):
-            (num_recruited, RIs) = self.recruitRound(transformedCP, averageCoverages, kmerVals, contigLengths, im2RowIndicies, binnedRowIndicies, restrictedRowIndicies, RIs)
+            (num_recruited, RIs) = self.recruitRound(transformedCP, averageCoverages, kmerVals, contigLengths, im2RowIndices, binnedRowIndices, restrictedRowIndices, RIs)
             self.covTolerance *= 0.8
             self.kValTolerance *= 0.8
             self.makeLimits()
@@ -388,7 +402,7 @@ class Bin:
             print "[END_SIZE: %d]" % self.binSize
         return self.binSize
         
-    def recruitRound(self, transformedCP, averageCoverages, kmerVals, contigLengths, im2RowIndicies, binnedRowIndicies, restrictedRowIndicies, rowIndices):
+    def recruitRound(self, transformedCP, averageCoverages, kmerVals, contigLengths, im2RowIndices, binnedRowIndices, restrictedRowIndices, rowIndices):
         """Recruit more points in from outside the current blob boundaries"""
         num_recruited = 0
         ris_seen = []
@@ -398,9 +412,9 @@ class Bin:
                 for y in range(int(self.covLowerLimits[1]), int(self.covUpperLimits[1])):
                     for z in range(int(self.covLowerLimits[2]), int(self.covUpperLimits[2])):
                         # make sure it's a legit point
-                        if((x,y,z) in im2RowIndicies):
-                            for row_index in im2RowIndicies[(x,y,z)]:
-                                if (row_index not in binnedRowIndicies) and (row_index not in self.rowIndices) and (row_index not in restrictedRowIndicies):
+                        if((x,y,z) in im2RowIndices):
+                            for row_index in im2RowIndices[(x,y,z)]:
+                                if (row_index not in binnedRowIndices) and (row_index not in self.rowIndices) and (row_index not in restrictedRowIndices):
                                     if(self.withinLimits(kmerVals, averageCoverages, row_index)):
                                         self.rowIndices = np.append(self.rowIndices,row_index)
                                         num_recruited += 1
@@ -409,7 +423,7 @@ class Bin:
                                         ris_seen.append(row_index)
         else:
             for row_index in rowIndices:
-                if (row_index not in binnedRowIndicies) and (row_index not in self.rowIndices) and (row_index not in restrictedRowIndicies):
+                if (row_index not in binnedRowIndices) and (row_index not in self.rowIndices) and (row_index not in restrictedRowIndices):
                     if(self.withinLimits(kmerVals, averageCoverages, row_index)):
                         self.rowIndices = np.append(self.rowIndices,row_index)
                         num_recruited += 1
@@ -422,46 +436,6 @@ class Bin:
         self.binSize = self.rowIndices.shape[0]
         return (num_recruited, ris_seen)
 
-    def overlappingKVals(self, kmerVals, bin):
-        """Do the kmer val ranges of these bins overlap?"""
-        
-        # single contig bins hurt everyone!
-        if self.lowestK == self.highestK:
-            if(bin.lowestK <= self.highestK and
-               bin.highestK >= self.highestK):
-                return (True, 1.0, 0.0)
-            else:
-                return (False,0,0)
-
-        if bin.lowestK == bin.highestK:
-            if(self.lowestK <= bin.highestK and
-               self.highestK >= bin.highestK):
-                return (True, 0.0, 1.0)
-            else:
-                return (False,0,0)
-        
-        trial_list = [self.lowestK, bin.lowestK, self.highestK, bin.highestK]
-        lookup = tuple(np.argsort(trial_list))
-        try:
-            (olap, A, B) = GMolapTable[lookup]
-            if olap: # one bin contains the other
-                olap_amount = float(trial_list[A] - trial_list[B])
-                return (True, olap_amount/float(self.highestK - self.lowestK), olap_amount/float(bin.highestK - bin.lowestK))
-            else:
-                return (False, 0, 0)
-        except KeyError:
-            print "OI", self.id, bin.id, lookup
-        
-    
-    def withinLimits(self, kmerVals, averageCoverages, rowIndex, verbose=False):
-        """Is the contig within the limits of this bin?"""
-        if verbose:
-            print self.kValLowerLimit, kmerVals[rowIndex], self.kValUpperLimit
-            print self.cValLowerLimit, averageCoverages[rowIndex], self.cValUpperLimit
-            print (kmerVals[rowIndex] >= self.kValLowerLimit and kmerVals[rowIndex] <= self.kValUpperLimit and averageCoverages[rowIndex] >= self.cValLowerLimit and averageCoverages[rowIndex] <= self.cValUpperLimit)
-            print "++++"
-        return kmerVals[rowIndex] >= self.kValLowerLimit and kmerVals[rowIndex] <= self.kValUpperLimit and averageCoverages[rowIndex] >= self.cValLowerLimit and averageCoverages[rowIndex] <= self.cValUpperLimit
-        
     def shuffleMembers(self, adds, removes):
         """add some guys, take some guys away"""
         for row_index in self.rowIndices:
@@ -470,6 +444,18 @@ class Bin:
         self.rowIndices = np.array(adds)
         self.binSize = self.rowIndices.shape[0]
         
+#------------------------------------------------------------------------------
+# MEASURING 
+#
+    def withinLimits(self, kmerVals, averageCoverages, rowIndex, verbose=False):
+        """Is the contig within the limits of this bin?"""
+        if verbose:
+            print self.kValLowerLimit, kmerVals[rowIndex], self.kValUpperLimit
+            print self.cValLowerLimit, averageCoverages[rowIndex], self.cValUpperLimit
+            print (kmerVals[rowIndex] >= self.kValLowerLimit and kmerVals[rowIndex] <= self.kValUpperLimit and averageCoverages[rowIndex] >= self.cValLowerLimit and averageCoverages[rowIndex] <= self.cValUpperLimit)
+            print "++++"
+        return kmerVals[rowIndex] >= self.kValLowerLimit and kmerVals[rowIndex] <= self.kValUpperLimit and averageCoverages[rowIndex] >= self.cValLowerLimit and averageCoverages[rowIndex] <= self.cValUpperLimit
+
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
 #
@@ -542,10 +528,10 @@ class Bin:
         del fig
             
         
-    def plotBin(self, transformedCP, contigColours, kmerVals, contigLengths, fileName="", ET=None):
+    def plotBin(self, transformedCP, contigColors, kmerVals, contigLengths, fileName="", ET=None):
         """Plot a single bin"""
         fig = plt.figure()
-        title = self.plotOnFig(fig, 1, 1, 1, transformedCP, contigColours, contigLengths, fileName=fileName, ET=ET)
+        title = self.plotOnFig(fig, 1, 1, 1, transformedCP, contigColors, contigLengths, fileName=fileName, ET=ET)
         plt.title(title)
         if(fileName != ""):
             try:
@@ -563,11 +549,11 @@ class Bin:
         plt.close(fig)
         del fig
 
-    def plotOnFig(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigColours, contigLengths, fileName="", ET=None):
+    def plotOnFig(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigColors, contigLengths, fileName="", ET=None):
         ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
-        return self.plotOnAx(ax, transformedCP, contigColours, contigLengths, fileName=fileName, ET=ET)
+        return self.plotOnAx(ax, transformedCP, contigColors, contigLengths, fileName=fileName, ET=ET)
         
-    def plotOnAx(self, ax, transformedCP, contigColours, contigLengths, fileName="", plotCentroid=True, ET=None, printID=False):
+    def plotOnAx(self, ax, transformedCP, contigColors, contigLengths, fileName="", plotCentroid=True, ET=None, printID=False):
         """Plot a bin in a given subplot
         
         If you pass through an EllipsoidTool then it will plot the minimum bounding ellipsoid as well!
@@ -579,19 +565,21 @@ class Bin:
         for row_index in self.rowIndices:
             num_points += 1
             disp_vals = np.append(disp_vals, transformedCP[row_index])
-            disp_cols = np.append(disp_cols, contigColours[row_index])
+            disp_cols = np.append(disp_cols, contigColors[row_index])
             disp_lens = np.append(disp_lens, np.sqrt(contigLengths[row_index]))
 
         # make a black mark at the max values
-        self.makeLimits()
-        px = self.covMeans[0]
-        py = self.covMeans[1]
-        pz = self.covMeans[2]
+        cc_string = ""
         if plotCentroid and printID == False:
+            self.makeLimits()
+            px = self.covMeans[0]
+            py = self.covMeans[1]
+            pz = self.covMeans[2]
             num_points += 1
             disp_vals = np.append(disp_vals, [px,py,pz])
             disp_cols = np.append(disp_cols, colorsys.hsv_to_rgb(0,0,0))
             disp_lens = np.append(disp_lens, 100)
+            cc_string = "Coverage centroid: %d %d [%d -> %d]\n" % (px,py,self.covLowerLimits[2],self.covUpperLimits[2])
         
         # fix these
         self.makeLimits()
@@ -604,29 +592,29 @@ class Bin:
         
         if ET != None:
             (center, radii, rotation) = self.getBoundingEllipsoid(transformedCP, ET=ET)
-            centroid_colour = np.mean([contigColours[row_index] for row_index in self.rowIndices],
+            centroid_color = np.mean([contigColours[row_index] for row_index in self.rowIndices],
                                       axis=0)
             if printID:
-                ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_colour, label=self.id)
+                ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color, label=self.id)
             else:
-                ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_colour)
+                ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color)
         
         from locale import format, setlocale, LC_ALL # purdy commas
         setlocale(LC_ALL, "")
         title = str.join(" ", ["Bin: %d : %d contigs : %s BP\n" %(self.id,self.binSize,format('%d', self.totalBP, True)),
-                               "Coverage centroid: %d %d [%d -> %d]\n" % (px,py,self.covLowerLimits[2],self.covUpperLimits[2]),
+                               cc_string,
                                "Kmers: mean: %.4f stdev: %.4f\n" % (self.kValMean, self.kValStdev)]
                          )
         return title
 
-    def plotMersOnAx(self, ax, kPCA1, kPCA2, contigColours, contigLengths, fileName="", ET=None, printID=False):
+    def plotMersOnAx(self, ax, kPCA1, kPCA2, contigColors, contigLengths, fileName="", ET=None, printID=False):
         """Plot a bins kmer sig PCAs in a given subplot
         
         If you pass through an EllipsoidTool then it will plot the minimum bounding ellipse as well!
         """
         disp_vals = np.array(zip([kPCA1[i] for i in self.rowIndices],
                                  [kPCA2[i] for i in self.rowIndices]))
-        disp_cols = np.array([contigColours[i] for i in self.rowIndices])
+        disp_cols = np.array([contigColors[i] for i in self.rowIndices])
         disp_lens = np.array([np.sqrt(contigLengths[i]) for i in self.rowIndices])
 
         # reshape
@@ -637,12 +625,12 @@ class Bin:
         
         if ET != None:
             (center, radii, rotation) = ET.getMinVolEllipse(disp_vals)
-            centroid_colour = np.mean([contigColours[row_index] for row_index in self.rowIndices],
+            centroid_color = np.mean([contigColours[row_index] for row_index in self.rowIndices],
                                       axis=0)
             if printID:
-                ET.plotEllipse(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_colour, label=self.id)
+                ET.plotEllipse(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color, label=self.id)
             else:
-                ET.plotEllipse(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_colour)
+                ET.plotEllipse(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color)
 
     def printBin(self, contigNames, contigLengths, outFormat="summary", separator="\t", stream=sys.stdout):
         """print this bin info in csvformat"""
