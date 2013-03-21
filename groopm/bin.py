@@ -592,7 +592,7 @@ class Bin:
         
         if ET != None:
             (center, radii, rotation) = self.getBoundingEllipsoid(transformedCP, ET=ET)
-            centroid_color = np.mean([contigColours[row_index] for row_index in self.rowIndices],
+            centroid_color = np.mean([contigColors[row_index] for row_index in self.rowIndices],
                                       axis=0)
             if printID:
                 ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color, label=self.id)
@@ -625,7 +625,7 @@ class Bin:
         
         if ET != None:
             (center, radii, rotation) = ET.getMinVolEllipse(disp_vals)
-            centroid_color = np.mean([contigColours[row_index] for row_index in self.rowIndices],
+            centroid_color = np.mean([contigColors[row_index] for row_index in self.rowIndices],
                                       axis=0)
             if printID:
                 ET.plotEllipse(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color, label=self.id)

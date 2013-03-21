@@ -134,7 +134,7 @@ if __name__ == '__main__':
                                         help='merge similar bins / split chimeric ones',
                                         description='Merge similar bins and split chimeric ones')
     bin_refiner.add_argument('dbname', help="name of the database to open")
-    bin_refiner.add_argument('-m', '--mode', default='plot', help="refinement mode plot|shuffle")
+    bin_refiner.add_argument('-a', '--auto', action="store_true", default=False, help="automatically refine bins")
     bin_refiner.add_argument('-r', '--no_transform', action="store_true", default=False, help="skip data transformation (3 stoits only)")
 
     #-------------------------------------------------

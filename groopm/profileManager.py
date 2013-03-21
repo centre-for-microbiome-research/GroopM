@@ -234,7 +234,7 @@ class ProfileManager:
         self.transformedCP = np_delete(self.transformedCP, deadRowIndices, axis=0)
         self.contigNames = np_delete(self.contigNames, deadRowIndices, axis=0)
         self.contigLengths = np_delete(self.contigLengths, deadRowIndices, axis=0)
-        self.contigColors = np_delete(self.contigColours, deadRowIndices, axis=0)
+        self.contigColors = np_delete(self.contigColors, deadRowIndices, axis=0)
         #self.kmerSigs = np_delete(self.kmerSigs, deadRowIndices, axis=0)
         self.kmerVals = np_delete(self.kmerVals, deadRowIndices, axis=0)
         self.binIds = np_delete(self.binIds, deadRowIndices, axis=0)
@@ -397,7 +397,6 @@ class ProfileManager:
 
         # get the corner points
         corners = np_diag(np_max(self.covProfiles, axis=0))
-        print np_max(self.covProfiles, axis=0)
         for i in range(self.numStoits):
             norm = np_norm(corners[i])
             if(norm != 0):
@@ -496,7 +495,7 @@ class ProfileManager:
         self.transformCP()
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
-        ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColours, marker='.')
+        ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
         try:
             plt.show()
             plt.close(fig)
@@ -543,7 +542,7 @@ class ProfileManager:
             }
 
             ax = fig.add_subplot(131, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColours, marker='.')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
             ax.azim = 0
             ax.elev = 0
             ax.set_xlim3d(0,self.scaleFactor)
@@ -563,7 +562,7 @@ class ProfileManager:
             ax.w_zaxis._AXINFO = myAXINFO
             
             ax = fig.add_subplot(132, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColours, marker='.')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
             ax.azim = 90
             ax.elev = 0
             ax.set_xlim3d(0,self.scaleFactor)
@@ -583,7 +582,7 @@ class ProfileManager:
             ax.w_zaxis._AXINFO = myAXINFO
             
             ax = fig.add_subplot(133, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColours, marker='.')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
             ax.azim = 0
             ax.elev = 90
             ax.set_xlim3d(0,self.scaleFactor)

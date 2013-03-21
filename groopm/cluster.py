@@ -65,6 +65,7 @@ from scipy.cluster.vq import kmeans,vq
 from profileManager import ProfileManager
 from binManager import BinManager, CenterFinder
 import groopmTimekeeper as gtime
+import refine
 
 np_seterr(all='raise')      
 
@@ -154,8 +155,9 @@ class ClusterEngine:
         print "    %s" % timer.getTimeStamp()
 
         # condense cores
-        #print "Refine cores [begin: %d]" % len(self.BM.bins)
-        #self.BM.autoRefineBins(iterate=True)
+        print "Refine cores [begin: %d]" % len(self.BM.bins)
+        RE = refine.RefineEngine(BM=self.BM)
+        RE.refineBins(auto=True, saveBins=False)
         
         num_binned = len(self.PM.binnedRowIndices.keys())
         perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)

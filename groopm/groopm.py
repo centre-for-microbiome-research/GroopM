@@ -56,6 +56,7 @@ import os
 # GroopM imports
 import mstore
 import cluster
+import refine
 import bin
 import binManager
 import groopmUtils
@@ -111,30 +112,14 @@ class GroopMOptionsParser():
             print "****************************************************************"
             print " [[GroopM]] Running in core refining mode..."
             print "****************************************************************"
-            plotter = False
-            shuffle = False
-            links = False
+            
+            auto = options.auto
             transform=True^options.no_transform
             
-            if(options.mode == 'shuffle'):
-                shuffle = True
-                transform = True
-            elif(options.mode == 'plot'):
-                plotter = True
-            else:
-                print "**Error: unknown mode:",options.mode
-                return
-            BM = binManager.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True,
-                        silent=False,
-                        loadContigNames=False,
-                        transform=transform,
-                        loadRawKmers=True)
-            BM.refineWrapper(saveBins=True,
-                               plotter=plotter,
-                               shuffle=shuffle,
-                               links=links,
-                               ignoreRanges=options.no_transform)
+            RE = refine.RefineEngine(dbFileName=options.dbname,
+                                     transform=transform)
+            
+            RE.refineBins(auto=auto, saveBins=True)
 
         elif(options.subparser_name == 'recruit'):
             # make bin cores
