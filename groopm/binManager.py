@@ -1316,17 +1316,7 @@ class BinManager:
 
     def plotStoitNames(self, ax):
         """Plot stoit names on an existing axes"""
-        stoit_names = self.PM.getStoitColNames().split(",")
-        outer_index = 0
-        for corner in self.PM.corners:
-            ax.text(corner[0], 
-                    corner[1], 
-                    corner[2], 
-                    stoit_names[outer_index], 
-                    color='#000000'
-                    )
-            outer_index += 1
-        
+        self.PM.plotStoitNames(ax)
 
     def plotBinIds(self, krange=None, ignoreRanges=False):
         """Render 3d image of core ids"""

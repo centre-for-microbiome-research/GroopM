@@ -302,6 +302,8 @@ class BinExplorer:
             ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors=self.PM2.contigColors, c=self.PM2.contigColors, s=disp_lens, marker='.')
             ax2 = fig.add_subplot(122, projection='3d')
             ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColors, c=binCentroidColors)
+            self.BM.plotStoitNames(ax1)
+            self.BM.plotStoitNames(ax2)
             try:
                 plt.show()
                 plt.close(fig)
@@ -326,6 +328,8 @@ class BinExplorer:
             ax.set_xticks([])
             ax.set_yticks([])
             ax.set_zticks([])
+            self.BM.plotStoitNames(ax)
+
             try:
                 fig.set_size_inches(12,12)            
                 plt.savefig(f_name1,dpi=dpi,format=format)
@@ -358,6 +362,8 @@ class BinExplorer:
             ax.set_xticks([])
             ax.set_yticks([])
             ax.set_zticks([])
+            self.BM.plotStoitNames(ax)
+
             try:
                 fig.set_size_inches(12,12)            
                 plt.savefig(f_name2,dpi=dpi,format=format)

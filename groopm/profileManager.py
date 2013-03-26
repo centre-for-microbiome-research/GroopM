@@ -497,6 +497,19 @@ class ProfileManager:
 
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
+    
+    def plotStoitNames(self, ax):
+        """Plot stoit names on an existing axes"""
+        stoit_names = self.getStoitColNames().split(",")
+        outer_index = 0
+        for corner in self.corners:
+            ax.text(corner[0], 
+                    corner[1], 
+                    corner[2], 
+                    stoit_names[outer_index], 
+                    color='#000000'
+                    )
+            outer_index += 1
 
     def plotUnbinned(self, timer, coreCut):
         """Plot all contigs over a certain length which are unbinned"""
@@ -505,6 +518,8 @@ class ProfileManager:
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
         ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
+        self.plotStoitNames(ax1)
+        
         try:
             plt.show()
             plt.close(fig)
