@@ -1314,6 +1314,20 @@ class BinManager:
         plt.close(fig)
         del fig
 
+    def plotStoitNames(self, ax):
+        """Plot stoit names on an existing axes"""
+        stoit_names = self.PM.getStoitColNames().split(",")
+        outer_index = 0
+        for corner in self.PM.corners:
+            ax.text(corner[0], 
+                    corner[1], 
+                    corner[2], 
+                    stoit_names[outer_index], 
+                    color='#000000'
+                    )
+            outer_index += 1
+        
+
     def plotBinIds(self, krange=None, ignoreRanges=False):
         """Render 3d image of core ids"""
         (bin_centroid_points, bin_centroid_colors, bids) = self.findCoreCentres(krange=krange)
@@ -1328,19 +1342,9 @@ class BinManager:
                     color=bin_centroid_colors[outer_index]
                     )
             outer_index += 1
-        stoit_names = self.PM.getStoitColNames().split(",")
-        outer_index = 0
-        for corner in self.PM.corners:
-            ax.text(corner[0], 
-                    corner[1], 
-                    corner[2], 
-                    stoit_names[outer_index], 
-                    color='#000000'
-                    )
-            outer_index += 1
-            
         
         if not ignoreRanges:
+            self.plotStoitNames(ax)
             ax.set_xlim3d(0, 1000)
             ax.set_ylim3d(0, 1000)
             ax.set_zlim3d(0, 1000)
@@ -1360,10 +1364,10 @@ class BinManager:
         ax.scatter(bin_centroid_points[:,0], bin_centroid_points[:,1], bin_centroid_points[:,2], edgecolors=bin_centroid_colors, c=bin_centroid_colors)
 
         if not ignoreRanges:
+            self.plotStoitNames(ax)
             ax.set_xlim3d(0, 1000)
             ax.set_ylim3d(0, 1000)
             ax.set_zlim3d(0, 1000)
-        
         try:
             plt.show()
             plt.close(fig)
