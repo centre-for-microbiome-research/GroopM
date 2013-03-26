@@ -273,7 +273,7 @@ class EllipsoidTool:
             plt.close(fig)
             del fig
 
-    def plotEllipse(self, center, radii, rotation, ax=None, plotAxes=False, cageColor='b', cageAlpha=0.2, label=None):
+    def plotEllipse(self, center, radii, rotation, ax=None, plotAxes=False, cageColor='b', cageAlpha=0.2, label=None, linewidth=-1):
         """plot an ellipse"""
         make_ax = ax == None
         if make_ax:
@@ -304,7 +304,10 @@ class EllipsoidTool:
                 ax.plot(X3, Y3, color=cageColor)
     
         # plot ellipsoid
-        ax.plot(x, y, color=cageColor, alpha=cageAlpha)
+        if linewidth == -1:
+            ax.plot(x, y, color=cageColor, alpha=cageAlpha)
+        else:
+            ax.plot(x, y, color=cageColor, alpha=cageAlpha, linewidth=linewidth, zorder = 10)
 
         if label is not None:        
             ax.text(center[0], 
