@@ -180,9 +180,10 @@ class BinExplorer:
         else:
             self.bids = bids
 
-    def plotFlyOver(self, fps=10.0, totalTime=120.0):
+    def plotFlyOver(self, timer, fps=10.0, totalTime=120.0):
         """Plot a flyover of the data with bins being removed"""
-        self.BM.loadBins(makeBins=True,
+        self.BM.loadBins(timer,
+                         makeBins=True,
                          silent=False,
                          bids=self.bids,
                          loadContigLengths=False,
@@ -231,16 +232,16 @@ class BinExplorer:
                 current_bid_index += 1
                 bids_removed += 1                
 
-    def plotBinProfiles(self):
+    def plotBinProfiles(self, timer):
         """Plot the distributions of kmer and coverage signatures"""
-        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
         print "Plotting bin profiles"
         self.BM.plotProfileDistributions()
     
-    def plotPoints(self):
+    def plotPoints(self, timer):
         """plot points"""
         print "Plotting bin points"
-        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
         self.BM.plotBinPoints()
     
     def kmerSig2GC(self, sig_weightings, sig):
@@ -252,17 +253,19 @@ class BinExplorer:
             outer_index += 1
         return GC
     
-    
-    def plotSideBySide(self, coreCut):
+    def plotSideBySide(self, timer, coreCut):
         """Plot cores side by side with their contigs"""
         print "Plotting side by side graphs"        
         self.PM2 = binManager.ProfileManager(dbFileName=self.BM.PM.dbFileName)
-        self.PM2.loadData(condition="length >= "+str(coreCut),
+        self.PM2.loadData(timer,
+                          condition="length >= "+str(coreCut),
                           bids=self.bids,
-                          loadContigNames=False
+                          loadContigNames=False,
+                          loadContigLengths=True
                           )
-        (min,max) = self.PM2.transformCP()
-        self.BM.loadBins(makeBins=True,
+        (min,max) = self.PM2.transformCP(timer)
+        self.BM.loadBins(timer,
+                         makeBins=True,
                          loadContigNames=False,
                          bids=self.bids,
                          silent=False,
@@ -271,28 +274,27 @@ class BinExplorer:
         print "Creating side by side plots"
         (bin_centroid_points, bin_centroid_colors, bin_ids) = self.BM.findCoreCentres()
         self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colors)
-        #self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colors, azim=11, elev=43, fileName="forGene")
 
-    def plotIds(self):
+    def plotIds(self, timer):
         """Make a 3d plot of the bins but use IDs instead of points
         
         This function will help users know which bins to merge
         """
         print "Plotting bin IDs"        
-        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
         self.BM.plotBinIds()
 
-    def plotUnbinned(self, coreCut):
+    def plotUnbinned(self, timer, coreCut):
         print "Plotting unbinned contigs"        
         """Plot all contigs over a certain length which are unbinned"""
-        self.PM.plotUnbinned(coreCut)
+        self.PM.plotUnbinned(timer, coreCut)
             
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
 
     def plotCoresVsContigs(self, binCentroidPoints, binCentroidColors, azim=0, elev=0, fileName='', dpi=300, format='png'):
         """Render the image for validating cores"""
-        disp_lens = np.array([np.sqrt(self.PM2.contigLengths[i]) for i in range(len(self.PM.indices))])
+        disp_lens = np.array([np.sqrt(self.PM2.contigLengths[i]) for i in range(len(self.PM2.indices))])
         if(fileName==""):
             # plot on screen for user
             fig = plt.figure()
