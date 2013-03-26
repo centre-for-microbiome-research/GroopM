@@ -106,6 +106,7 @@ class BinManager:
 # LOADING / SAVING
         
     def loadBins(self,
+                 timer,
                  getUnbinned=False,
                  bids=[],
                  makeBins=False,
@@ -132,7 +133,8 @@ class BinManager:
             loadKmerSigs=True
             loadCovProfiles=True
         
-        self.PM.loadData(bids=bids,
+        self.PM.loadData(timer,
+                         bids=bids,
                          condition=condition,
                          silent=silent,
                          loadCovProfiles=loadCovProfiles,
@@ -144,17 +146,23 @@ class BinManager:
                          loadBins=True,
                          loadLinks=loadLinks
                         )
-        
         if(makeBins):
             if transform:
-                self.PM.transformCP(silent=silent, min=min, max=max)
+                self.PM.transformCP(timer, silent=silent, min=min, max=max)
             else:
                 if self.PM.numStoits == 3:
                     self.PM.transformedCP = self.PM.covProfiles
                 else:
                     print "Number of stoits != 3. You need to transform"
-                    self.PM.transformCP(silent=silent, min=min, max=max)
+                    self.PM.transformCP(timer, silent=silent, min=min, max=max)
+            if not silent:
+                print "    Making bins"
             self.makeBins(self.getBinMembers())
+            if not silent:
+                print "    Loaded %d bins" % len(self.bins)
+        if not silent:
+            print "    %s" % timer.getTimeStamp()
+            sys_stdout.flush()
 
     def getBinMembers(self):
         """Munge the raw data into something more usable
@@ -411,20 +419,6 @@ class BinManager:
     def getBids(self):
         """Return a sorted list of bin ids"""
         return sorted(self.bins.keys())
-
-    def isGoodBin(self, totalBP, binSize, ms=0, mv=0):
-        """Does this bin meet my exacting requirements?"""
-        if(ms == 0):
-            ms = self.minSize               # let the user choose
-        if(mv == 0):
-            mv = self.minVol                # let the user choose
-        
-        if(totalBP < mv):                   # less than the good volume
-            if(binSize > ms):               # but has enough contigs
-                return True
-        else:                               # contains enough bp to pass regardless of number of contigs
-            return True        
-        return False
 
     def getCentroidProfiles(self, mode="mer"):
         """Return an array containing the centroid stats for each bin"""
