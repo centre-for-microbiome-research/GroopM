@@ -97,7 +97,6 @@ class Bin:
         self.covStdevs = np.zeros((3))
         self.covLowerLimits = np.zeros((3)) # lower and upper limits based on tolerance
         self.covUpperLimits = np.zeros((3))
-        self.rawCovMeans = np.array([])
         
         # AVERAGE COVERAGE
         self.cValMean = 0.0
@@ -155,7 +154,6 @@ class Bin:
         # consume all the other bins rowIndices
         if(verbose):
             print "    BIN:",deadBin.id,"will be consumed by BIN:",self.id
-            print deadBin.rowIndices
         self.rowIndices = np.concatenate([self.rowIndices, deadBin.rowIndices])
         self.binSize  = self.rowIndices.shape[0]
         
@@ -340,7 +338,7 @@ class Bin:
             except:
                 print bin_points
                 raise
-        else: # minimum bounding elipse of a point is 0 
+        else: # minimum bounding ellipse of a point is 0 
             if retA:
                 return (np.zeros((3,3)), transformedCP[self.rowIndices[0]], np.zeros((3)), np.eye(3))
             else:
