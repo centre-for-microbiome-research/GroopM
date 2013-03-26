@@ -147,7 +147,7 @@ class GMDataManager:
 #------------------------------------------------------------------------------
 # DB CREATION / INITIALISATION  - PROFILES
 
-    def createDB(self, bamFiles, contigs, dbFileName, kmerSize=4, dumpAll=False, force=False):
+    def createDB(self, bamFiles, contigs, dbFileName, timer, kmerSize=4, dumpAll=False, force=False):
         """Main wrapper for parsing all input files"""
         # load all the passed vars
         dbFileName = dbFileName
@@ -174,7 +174,6 @@ class GMDataManager:
             print "Creating new database", dbFileName
         
         # create the db
-        timer = gtime.TimeKeeper()
         try:        
             with tables.openFile(dbFileName, mode = "w", title = "GroopM") as h5file:
                 # Create groups under "/" (root) for storing profile information and metadata
@@ -394,12 +393,13 @@ class GMDataManager:
 #------------------------------------------------------------------------------
 # DB UPGRADE 
 
-    def checkAndUpgradeDB(self, dbFileName):
+    def checkAndUpgradeDB(self, dbFileName, silent=False):
         """Check the DB and upgrade if necessary"""
         # get the DB format version
         this_DB_version = self.getGMFormat(dbFileName)
         if __current_GMDB_version__ == this_DB_version:
-            print "    GroopM DB version up to date"
+            if not silent:
+                print "    GroopM DB version up to date"
             return 
         
         # now, if we get here then we need to do some work
@@ -499,7 +499,7 @@ class GMDataManager:
 #------------------------------------------------------------------------------
 # GET LINKS 
 
-    def restoreLinks(self, dbFileName, indices=[]):
+    def restoreLinks(self, dbFileName, indices=[], silent=False):
         """Restore the links hash for a given set of indicies"""
         full_record = []
         try:
@@ -511,7 +511,7 @@ class GMDataManager:
         
         if indices == []:
             # get all!
-            indices = self.getConditionalIndices(dbFileName)
+            indices = self.getConditionalIndices(dbFileName, silent=silent)
         
         links_hash = {}
         if full_record != []:
@@ -527,10 +527,10 @@ class GMDataManager:
 #------------------------------------------------------------------------------
 # GET / SET DATA TABLES - PROFILES 
 
-    def getConditionalIndices(self, dbFileName, condition=''):
+    def getConditionalIndices(self, dbFileName, condition='', silent=False):
         """return the indices into the db which meet the condition"""
         # check the DB out and see if we need to change anything about it
-        self.checkAndUpgradeDB(dbFileName)
+        self.checkAndUpgradeDB(dbFileName, silent=silent)
         
         if('' == condition):
             condition = "cid != ''" # no condition breaks everything!

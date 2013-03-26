@@ -130,20 +130,19 @@ class ClusterEngine:
 #------------------------------------------------------------------------------
 # CORE CONSTRUCTION AND MANAGEMENT
         
-    def makeCores(self, coreCut):
+    def makeCores(self, timer, coreCut):
         """Cluster the contigs to make bin cores"""
         # check that the user is OK with nuking stuff...
         if(not self.promptOnOverwrite()):
             return False
 
         # get some data
-        timer = gtime.TimeKeeper()
-        self.PM.loadData(condition="length >= "+str(coreCut))
+        self.PM.loadData(timer, condition="length >= "+str(coreCut))
         print "    %s" % timer.getTimeStamp()
         
         # transform the data
         print "Apply data transformations"
-        self.PM.transformCP()
+        self.PM.transformCP(timer)
         # plot the transformed space (if we've been asked to...)
         if(self.debugPlots):
             self.PM.renderTransCPData()

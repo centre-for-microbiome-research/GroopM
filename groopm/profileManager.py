@@ -49,7 +49,7 @@ __status__ = "Alpha"
 
 ###############################################################################
 
-from sys import exc_info, exit, stdout
+from sys import exc_info, exit, stdout as sys_stdout
 from operator import itemgetter
 
 from colorsys import hsv_to_rgb as htr
@@ -120,6 +120,7 @@ class ProfileManager:
         self.scaleFactor = scaleFactor      # scale every thing in the transformed data to this dimension
 
     def loadData(self,
+                 timer,
                  condition="",              # condition as set by another function
                  bids=[],                   # if this is set then only load those contigs with these bin ids
                  verbose=True,              # many to some output messages
@@ -133,7 +134,10 @@ class ProfileManager:
                  loadBins=False,
                  loadLinks=False):
         """Load pre-parsed data"""
-        if(verbose):
+        timer.getTimeStamp()
+        if(silent):
+            verbose=False
+        if verbose:
             print "Loading data from:", self.dbFileName
         
         # check to see if we need to override the condition
@@ -142,12 +146,12 @@ class ProfileManager:
             for index in range (1,len(bids)):
                 condition += " | (bid == "+str(bids[index])+")"
             condition += ")"
-        if(silent):
-            verbose=False
         try:
             self.numStoits = self.getNumStoits()
             self.condition = condition
-            self.indices = self.dataManager.getConditionalIndices(self.dbFileName, condition=condition)
+            self.indices = self.dataManager.getConditionalIndices(self.dbFileName,
+                                                                  condition=condition,
+                                                                  silent=silent)
             if(verbose):
                 print "    Loaded indices with condition:", condition
             self.numContigs = len(self.indices)
@@ -194,7 +198,8 @@ class ProfileManager:
                 if(verbose):
                     print "    Loading contig lengths"
                 self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indices=self.indices)
-                print "    Contigs contain %d BP" % ( sum(self.contigLengths) )
+                if(verbose):
+                    print "    Contigs contain %d BP" % ( sum(self.contigLengths) )
             
             if(loadBins):
                 if(verbose):
@@ -222,6 +227,10 @@ class ProfileManager:
         except:
             print "Error loading DB:", self.dbFileName, exc_info()[0]
             raise
+        if(verbose):
+            print "    %s" % timer.getTimeStamp()
+            sys_stdout.flush()
+
 
     def reduceIndices(self, deadRowIndices):
         """purge indices from the data structures
@@ -341,8 +350,9 @@ class ProfileManager:
         """Return the average coverage for this contig across all stoits"""
         return sum(self.transformedCP[rowIndex])/self.numStoits
 
-    def transformCP(self, silent=False, nolog=False, min=None, max=None):
+    def transformCP(self, timer, silent=False, nolog=False, min=None, max=None):
         """Do the main ransformation on the coverage profile data"""
+        timer.getTimeStamp()
         shrinkFn = np_log10
         if(nolog):
             shrinkFn = lambda x:x
@@ -427,7 +437,11 @@ class ProfileManager:
         for i in range(2):
             self.corners[:,i] /= max[i]
 
-
+        if not silent:
+            print "    %s" % timer.getTimeStamp()
+            sys_stdout.flush()            
+        
+        timer.getTimeStamp()
         return(min,max)
         
     def rotateVectorAndScale(self, point, las, centerVector, delta_max=0.25):
@@ -489,10 +503,10 @@ class ProfileManager:
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
 
-    def plotUnbinned(self, coreCut):
+    def plotUnbinned(self, timer, coreCut):
         """Plot all contigs over a certain length which are unbinned"""
-        self.loadData(condition="((length >= "+str(coreCut)+") & (bid == 0))")
-        self.transformCP()
+        self.loadData(timer, condition="((length >= "+str(coreCut)+") & (bid == 0))")
+        self.transformCP(timer)
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
         ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
