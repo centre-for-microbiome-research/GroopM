@@ -115,13 +115,16 @@ class GroopMOptionsParser():
             print "*******************************************************************************"
             print " [[GroopM]] Running in core refining mode..."
             print "*******************************************************************************"
-            
+            bids = []
+            if options.bids is not None:
+                bids = options.bids            
             auto = options.auto
             transform=True^options.no_transform
             
             RE = refine.RefineEngine(timer,
                                      dbFileName=options.dbname,
-                                     transform=transform)
+                                     transform=transform,
+                                     bids=bids)
             
             RE.refineBins(timer,
                           auto=auto,
@@ -132,15 +135,13 @@ class GroopMOptionsParser():
             print "*******************************************************************************"
             print " [[GroopM]] Running in bin expansion mode..."
             print "*******************************************************************************"
-            BM = binManager.BinManager(dbFileName=options.dbname)
-            BM.loadBins(timer,
-                        makeBins=True,
-                        loadContigNames=False,
-                        silent=False,
-                        getUnbinned=True,
-                        cutOff=options.cutoff
-                        )
-            BM.recruitWrapper(timer,
+            RE = refine.RefineEngine(timer,
+                                     dbFileName=options.dbname,
+                                     getUnbinned=True,
+                                     loadContigNames=False
+                                     )
+
+            RE.recruitWrapper(timer,
                               inclusivity=options.inclusivity,
                               step=options.step,
                               saveBins=True)
@@ -148,7 +149,7 @@ class GroopMOptionsParser():
         elif(options.subparser_name == 'extract'):
             # Extract data
             print "*******************************************************************************"
-            print " [[GroopM]] Running in %s extraction mode..." % options.mode 
+            print " [[GroopM]] Running in '%s' extraction mode..." % options.mode 
             print "*******************************************************************************"
             bids = []
             if options.bids is not None:
@@ -158,9 +159,9 @@ class GroopMOptionsParser():
                                           folder=options.outfolder
                                           )
             if(options.mode=='contigs'):
-                BX.extractContigs(fasta=options.data, cutoff=options.cutoff)
+                BX.extractContigs(timer, fasta=options.data, cutoff=options.cutoff)
             elif(options.mode=='reads'):
-                BX.extractReads(bams=options.data)
+                BX.extractReads(timer, bams=options.data)
             else:
                 raise ge.ExtractModeNotAppropriateException("mode: "+mode+" is unknown")
 
@@ -194,7 +195,7 @@ class GroopMOptionsParser():
         elif(options.subparser_name == 'explore'):
             # make bin cores
             print "*******************************************************************************"
-            print " [[GroopM]] Running in bin %s explorer mode..." % options.mode
+            print " [[GroopM]] Running in bin '%s' explorer mode..." % options.mode
             print "*******************************************************************************"
             bids = []
             if options.bids is not None:
@@ -202,6 +203,8 @@ class GroopMOptionsParser():
             BE = groopmUtils.BinExplorer(options.dbname, bids=bids)
             if(options.mode == 'points'):
                 BE.plotPoints(timer)
+            elif(options.mode == 'contigs'):
+                BE.plotContigs(timer)
             elif(options.mode == 'ids'):
                 BE.plotIds(timer)
             elif(options.mode == 'flyover'):
@@ -225,7 +228,7 @@ class GroopMOptionsParser():
 
         elif(options.subparser_name == 'plot'):
             print "*******************************************************************************"
-            print " [[GroopM]] Plot bins..."
+            print " [[GroopM]] Running in bin plotting mode..."
             print "*******************************************************************************"
             BM = binManager.BinManager(dbFileName=options.dbname)
             if options.bids is None:
@@ -246,7 +249,6 @@ class GroopMOptionsParser():
                             sideBySide=options.sidebyside,
                             plotEllipsoid=True,
                             folder=options.folder)
-            
         return 0
     
 

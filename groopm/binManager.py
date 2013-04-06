@@ -127,7 +127,10 @@ class BinManager:
         if(cutOff != 0):
             condition="length >= %d" % cutOff
         elif(len(bids) == 0):
-            condition='bid != 0'
+            if getUnbinned:
+                condition="length >= 0"
+            else:
+                condition='bid != 0'
         # if we're going to make bins then we'll need kmer sigs
         if(makeBins):
             loadKmerSigs=True
@@ -415,6 +418,20 @@ class BinManager:
     
 #------------------------------------------------------------------------------
 # BIN UTILITIES 
+
+    def isGoodBin(self, totalBP, binSize, ms=0, mv=0):
+        """Does this bin meet my exacting requirements?"""
+        if(ms == 0):
+            ms = self.minSize               # let the user choose
+        if(mv == 0):
+            mv = self.minVol                # let the user choose
+        
+        if(totalBP < mv):                   # less than the good volume
+            if(binSize > ms):               # but has enough contigs
+                return True
+        else:                               # contains enough bp to pass regardless of number of contigs
+            return True        
+        return False
 
     def getBids(self):
         """Return a sorted list of bin ids"""
@@ -954,32 +971,12 @@ class BinManager:
             return (bin_centroid_points, bin_centroid_colors, bin_centroid_kvals, bids)
         return (bin_centroid_points, bin_centroid_colors, bids)
 
-    def calculateAngles(self, rowSet1, rowSet2):
-        """work out the angles between a set of contigs"""
-        angles = []
-        for i in rowSet1:
-            for j in rowSet2:
-                if i != j:
-                    angles.append(self.getAngleBetween(i, j))
-        return angles
-
-    def getAngleBetween(self, rowIndex1, rowIndex2):
+    def getAngleBetween(self, rowIndex1, rowIndex2, ):
         """Find the angle between two contig's coverage vectors"""
         u = self.PM.covProfiles[rowIndex1]
         v = self.PM.covProfiles[rowIndex2]
-        
         try:
-            ac = np_arccos(np_dot(u,v)/np_norm(u)/np_norm(v))
-        except FloatingPointError:
-            return 0
-        return ac
-
-    def getAngleBetweenVectors(self, u, v):
-        """Find the angle between two contig's coverage vectors
-        
-        """
-        try:
-            ac = np_arccos(np_dot(u,v)/np_norm(u)/np_norm(v))
+            ac = np_arccos(np_dot(u,v)/self.PM.normCoverages[rowIndex1]/self.PM.normCoverages[rowIndex1])
         except FloatingPointError:
             return 0
         return ac

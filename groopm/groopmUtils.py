@@ -95,10 +95,10 @@ class GMExtractor:
         # make the dir if need be
         makeSurePathExists(self.outDir)
         
-    def extractContigs(self, fasta=[], cutoff=0):
+    def extractContigs(self, timer, fasta=[], cutoff=0):
         """Extract contigs and write to file"""
         self.BM = binManager.BinManager(dbFileName=self.dbFileName)   # bins
-        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
         self.PM = self.BM.PM
         
         # load all the contigs which have been assigned to bins
@@ -237,6 +237,12 @@ class BinExplorer:
         self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
         print "Plotting bin profiles"
         self.BM.plotProfileDistributions()
+
+    def plotContigs(self, timer):
+        """plot contigs"""
+        print "Plotting bin contigs"
+        self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
+        self.BM.plotMultipleBins([self.bids], squash=True)
     
     def plotPoints(self, timer):
         """plot points"""

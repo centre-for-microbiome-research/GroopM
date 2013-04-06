@@ -94,6 +94,7 @@ class ProfileManager:
         self.transformedCP = np_array([])   # the munged data points
         self.corners = np_array([])         # the corners of the tranformed space
         self.averageCoverages = np_array([]) # average coverage across all stoits
+        self.normCoverages = np_array([])   # norm of the raw coverage vectors
         self.kmerSigs = np_array([])        # raw kmer signatures
         self.kmerVals = np_array([])        # PCA'd kmer sigs PC1
         self.kmerVals2 = np_array([])       # PCA'd kmer sigs PC2
@@ -375,6 +376,7 @@ class ProfileManager:
         
         for i in range(len(self.indices)):
             norm = np_norm(self.covProfiles[i])
+            self.normCoverages = np_append(self.normCoverages, norm)
             if(norm != 0):
                 radial = shrinkFn(norm)
             else:
@@ -438,63 +440,7 @@ class ProfileManager:
         
         timer.getTimeStamp()
         return(min,max)
-        
-    def rotateVectorAndScale(self, point, las, centerVector, delta_max=0.25):
-        """
-        Move a vector closer to the center of the positive quadrant
-        
-        Find the co-ordinates of its projection
-        onto the surface of a hypersphere with radius R
-        
-        What?...  ...First some definitions:
-       
-        For starters, think in 3 dimensions, then take it out to N.
-        Imagine all points (x,y,z) on the surface of a sphere
-        such that all of x,y,z > 0. ie trapped within the positive
-        quadrant.
-       
-        Consider the line x = y = z which passes through the origin
-        and the point on the surface at the "center" of this quadrant.
-        Call this line the "main mapping axis". Let the unit vector 
-        coincident with this line be called A.
-       
-        Now think of any other vector V also located in the positive
-        quadrant. The goal of this function is to move this vector
-        closer to the MMA. Specifically, if we think about the plane
-        which contains both V and A, we'd like to rotate V within this
-        plane about the origin through phi degrees in the direction of
-        A.
-        
-        Once this has been done, we'd like to project the rotated co-ords 
-        onto the surface of a hypersphere with radius R. This is a simple
-        scaling operation.
-       
-        The idea is that vectors closer to the corners should be pertubed
-        more than those closer to the center.
-        
-        Set delta_max as the max percentage of the existing angle to be removed
-        """
-        theta = self.getAngBetween(point, centerVector)
-        A = delta_max/((las)**2)
-        B = delta_max/las
-        delta = 2*B*theta - A *(theta**2) # the amount to shift
-        V_p = point*(1-delta) + centerVector*delta
-        return V_p/np_norm(V_p)
     
-    def rad2deg(self, anglein):
-        return 180*anglein/np_pi
-
-    def getAngBetween(self, P1, P2):
-        """Return the angle between two points (in radians)"""
-        # find the existing angle between them theta
-        c = np_dot(P1,P2)/np_norm(P1)/np_norm(P2) 
-        # rounding errors hurt everyone...
-        if(c > 1):
-            c = 1
-        elif(c < -1):
-            c = -1
-        return np_arccos(c) # in radians
-
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
     

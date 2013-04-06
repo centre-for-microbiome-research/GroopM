@@ -127,26 +127,6 @@ class Bin:
             return 1
 
 #------------------------------------------------------------------------------
-# Sort row indices
-    
-    def sortIndicesByAngle(self, covProfiles):
-        """Sort row indices in increasing position angle from the coverage mean"""
-        # find the mean coverage profile
-        mcp = np.mean([covProfiles[i] for i in self.rowIndices], axis=0)
-        # work out al the angles
-        angle_indices = np.argsort(np.array([self.getAngleBetweenVectors(covProfiles[i], mcp) for i in self.rowIndices]))
-        # now update the indices
-        self.rowIndices = np.array([self.rowIndices[i] for i in angle_indices])
-
-    def getAngleBetweenVectors(self, u, v):
-        """Find the angle between two contig's coverage vectors"""
-        try:
-            ac = np.arccos(np.dot(u,v)/np.linalg.norm(u)/np.linalg.norm(v))
-        except FloatingPointError:
-            return 0
-        return ac
-            
-#------------------------------------------------------------------------------
 # Grow and shrink 
     
     def consume(self, transformedCP, averageCoverages, kmerVals, contigLengths, deadBin, verbose=False):

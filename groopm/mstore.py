@@ -531,7 +531,7 @@ class GMDataManager:
         """return the indices into the db which meet the condition"""
         # check the DB out and see if we need to change anything about it
         self.checkAndUpgradeDB(dbFileName, silent=silent)
-        
+
         if('' == condition):
             condition = "cid != ''" # no condition breaks everything!
         try:

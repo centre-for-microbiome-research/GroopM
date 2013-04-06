@@ -155,8 +155,8 @@ class ClusterEngine:
 
         # condense cores
         print "Refine cores [begin: %d]" % len(self.BM.bins)
-        RE = refine.RefineEngine(BM=self.BM)
-        RE.refineBins(auto=True, saveBins=False)
+        RE = refine.RefineEngine(timer, BM=self.BM)
+        RE.refineBins(timer, auto=True, saveBins=False)
         
         num_binned = len(self.PM.binnedRowIndices.keys())
         perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)

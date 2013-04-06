@@ -61,7 +61,7 @@ from pylab import plot,subplot,axis,stem,show,figure
 
 from numpy import arange as numpy_arange, copy as np_copy, arange as np_arange, ravel as np_ravel, ones as np_ones, eye as np_eye, shape as np_shape, around as np_around, argmax as np_argmax, arccos as np_cos, dot as np_dot, sum as np_sum, abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
 from numpy.linalg import norm as np_norm 
-from numpy.random import shuffle as shuffle
+from numpy.random import shuffle as shuffle, randint as randint
 
 from scipy.spatial import KDTree as kdt
 from scipy.cluster.vq import kmeans,vq,whiten,kmeans2
@@ -84,15 +84,25 @@ np_seterr(all='raise')
 
 class RefineEngine:
     """Workhorse wrapper for bin refinement"""
-    def __init__(self, timer, BM=None, dbFileName="", transform=True):
+    def __init__(self,
+                 timer,
+                 BM=None,
+                 dbFileName="",
+                 transform=True,
+                 getUnbinned=False,
+                 loadContigNames=False,
+                 bids=[]
+                 ):
         # worker classes
         if BM is None:
             # make our own ones from scratch
             self.BM = BinManager(dbFileName=dbFileName)
             self.BM.loadBins(timer,
+                             bids=bids,
                              makeBins=True,
                              silent=False,
-                             loadContigNames=False,
+                             loadContigNames=loadContigNames,
+                             getUnbinned=getUnbinned,
                              transform=transform,
                              loadRawKmers=True)
         else:
@@ -317,16 +327,19 @@ class RefineEngine:
 
     def autoRefineBins(self,
                        timer,
-                       mergeObvious=True,
+                       mergeSimilarBins=True,
                        removeDuds=True,
                        nukeOutliers=True,
-                       shuffleRefine=True,
+                       shuffleRefine=False,
                        verbose=False,
                        plotAfterOB=False,
-                       plotFinal=False):
+                       plotFinal=True):
         """Automagically refine bins"""
 
         sys_stdout.flush()
+        kCut = self.getKCut()
+        #self.combineMergers(self.BM.getBids(), kCut)
+        #exit(0)
 
         # identify and remove outlier bins
         if nukeOutliers:
@@ -335,8 +348,8 @@ class RefineEngine:
             sys_stdout.flush()
 
         # merge bins together
-        if mergeObvious:
-            self.mergeObvious()
+        if mergeSimilarBins:
+            self.mergeSimilarBins(kCut)
             print "    %s" % timer.getTimeStamp()
             sys_stdout.flush()
 
@@ -368,7 +381,7 @@ class RefineEngine:
                                            self.PM.averageCoverages, 
                                            self.PM.kmerVals, 
                                            self.PM.contigLengths)
-            self.plotBins(FNPrefix="FINAL", ET=self.ET)
+            self.BM.plotBins(FNPrefix="FINAL", ET=self.ET)
             
         print "    %s" % timer.getTimeStamp()
         sys_stdout.flush()
@@ -401,23 +414,35 @@ class RefineEngine:
                  dead_bins.append(bid)
                  
         # delete the bad bins
-        print "returning before delete"
-        return
         self.BM.deleteBins(dead_bins,
                            force=True,
                            freeBinnedRowIndices=True,
                            saveBins=False)
         print "    Identified %d possible chimeras leaving %d cores" % (len(dead_bins), len(self.BM.bins))
 
-    def mergeObvious(self, verbose=False):
+    def mergeSimilarBins(self, kCut, bids=[], verbose=False):
         """Merge bins which are just crying out to be merged!"""
+        print "    Merging similar bins with kCut %0.4f" % kCut
+        if bids == []:
+            bids = self.BM.getBids()
+        # identify merging groups
+        mergers = self.findMergeGroups(verbose=verbose)
+        num_bins_removed = 0
+        # and then merge them
+        for merge in mergers:
+            bins_removed = self.combineMergers(merge, kCut)
+            num_bins_removed += len(bins_removed)
+        print "    Merged %d cores leaving %d cores" % (num_bins_removed, len(self.BM.bins))        
+        return num_bins_removed                
         
-        print "    Making obvious mergers"
+    def findMergeGroups(self, bids=[], verbose=False):
+        """Identify groups of contigs which could be merged"""
         tdm = []                # these are used in the neighbor search
         bid_2_tdm_index = {} 
         tdm_index_2_bid = {} 
 
-        bids = self.BM.getBids()
+        if bids == []:
+            bids = self.BM.getBids()
         K = 10                   # number of neighbours to test
         if K > len(bids):
             K = len(bids)
@@ -453,6 +478,14 @@ class RefineEngine:
                             self.PM.kmerVals, 
                             self.PM.contigLengths,
                             merTol=2.5)  # make the merTol a little larger...
+            
+            if False:
+                centroid_color = np_mean([self.PM.contigColors[row_index] for row_index in bin.rowIndices],
+                              axis=0)
+                ncc = [int(i) for i in centroid_color * 255]
+                hex_color = '#%02x%02x%02x' % (ncc[0], ncc[1], ncc[2])
+                print '%d [fontcolor="%s" color="%s"];' % (bid, hex_color, hex_color)
+                
             # use a 4 dimensional vector [cov, cov, cov, mer]
             tdm.append(np_append(bin.covMeans, [1000*bin.kValMean]))
 
@@ -473,7 +506,23 @@ class RefineEngine:
             # we will not process any pair twice.
             # we also wish to avoid checking if a bin will merge with itself        
             processed_pairs[self.BM.makeBidKey(bid, bid)] = True
-
+            
+        if False:
+            ave_cols = self.rePCA(bids, mode='trans')[:,0]
+            ave_cols -= np_min(ave_cols)
+            ave_cols /= np_max(ave_cols)
+            S = 1       # SAT and VAL remain fixed at 1. Reduce to make
+            V = 1       # Pastels if that's your preference...
+            bin_cols = np_array([htr(val, S, V) for val in ave_cols])
+            hbc = []
+            print "-------"
+            for col in bin_cols:
+                ncc = [int(i) for i in col * 255]
+                hbc.append('#%02x%02x%02x' % (ncc[0], ncc[1], ncc[2]))
+            for i in range(len(bids)):
+                print '%d [fontcolor="%s" color="%s"];' % (bids[i], hbc[i], hbc[i])
+                
+            sys_exit(0)
 #-----
 # ALL Vs ALL
         # make a search tree
@@ -610,7 +659,7 @@ class RefineEngine:
                 else:
                     merged_bins[merged_query_bid] = merged_base_bid
 #-----
-# MERGE
+# CREATE FINAL MERGE GROUPS
         # now make a bunch of possible mergers
         mergers = []
         processed_bids = {}     # bid => index in mergers
@@ -644,72 +693,120 @@ class RefineEngine:
                 processed_bids[merging_bid] = merge_list_id_1
                 mergers[merge_list_id_1].append(merging_bid)
 
-        # now merge them
-        num_bins_removed = 0
-        centroid_vector = np_ones((self.PM.numStoits))
-        for merge in mergers:
-            num_bins_removed += self.combineMergers(merge)
-        print "    Removed %d cores leaving %d cores" % (num_bins_removed, len(self.BM.bins))        
+        return mergers
 
-    def combineMergers(self, bidList):
+    def getKCut(self):
+        """Work out the easy cutoff for kmerVal distance"""
+        mean_k_vals = []
+        for bid in self.BM.getBids():
+            bin = self.BM.bins[bid]
+            bin_k_vals = [[self.PM.kmerVals[row_index]] for row_index in bin.rowIndices]
+            k_dist = squareform(cdist(bin_k_vals, bin_k_vals))
+            if len(k_dist) > 0:
+                mean_k_vals.append(np_mean(k_dist))
+        
+        return np_mean(mean_k_vals)# + np_std(mean_k_vals)  
+
+    def combineMergers(self, bidList, kCut):
         print "+++++++++++++++++++++++++"
         print bidList
-        small_mer_diff = 0.05
-        num_merged = 0
+        print "digraph ff{"
+        for bid in bidList:
+            bin = self.BM.bins[bid]
+            centroid_color = np_mean([self.PM.contigColors[row_index] for row_index in bin.rowIndices],
+                          axis=0)
+            ncc = [int(i) for i in centroid_color * 255]
+            hex_color = '#%02x%02x%02x' % (ncc[0], ncc[1], ncc[2])
+            print '\t%d [fontcolor="%s" color="%s"];' % (bid, hex_color, hex_color)
+
+        merged_bids = []
+        too_big = 10000
+
         # PCA kmers to find out who is most similar to whom
-        mer_PCAs = self.rePCA(bidList)
+        (bin_mer_PCAs, mer_con_PCAs) = self.rePCA(bidList, doBoth=True)
         side = len(bidList)
-        dists = squareform(cdist(mer_PCAs, mer_PCAs))
-
-        for count in range(((side*(side-1))/2)):
-            if len(bidList) > 1:
-                # find the closest pair 
-                closest = np_argmin(dists)
-                if dists[closest] == 10000:
-                    break
-                (i,j) = self.sq2indices(closest, side-1)
-                bid1 = bidList[i]
-                bid2 = bidList[j]
-
-                should_merge = False                
-                cov_alphas = {}
-                if np_abs(self.BM.bins[bid1].kValMean - self.BM.bins[bid2].kValMean) < small_mer_diff: # If the mer-range is teensy tiny... 
-                    should_merge = True
-                (test, null) = self.testMerge(bid1, bid2, cov_alphas)
+        sq_dists = cdist(bin_mer_PCAs, bin_mer_PCAs)
+        dists = squareform(sq_dists)
+        while True:
+            # find the closest pair 
+            closest = np_argmin(dists)
+            if dists[closest] == too_big:
+                break
+            (i,j) = self.small2indices(closest, side-1)
+            bid1 = bidList[i]
+            bid2 = bidList[j]
+            if False:
+                if bid1 == 10 or bid1 == 11 or bid1 == 12 or bid1 == 13 or bid2 == 10 or bid2 == 11 or bid2 == 12 or bid2 == 13:
+                    VVB = True
+                else:
+                    VVB = False 
+            should_merge = False                
+            # test if the mer dist is teensy tiny.
+            # this is a time saver...
+            k_diff = np_abs(self.BM.bins[bid1].kValMean - self.BM.bins[bid2].kValMean)
+            #if VVB:
+            #    print bid1, bid2, k_diff, 
+            if k_diff < kCut: 
+                should_merge = True
+            else:
+                # not teensy tiny, but is it still OK?
+                (test, null) = self.testMergeMer(bid1, bid2, mer_con_PCAs)
                 if test < null:
                     should_merge = True
-                if should_merge:
-                    # merge!
-                    num_merged += 1
-                    self.BM.merge([bid1, bid2],
-                                  auto=True,
-                                  manual=False,
-                                  newBid=False,
-                                  saveBins=False,
-                                  verbose=False,
-                                  printInstructions=False,
-                                  use_elipses=False)
+                    # now we know we should merge based on mers,
+                    # test is the bins lie in the same coverage region
+                    if should_merge:
+                        (test, null) = self.testMergeCoverage(bid1, bid2)
+                        if test < null:
+                            should_merge = True
+                        else:
+                            should_merge = False
+                            #if VVB:
+                            #    print "CVDISTFUCKED", test, null
 
-                    # fix the bidList
-                    bidList = [k for k in bidList if k != bid2]
-                    if len(bidList) < 2:
-                        break
-                    
-                    # average the PCAs
-                    avePCA = (mer_PCAs[i] + mer_PCAs[j])/2
-                    new_PCAs = np_array([])
-                    for k in range(len(mer_PCAs)):
-                        if k == i:
-                            new_PCAs = np_append(new_PCAs, avePCA)
-                        elif k != j:
-                            new_PCAs = np_append(new_PCAs, mer_PCAs[k])
-                    side = len(bidList)
-                    mer_PCAs = np_reshape(new_PCAs, (side,2)) 
-                    dists = squareform(cdist(mer_PCAs, mer_PCAs)) 
-                else:
-                    dists[closest] = 10000
+                #elif VVB:
+                #    print "KDISTFUCKED", test, null
+
+            if should_merge:
+                # get these before we merge!
+                print "\t%d -> %d;" % (bid2, bid1)
+                b1_size = self.BM.bins[bid1].binSize
+                b2_size = self.BM.bins[bid2].binSize
+
+                # merge!
+                merged_bids.append(bid2)
+                self.BM.merge([bid1, bid2],
+                              auto=True,
+                              manual=False,
+                              newBid=False,
+                              saveBins=False,
+                              verbose=False,
+                              printInstructions=False,
+                              use_elipses=False)
+
+                # we use the weighted average of the two previous pca positions 
+                # to determine where the newly merged bin should reside
+                bin_mer_PCAs[i] = (bin_mer_PCAs[i] * b1_size + bin_mer_PCAs[j] * b2_size) / (b1_size + b2_size)
+
+                # re-calc the distances                 
+                new_dists = cdist([bin_mer_PCAs[i]], bin_mer_PCAs)
+                
+                # we need to fix the distance matrix
+                sq_dists[j,:] = too_big
+                sq_dists[:,j] = too_big
+                sq_dists[j,j] = 0.0
+                sq_dists[i,:] = np_where(sq_dists[i,:] == too_big, sq_dists[i,:], new_dists)
+                sq_dists[:,i] = np_where(sq_dists[:,i] == too_big, sq_dists[:,i], new_dists)
+                dists = squareform(sq_dists)
+            else:
+                # we won't check this again
+                sq_dists[i,j] = too_big
+                sq_dists[j,i] = too_big
+                dists = squareform(sq_dists)
+                
         #self.BM.plotMultipleBins([[h] for h in bidList])
-        return num_merged
+        print "};"
+        return merged_bids
 
     def shuffleRefineConitgs(self):
         """refine bins by shuffling contigs around"""
@@ -734,7 +831,7 @@ class RefineEngine:
             for row_index in bin.rowIndices:
                 i = 0
                 for cent in bin_centroids:
-                    print bids[i], row_index, self.BM.getAngleBetweenVectors(self.PM.covProfiles[row_index], cent)
+                    #print bids[i], row_index, self.BM.getAngleBetweenVectors(self.PM.covProfiles[row_index], cent)
                     i += 1
                 print "---"
         
@@ -747,7 +844,7 @@ class RefineEngine:
         deleters = []
         for bid in self.BM.getBids():
             bin = self.BM.bins[bid]
-            if not self.isGoodBin(bin.totalBP, bin.binSize, ms=ms, mv=mv):
+            if not self.BM.isGoodBin(bin.totalBP, bin.binSize, ms=ms, mv=mv):
                 # delete this chap!
                 deleters.append(bid)
         if verbose:
@@ -761,22 +858,8 @@ class RefineEngine:
 
 #------------------------------------------------------------------------------
 # UTILITIES
- 
-    def isGoodBin(self, totalBP, binSize, ms=0, mv=0):
-        """Does this bin meet my exacting requirements?"""
-        if(ms == 0):
-            ms = self.minSize               # let the user choose
-        if(mv == 0):
-            mv = self.minVol                # let the user choose
-        
-        if(totalBP < mv):                   # less than the good volume
-            if(binSize > ms):               # but has enough contigs
-                return True
-        else:                               # contains enough bp to pass regardless of number of contigs
-            return True        
-        return False
 
-    def sq2indices(self, index, side):
+    def small2indices(self, index, side):
         """Return the indices of the comparative items
         when given an index into a condensed distance matrix
         """
@@ -789,12 +872,13 @@ class RefineEngine:
     def rePCA(self,
               bidList,
               mode='mer',
+              doBoth=False,
               doContigs=False,
               addZeros=False,
               addOnes=False):
         """Re-calculate PCA coords for a collection of bins
         
-        mode may be 'mer' on 'cov'
+        mode may be 'mer', 'cov' or 'trans'
         
         If do contigs is set then it returns a n X 2 array
         of PC1, PC2 for all contigs in all bins in bidList
@@ -805,24 +889,40 @@ class RefineEngine:
         in each bin and return a n X 2 array where n is the number of
         bins in bidList
         
+        If doBoth is set then we do both. However, we return a dict of type:
+        {row_index : np_array([PC1, PC2])}
+        
         addZeros adds a zero vector as the final entry in the PCA output
         addOnes adds a ones vector as the second last entry.
         addOnes implies addZeros
         """
         signal = []
+        both_tmp = {}
+        both_ret = {}
         num_ss = 0
         if mode == 'mer':
             data = self.PM.kmerSigs
         elif mode == 'cov':
             data = self.PM.covProfiles
+        elif mode == 'trans':
+            data = self.PM.transformedCP
         else:
             raise ge.ModeNotAppropriateException("Invlaid mode " + type)
             
         pc_len = len(data[self.BM.bins[bidList[0]].rowIndices[0]])
-        for bid in bidList:
-            for row_index in self.BM.bins[bid].rowIndices:
-                signal.append(data[row_index])
-                num_ss += 1
+        if doBoth:
+            # the eventual goal is to produce a dict of RI -> kPCA
+            # we just need to shuffle things about for a second here...
+            for bid in bidList:
+                for row_index in self.BM.bins[bid].rowIndices:
+                    signal.append(data[row_index])
+                    both_tmp[num_ss] = row_index 
+                    num_ss += 1
+        else:
+            for bid in bidList:
+                for row_index in self.BM.bins[bid].rowIndices:
+                    signal.append(data[row_index])
+                    num_ss += 1
 
         if addOnes:
             addZeros = True
@@ -854,7 +954,11 @@ class RefineEngine:
         if doContigs:
             return np_reshape([[PC1[i], PC2[i]] for i in range(len(PC1))],
                               (num_ss,2))
-        
+        if doBoth:
+            # make the actual return dict
+            for i in range(num_ss):
+                both_ret[both_tmp[i]] = np_array([PC1[i], PC2[i]])
+                
         # else work out the average for each bin
         ml_2d = np_array([])
         index_start = 0
@@ -872,21 +976,248 @@ class RefineEngine:
             # last index is the 0 - PCA stylez!
             ml_2d = np_append(ml_2d, [PC1[-2], PC2[-2]])
             ml_2d = np_append(ml_2d, [PC1[-1], PC2[-1]])
+            if doBoth:
+                return (np_reshape(ml_2d, (len(bidList)+2,2)), both_ret)
             return np_reshape(ml_2d, (len(bidList)+2,2))
         elif addZeros:
             # last index is the 0 - PCA stylez!
             ml_2d = np_append(ml_2d, [PC1[-1], PC2[-1]])
+            if doBoth:
+                return (np_reshape(ml_2d, (len(bidList)+1,2)), both_ret)
             return np_reshape(ml_2d, (len(bidList)+1,2))
         else:
+            if doBoth:
+                return (np_reshape(ml_2d, (len(bidList),2)), both_ret)
             return np_reshape(ml_2d, (len(bidList),2))
 
-    def testMerge(self,
-                  bid1,
-                  bid2,
-                  covAlphas,
-                  maxSample = 200,
-                  confidence=0.97,
-                  verbose=False):
+#-----------------------------
+# MERGE TESTING BASED ON KMERS
+
+    def testMergeMer(self,
+                     bid1,
+                     bid2,
+                     merPCAs,
+                     maxSample = 200,
+                     confidence=0.97,
+                     verbose=False):
+        """Determine if a merge makes sense in mer land"""
+        null_loops = 99
+        front_RIs = self.BM.bins[bid1].rowIndices
+        rear_RIs = self.BM.bins[bid2].rowIndices
+
+        front_RIs_size = len(front_RIs)
+        rear_RIs_size = len(rear_RIs)
+
+        # generate a NULL distribution of alpha splits
+        x = np_concatenate([front_RIs, rear_RIs])
+        shuffle(x)
+        x_size = len(x)
+
+        # sub sample the total space
+        if maxSample != 0:
+            front_sample_size = np_min([maxSample, front_RIs_size])
+            rear_sample_size = np_min([maxSample, rear_RIs_size])
+        else:
+            front_sample_size = front_RIs_size
+            rear_sample_size = rear_RIs_size
+
+        # we do different things here depending on the size of the samples
+        if front_sample_size < 64:
+            # We should brute force this guy
+            F_funct = self.calculateMerAlphaPart
+        else:
+            # take a sampling approach
+            F_funct = self.calculateMerAlphaPartSampleNoSame
+
+        if rear_sample_size < 64:
+            R_funct = self.calculateMerAlphaPart
+        else:
+            R_funct = self.calculateMerAlphaPartSampleNoSame
+    
+        if front_sample_size * rear_sample_size < 2000:
+            C_funct = self.calculateMerAlphaPart
+        else:
+            C_funct = self.calculateMerAlphaPartSample
+
+        merAlphas={}
+        # test the given split against it
+        if maxSample != 0:
+            shuffle(front_RIs)
+            shuffle(rear_RIs)
+            FRI = front_RIs[:front_sample_size]
+            RRI = rear_RIs[:rear_sample_size]
+        else:
+            FRI = front_RIs
+            RRI = rear_RIs
+        test_T_score = C_funct(FRI,RRI,merPCAs,merAlphas) / ( F_funct(FRI,FRI,merPCAs,merAlphas) + R_funct(RRI,RRI,merPCAs,merAlphas))            
+
+        T_scores = []
+        index_array = numpy_arange(x_size)
+        fsi = np_arange(front_sample_size)
+        rsi = np_arange(front_sample_size, front_sample_size+rear_sample_size)
+        for i in range(null_loops):
+            # select two sets of bins at random
+            shuffle(index_array)
+            FRI = x[index_array[fsi]]
+            RRI = x[index_array[rsi]]
+            T_scores.append(C_funct(FRI,RRI,merPCAs,merAlphas) / ( F_funct(FRI,FRI,merPCAs,merAlphas) + R_funct(RRI,RRI,merPCAs,merAlphas)))
+
+        T_scores = sorted(T_scores)
+        index = int(np_around(float(null_loops+1)*confidence))
+
+        return (test_T_score, T_scores[index]) 
+
+    def calculateMerAlphaPartSampleNoSame(self, RI1, RI2, profile, alphas, sampleSize=2000):
+        """Calculate one part of an alpha score
+        
+        Subsample of all vs all, assumes RI1 == RI2"""
+        lr1 = len(RI1)
+        lr2 = len(RI2)
+        score = 0.0
+        samples_selected = {}
+        num_samples_complete = 0
+        while num_samples_complete < sampleSize:
+            combo = (randint(lr1), randint(lr2))
+            while (combo in samples_selected) or (combo[0] == combo[1]):
+                combo = (randint(lr1), randint(lr2)) 
+            samples_selected[combo] = True
+            r1 = RI1[combo[0]]
+            r2 = RI2[combo[1]]
+            num_samples_complete += 1
+            try:
+                # try to pull the value out
+                score += alphas[(r1,r2)]
+            except KeyError:
+                try:
+                    # try to pull the value out
+                    score += alphas[(r1,r2)]
+                except KeyError:
+                    # calculate it if it's not there...
+                    # inline this because we call it alot!
+                    dist = np_sum(np_abs(profile[r1] - profile[r2]))
+                    alphas[(r1,r2)] = dist
+                    score += dist
+        return score / sampleSize
+
+    def calculateMerAlphaPartSample(self, RI1, RI2, profile, alphas, sampleSize=2000):
+        """Calculate one part of an alpha score
+        
+        Subsample of all vs all, assumes RI1 != RI2
+        """
+        lr1 = len(RI1)
+        lr2 = len(RI2)
+        score = 0.0
+        samples_selected = {}
+        num_samples_complete = 0
+        while num_samples_complete < sampleSize:
+            combo = (randint(lr1), randint(lr2))
+            while combo in samples_selected:
+                combo = (randint(lr1), randint(lr2)) 
+            samples_selected[combo] = True
+            r1 = RI1[combo[0]]
+            r2 = RI2[combo[1]]
+            num_samples_complete += 1
+            try:
+                # try to pull the value out
+                score += alphas[(r1,r2)]
+            except KeyError:
+                try:
+                    # try to pull the value out
+                    score += alphas[(r1,r2)]
+                except KeyError:
+                    # calculate it if it's not there...
+                    # inline this because we call it alot!
+                    dist = np_sum(np_abs(profile[r1] - profile[r2]))
+                    alphas[(r1,r2)] = dist
+                    score += dist
+        return score / sampleSize
+
+    def calculateMerAlphaPart(self, RI1, RI2, profile, alphas):
+        """Calculate one part of an alpha score
+        
+        All vs all complete
+        """
+        lr1 = len(RI1)
+        lr2 = len(RI2)
+        score = 0.0
+        for r1 in RI1:
+            for r2 in RI2:
+                try:
+                    score += alphas[(r1,r2)]
+                except KeyError:
+                    try:
+                        score += alphas[(r2,r1)]
+                    except KeyError:
+                        dist = np_sum(np_abs(profile[r1] - profile[r2]))
+                        alphas[(r1,r2)] = dist
+                        score += dist
+        return score / (lr1*lr2)
+
+
+    def calculateMerAlphaTScore(self, RI1, RI2, profile, alphas):
+        """Measure the goodness of the separation into lists
+        
+        specifically, calculate: t = INTER_DIST / (INTRA_LIST1_DISTANCE + INTRA_LIST2_DISTANCE) 
+        """
+        lr1 = len(RI1)
+        lr2 = len(RI2)
+        R1_intras = 0.0
+        R2_intras = 0.0
+        inters = 0.0
+        for i in range(lr1):
+            for j in range(i+1, lr1):
+                try:
+                    # try to pull the value out
+                    R1_intras += alphas[(RI1[i], RI1[j])]
+                except KeyError:
+                    try:
+                        # try to pull the value out
+                        R1_intras += alphas[(RI1[j], RI1[i])]
+                    except KeyError:
+                        # calculate it if it's not there...
+                        # inline this because we call it alot!
+                        dist = np_sum(np_abs(profile[RI1[i]] - profile[RI1[j]]))
+                        alphas[(RI1[i],RI1[j])] = dist
+                        R1_intras += dist
+        R1_intras /= ((lr1 - 1)*lr1 / 2)
+
+        for i in range(lr2):
+            for j in range(i+1, lr2):
+                try:
+                    R2_intras += alphas[(RI2[i], RI2[j])]
+                except KeyError:
+                    try:
+                        R2_intras += alphas[(RI2[j], RI2[i])]
+                    except KeyError:
+                        dist = np_sum(np_abs(profile[RI2[i]] - profile[RI2[j]]))
+                        alphas[(RI2[i],RI2[j])] = dist
+                        R2_intras += dist
+        R2_intras /= ((lr2 - 1)*lr2 / 2)
+
+        for r1 in RI1:
+            for r2 in RI2:
+                try:
+                    inters += alphas[(r1,r2)]
+                except KeyError:
+                    try:
+                        inters += alphas[(r2,r1)]
+                    except KeyError:
+                        dist = np_sum(np_abs(profile[r1] - profile[r2]))
+                        alphas[(r1,r2)] = dist
+                        inters += dist
+        inters /= (lr1*lr2)
+        return inters/(R1_intras + R2_intras)
+
+
+#-----------------------------
+# MERGE TESTING BASED ON COVERAGE
+
+    def testMergeCoverage(self,
+                          bid1,
+                          bid2,
+                          maxSample = 200,
+                          confidence=0.97,
+                          verbose=False):
         """Determine if a merge based on kmer PCAs makes sense in coverage land
         
         Calculates a t-score which measures the coverage separation of the two groups
@@ -912,28 +1243,153 @@ class RefineEngine:
             front_sample_size = front_RIs_size
             rear_sample_size = rear_RIs_size
 
+        # we do different things here depending on the size of the samples
+        if front_sample_size < 64:
+            # We should brute force this guy
+            F_funct = self.calculateCovAlphaPart
+        else:
+            # take a sampling approach
+            F_funct = self.calculateCovAlphaPartSampleNoSame
+
+        if rear_sample_size < 64:
+            R_funct = self.calculateCovAlphaPart
+        else:
+            R_funct = self.calculateCovAlphaPartSampleNoSame
+    
+        if front_sample_size * rear_sample_size < 2000:
+            C_funct = self.calculateCovAlphaPart
+        else:
+            C_funct = self.calculateCovAlphaPartSample
+        covAlphas={}
+
         # test the given split against it
         if maxSample != 0:
             shuffle(front_RIs)
             shuffle(rear_RIs)
-            test_T_score = self.calculateAlphaTScore(front_RIs[:front_sample_size], rear_RIs[:rear_sample_size], covAlphas)
+            FRI = front_RIs[:front_sample_size]
+            RRI = rear_RIs[:rear_sample_size]
         else:
-            test_T_score = self.calculateAlphaTScore(front_RIs, rear_RIs, covAlphas)
-
+            FRI = front_RIs
+            RRI = rear_RIs
+        test_T_score = C_funct(FRI,RRI,covAlphas) / ( F_funct(FRI,FRI,covAlphas) + R_funct(RRI,RRI,covAlphas))            
+        
         T_scores = []
+        index_array = numpy_arange(x_size)
+        fsi = np_arange(front_sample_size)
+        rsi = np_arange(front_sample_size, front_sample_size+rear_sample_size)
         for i in range(null_loops):
             # select two sets of bins at random
-            index_array = numpy_arange(x_size)
             shuffle(index_array)
-            T_scores.append(self.calculateAlphaTScore(x[index_array[np_arange(front_sample_size)]],
-                                                      x[index_array[np_arange(front_sample_size, front_sample_size+rear_sample_size)]],
-                                                      covAlphas))
+            FRI = x[index_array[fsi]]
+            RRI = x[index_array[rsi]]
+            T_scores.append(C_funct(FRI,RRI,covAlphas) / ( F_funct(FRI,FRI,covAlphas) + R_funct(RRI,RRI,covAlphas)))
+
         T_scores = sorted(T_scores)
         index = int(np_around(float(null_loops+1)*confidence))
 
         return (test_T_score, T_scores[index]) 
 
-    def calculateAlphaTScore(self, RI1, RI2, alphas):
+    def calculateCovAlphaPartSampleNoSame(self, RI1, RI2, alphas, sampleSize=2000):
+        """Calculate one part of an alpha score
+        
+        Subsample of all vs all, assumes RI1 == RI2
+        """
+        lr1 = len(RI1)
+        lr2 = len(RI2)
+        score = 0.0
+        samples_selected = {}
+        num_samples_complete = 0
+        while num_samples_complete < sampleSize:
+            combo = (randint(lr1), randint(lr2))
+            while (combo in samples_selected) or (combo[0] == combo[1]):
+                combo = (randint(lr1), randint(lr2)) 
+            samples_selected[combo] = True
+            r1 = RI1[combo[0]]
+            r2 = RI2[combo[1]]
+            num_samples_complete += 1
+            try:
+                # try to pull the value out
+                score += alphas[(r1,r2)]
+            except KeyError:
+                try:
+                    # try to pull the value out
+                    score += alphas[(r1,r2)]
+                except KeyError:
+                    # calculate it if it's not there...
+                    # inline this becuase we call it alot!
+                    try:
+                        ang = np_arccos(np_dot(self.PM.covProfiles[r1],self.PM.covProfiles[r2]) /
+                                        self.PM.normCoverages[r1]/self.PM.normCoverages[r2])
+                    except FloatingPointError:
+                        ang = 0.0
+                    alphas[(r1,r2)] = ang
+                    score += ang
+        return score / sampleSize
+
+    def calculateCovAlphaPartSample(self, RI1, RI2, alphas, sampleSize=2000):
+        """Calculate one part of an alpha score
+        
+        Subsample of all vs all, assumes RI1 != RI2
+        """
+        lr1 = len(RI1)
+        lr2 = len(RI2)
+        score = 0.0
+        samples_selected = {}
+        num_samples_complete = 0
+        while num_samples_complete < sampleSize:
+            combo = (randint(lr1), randint(lr2))
+            while combo in samples_selected:
+                combo = (randint(lr1), randint(lr2)) 
+            samples_selected[combo] = True
+            r1 = RI1[combo[0]]
+            r2 = RI2[combo[1]]
+            num_samples_complete += 1
+            try:
+                # try to pull the value out
+                score += alphas[(r1,r2)]
+            except KeyError:
+                try:
+                    # try to pull the value out
+                    score += alphas[(r1,r2)]
+                except KeyError:
+                    # calculate it if it's not there...
+                    # inline this becuase we call it alot!
+                    try:
+                        ang = np_arccos(np_dot(self.PM.covProfiles[r1],self.PM.covProfiles[r2]) /
+                                        self.PM.normCoverages[r1]/self.PM.normCoverages[r2])
+                    except FloatingPointError:
+                        ang = 0.0
+                    alphas[(r1,r2)] = ang
+                    score += ang
+        return score / sampleSize
+
+    def calculateCovAlphaPart(self, RI1, RI2, alphas):
+        """Calculate one part of an alpha score
+        
+        All vs all
+        """
+        lr1 = len(RI1)
+        lr2 = len(RI2)
+        score = 0.0
+        for r1 in RI1:
+            for r2 in RI2:
+                try:
+                    score += alphas[(r1,r2)]
+                except KeyError:
+                    try:
+                        score += alphas[(r2,r1)]
+                    except KeyError:
+                        try:
+                            ang = np_arccos(np_dot(self.PM.covProfiles[r1],self.PM.covProfiles[r2]) /
+                                            self.PM.normCoverages[r1]/self.PM.normCoverages[r2])
+                        except FloatingPointError:
+                            ang = 0.0
+                        alphas[(r1,r2)] = ang
+                        score += ang
+        return score / (lr1*lr2)
+
+
+    def calculateCovAlphaTScore(self, RI1, RI2, alphas):
         """Measure the goodness of the separation into lists
         
         specifically, calculate: t = INTER_DIST / (INTRA_LIST1_DISTANCE + INTRA_LIST2_DISTANCE) 
@@ -944,7 +1400,7 @@ class RefineEngine:
         R2_intras = 0.0
         inters = 0.0
         for i in range(lr1):
-            for j in range(i, lr1):
+            for j in range(i+1, lr1):
                 try:
                     # try to pull the value out
                     R1_intras += alphas[(RI1[i], RI1[j])]
@@ -954,22 +1410,32 @@ class RefineEngine:
                         R1_intras += alphas[(RI1[j], RI1[i])]
                     except KeyError:
                         # calculate it if it's not there...
-                        ang = self.BM.getAngleBetweenVectors(self.PM.covProfiles[RI1[i]], self.PM.covProfiles[RI1[j]])
+                        # inline this becuase we call it alot!
+                        try:
+                            ang = np_arccos(np_dot(self.PM.covProfiles[RI1[i]],self.PM.covProfiles[RI1[j]]) /
+                                            self.PM.normCoverages[RI1[i]]/self.PM.normCoverages[RI1[j]])
+                        except FloatingPointError:
+                            ang = 0.0
                         alphas[(RI1[i],RI1[j])] = ang
                         R1_intras += ang
-        R1_intras /= ((lr1 +1)*lr1 / 2)
+        R1_intras /= ((lr1 - 1)*lr1 / 2)
+
         for i in range(lr2):
-            for j in range(i, lr2):
+            for j in range(i+1, lr2):
                 try:
                     R2_intras += alphas[(RI2[i], RI2[j])]
                 except KeyError:
                     try:
                         R2_intras += alphas[(RI2[j], RI2[i])]
                     except KeyError:
-                        ang = self.BM.getAngleBetweenVectors(self.PM.covProfiles[RI2[i]], self.PM.covProfiles[RI2[j]])
+                        try:
+                            ang = np_arccos(np_dot(self.PM.covProfiles[RI2[i]],self.PM.covProfiles[RI2[j]]) /
+                                            self.PM.normCoverages[RI2[i]]/self.PM.normCoverages[RI2[j]])
+                        except FloatingPointError:
+                            ang = 0.0
                         alphas[(RI2[i],RI2[j])] = ang
                         R2_intras += ang
-        R2_intras /= ((lr2 +1)*lr2 / 2)
+        R2_intras /= ((lr2 - 1)*lr2 / 2)
         for r1 in RI1:
             for r2 in RI2:
                 try:
@@ -978,7 +1444,11 @@ class RefineEngine:
                     try:
                         inters += alphas[(r2,r1)]
                     except KeyError:
-                        ang = self.BM.getAngleBetweenVectors(self.PM.covProfiles[r1], self.PM.covProfiles[r2])
+                        try:
+                            ang = np_arccos(np_dot(self.PM.covProfiles[r1],self.PM.covProfiles[r2]) /
+                                            self.PM.normCoverages[r1]/self.PM.normCoverages[r2])
+                        except FloatingPointError:
+                            ang = 0.0
                         alphas[(r1,r2)] = ang
                         inters += ang
         inters /= (lr1*lr2)
@@ -1069,7 +1539,7 @@ class RefineEngine:
 #------------------------------------------------------------------------------
 # RECRUITMENT
 
-    def recruitWrapper(self, inclusivity=2, step=200, saveBins=False):
+    def recruitWrapper(self, timer, inclusivity=2, step=200, saveBins=False):
         """Recuit more contigs to the bins"""
         print "Recruiting unbinned contigs"
         # make a list of all the cov and kmer vals
@@ -1086,7 +1556,7 @@ class RefineEngine:
         (bin_centroid_points,
          bin_centroid_colors,
          bin_centroid_kvals,
-         bids) = self.findCoreCentres(getKVals=True)
+         bids) = self.BM.findCoreCentres(getKVals=True)
         # centroids
         tdm_centroid = np_append(bin_centroid_points,
                                  1000*np_reshape(bin_centroid_kvals,(len(bin_centroid_kvals),1)),
@@ -1141,7 +1611,7 @@ class RefineEngine:
                         # meets our criteria
                         putative_bid = int(bids[search_tree.query(tdm[row_index])[1]])
                         if self.BM.bins[putative_bid].binSize > 1:
-                            (covZ,merZ) = self.scoreContig(row_index, putative_bid)
+                            (covZ,merZ) = self.BM.scoreContig(row_index, putative_bid)
                             if covZ <= inclusivity and merZ <= inclusivity:
                                 # we can recruit
                                 self.BM.bins[putative_bid].rowIndices = np_append(self.BM.bins[putative_bid].rowIndices,
@@ -1165,16 +1635,19 @@ class RefineEngine:
                                                self.PM.contigLengths)      
 
             print "    Recruited: %d contigs" % this_step_binned
-
+            print "    %s" % timer.getTimeStamp()
+            sys_stdout.flush()
+            
         # talk to the user
         perc_recruited = float(total_expanded)/float(total_unbinned)
         perc_binned = float(total_binned)/float(total_contigs)
         print "    Recruited %0.4f" % perc_recruited +"%"+" of %d unbinned contigs" % total_unbinned
         print "    END: %0.4f" % perc_binned +"%"+" of %d requested contigs in bins" % total_contigs
-        
+        print "    %s" % timer.getTimeStamp()
+        sys_stdout.flush()        
         # now save
         if(saveBins):
-            self.saveBins()
+            self.BM.saveBins()
             
 #------------------------------------------------------------------------------
 # UI and IMAGE RENDERING 
