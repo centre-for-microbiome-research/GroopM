@@ -228,10 +228,6 @@ class ProfileManager:
         except:
             print "Error loading DB:", self.dbFileName, exc_info()[0]
             raise
-        if(verbose):
-            print "    %s" % timer.getTimeStamp()
-            sys_stdout.flush()
-
 
     def reduceIndices(self, deadRowIndices):
         """purge indices from the data structures
@@ -434,11 +430,6 @@ class ProfileManager:
         for i in range(self.numStoits):
             self.corners[i,2] = self.scaleFactor + 100
 
-        if not silent:
-            print "    %s" % timer.getTimeStamp()
-            sys_stdout.flush()            
-        
-        timer.getTimeStamp()
         return(min,max)
     
 #------------------------------------------------------------------------------

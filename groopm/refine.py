@@ -120,19 +120,40 @@ class RefineEngine:
 #------------------------------------------------------------------------------
 # REFINING
 
-    def refineBins(self, timer, auto=False, saveBins=False):
+    def refineBins(self, timer, auto=False, saveBins=False, plotFinal="", gf=""):
         """Iterative wrapper for the refine function"""
         if self.transform:      # do we want to plot to 1000*1000*1000
             ignoreRanges=False
         else:
             ignoreRanges=True
         if auto:
-            print "Start automatic bin refinement"
+            print "    Start automatic bin refinement"
             num_binned = len(self.PM.binnedRowIndices.keys())
-            print "   ",num_binned,"contigs across",len(self.BM.bins.keys()),"cores"
-            self.autoRefineBins(timer)
+            perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
+            print "   ",num_binned,"contigs across",len(self.BM.bins.keys()),"cores (",perc,"% )"
+            
+            graph = self.autoRefineBins(timer, makeGraph=gf!="")
+            if graph is not None:
+                print "    Writing graph to:", gf
+                try:
+                    with open(gf, "w") as gv_fh:
+                        gv_fh.write(graph)
+                except:
+                    print "Error writing graph to:", gf
+            
             num_binned = len(self.PM.binnedRowIndices.keys())
-            print "   ",num_binned,"contigs across",len(self.BM.bins.keys()),"cores"
+            perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
+            print "   ",num_binned,"contigs across",len(self.BM.bins.keys()),"cores (",perc,"% )"
+
+            if plotFinal != "":
+                bids = self.BM.getBids()
+                for bid in bids:
+                    self.BM.bins[bid].makeBinDist(self.PM.transformedCP, 
+                                               self.PM.averageCoverages, 
+                                               self.PM.kmerVals, 
+                                               self.PM.contigLengths)
+                self.BM.plotBins(FNPrefix=plotFinal, ET=self.ET)
+            
             if saveBins:
                 self.BM.saveBins(nuke=True)
         else:
@@ -333,23 +354,40 @@ class RefineEngine:
                        shuffleRefine=False,
                        verbose=False,
                        plotAfterOB=False,
-                       plotFinal=True):
+                       makeGraph=False):
         """Automagically refine bins"""
 
         sys_stdout.flush()
         kCut = self.getKCut()
-        #self.combineMergers(self.BM.getBids(), kCut)
-        #exit(0)
-
+        graph = None
+        if makeGraph:
+            # lets make a graph
+            graph = [{}, []]
+            
+            for bid in self.BM.getBids():
+                bin = self.BM.bins[bid]
+                centroid_color = np_mean([self.PM.contigColors[row_index] for row_index in bin.rowIndices],
+                              axis=0)
+                ncc = [int(i) for i in centroid_color * 255]
+                hex_color = '#%02x%02x%02x' % (ncc[0], ncc[1], ncc[2])
+                graph[0][bid] = '\t%d [fontcolor="%s" color="%s"];\n' % (bid, hex_color, hex_color)
+        
         # identify and remove outlier bins
         if nukeOutliers:
-            self.nukeOutliers()
+            nuked = self.nukeOutliers()
             print "    %s" % timer.getTimeStamp()
             sys_stdout.flush()
 
+            if makeGraph:
+                # make all these uys point at the deleted bin
+                if len(nuked) > 0:
+                    graph[0][-1] = '\t"OUTLIERS" [fontcolor="#FF0000" color="#000000"];\n'
+                for bid in nuked:
+                    graph[1].append('\t%d -> "OUTLIERS";' % (bid))
+
         # merge bins together
         if mergeSimilarBins:
-            self.mergeSimilarBins(kCut)
+            self.mergeSimilarBins(kCut, graph=graph)
             print "    %s" % timer.getTimeStamp()
             sys_stdout.flush()
 
@@ -365,26 +403,29 @@ class RefineEngine:
             sys_stdout.flush()
 
         if shuffleRefine:
-            self.shuffleRefineConitgs()
+            nuked = self.shuffleRefineConitgs()
             print "    %s" % timer.getTimeStamp()
             sys_stdout.flush()
+            if makeGraph:
+                # Make sure we know these guys were deleted
+                if len(nuked) > 0:
+                    graph[0][-2] = '\t"SHUFFLED" [fontcolor="#FF0000" color="#000000"];\n'
+                for bid in nuked:
+                    graph[1].append('\t%d -> "SHUFFLED";' % (bid))
 
         if removeDuds:    
-            self.removeDuds()
+            nuked = self.removeDuds()
             print "    %s" % timer.getTimeStamp()
             sys_stdout.flush()
-
-        if plotFinal:
-            bids = self.BM.getBids()
-            for bid in bids:
-                self.BM.bins[bid].makeBinDist(self.PM.transformedCP, 
-                                           self.PM.averageCoverages, 
-                                           self.PM.kmerVals, 
-                                           self.PM.contigLengths)
-            self.BM.plotBins(FNPrefix="FINAL", ET=self.ET)
-            
-        print "    %s" % timer.getTimeStamp()
-        sys_stdout.flush()
+            if makeGraph:
+                # Make sure we know these guys were deleted
+                if len(nuked) > 0:
+                    graph[0][-3] = '\t"DUDS" [fontcolor="#FF0000" color="#000000"];\n'
+                for bid in nuked:
+                    graph[1].append('\t%d -> "DUDS";' % (bid))
+                    
+        if makeGraph:
+            return self.writeGV(graph)
 
     def nukeOutliers(self, verbose=False):
         """Identify and remove small bins which contain mixed genomes
@@ -419,8 +460,9 @@ class RefineEngine:
                            freeBinnedRowIndices=True,
                            saveBins=False)
         print "    Identified %d possible chimeras leaving %d cores" % (len(dead_bins), len(self.BM.bins))
+        return dead_bins
 
-    def mergeSimilarBins(self, kCut, bids=[], verbose=False):
+    def mergeSimilarBins(self, kCut, bids=[], verbose=False, graph=None):
         """Merge bins which are just crying out to be merged!"""
         print "    Merging similar bins with kCut %0.4f" % kCut
         if bids == []:
@@ -430,7 +472,7 @@ class RefineEngine:
         num_bins_removed = 0
         # and then merge them
         for merge in mergers:
-            bins_removed = self.combineMergers(merge, kCut)
+            bins_removed = self.combineMergers(merge, kCut, graph=graph)
             num_bins_removed += len(bins_removed)
         print "    Merged %d cores leaving %d cores" % (num_bins_removed, len(self.BM.bins))        
         return num_bins_removed                
@@ -479,13 +521,6 @@ class RefineEngine:
                             self.PM.contigLengths,
                             merTol=2.5)  # make the merTol a little larger...
             
-            if False:
-                centroid_color = np_mean([self.PM.contigColors[row_index] for row_index in bin.rowIndices],
-                              axis=0)
-                ncc = [int(i) for i in centroid_color * 255]
-                hex_color = '#%02x%02x%02x' % (ncc[0], ncc[1], ncc[2])
-                print '%d [fontcolor="%s" color="%s"];' % (bid, hex_color, hex_color)
-                
             # use a 4 dimensional vector [cov, cov, cov, mer]
             tdm.append(np_append(bin.covMeans, [1000*bin.kValMean]))
 
@@ -506,23 +541,6 @@ class RefineEngine:
             # we will not process any pair twice.
             # we also wish to avoid checking if a bin will merge with itself        
             processed_pairs[self.BM.makeBidKey(bid, bid)] = True
-            
-        if False:
-            ave_cols = self.rePCA(bids, mode='trans')[:,0]
-            ave_cols -= np_min(ave_cols)
-            ave_cols /= np_max(ave_cols)
-            S = 1       # SAT and VAL remain fixed at 1. Reduce to make
-            V = 1       # Pastels if that's your preference...
-            bin_cols = np_array([htr(val, S, V) for val in ave_cols])
-            hbc = []
-            print "-------"
-            for col in bin_cols:
-                ncc = [int(i) for i in col * 255]
-                hbc.append('#%02x%02x%02x' % (ncc[0], ncc[1], ncc[2]))
-            for i in range(len(bids)):
-                print '%d [fontcolor="%s" color="%s"];' % (bids[i], hbc[i], hbc[i])
-                
-            sys_exit(0)
 #-----
 # ALL Vs ALL
         # make a search tree
@@ -695,29 +713,8 @@ class RefineEngine:
 
         return mergers
 
-    def getKCut(self):
-        """Work out the easy cutoff for kmerVal distance"""
-        mean_k_vals = []
-        for bid in self.BM.getBids():
-            bin = self.BM.bins[bid]
-            bin_k_vals = [[self.PM.kmerVals[row_index]] for row_index in bin.rowIndices]
-            k_dist = squareform(cdist(bin_k_vals, bin_k_vals))
-            if len(k_dist) > 0:
-                mean_k_vals.append(np_mean(k_dist))
-        
-        return np_mean(mean_k_vals)# + np_std(mean_k_vals)  
-
-    def combineMergers(self, bidList, kCut):
-        print "+++++++++++++++++++++++++"
-        print bidList
-        print "digraph ff{"
-        for bid in bidList:
-            bin = self.BM.bins[bid]
-            centroid_color = np_mean([self.PM.contigColors[row_index] for row_index in bin.rowIndices],
-                          axis=0)
-            ncc = [int(i) for i in centroid_color * 255]
-            hex_color = '#%02x%02x%02x' % (ncc[0], ncc[1], ncc[2])
-            print '\t%d [fontcolor="%s" color="%s"];' % (bid, hex_color, hex_color)
+    def combineMergers(self, bidList, kCut, graph=None):
+        """Try to merge similar bins in the given list"""
 
         merged_bids = []
         too_big = 10000
@@ -735,11 +732,6 @@ class RefineEngine:
             (i,j) = self.small2indices(closest, side-1)
             bid1 = bidList[i]
             bid2 = bidList[j]
-            if False:
-                if bid1 == 10 or bid1 == 11 or bid1 == 12 or bid1 == 13 or bid2 == 10 or bid2 == 11 or bid2 == 12 or bid2 == 13:
-                    VVB = True
-                else:
-                    VVB = False 
             should_merge = False                
             # test if the mer dist is teensy tiny.
             # this is a time saver...
@@ -761,15 +753,11 @@ class RefineEngine:
                             should_merge = True
                         else:
                             should_merge = False
-                            #if VVB:
-                            #    print "CVDISTFUCKED", test, null
-
-                #elif VVB:
-                #    print "KDISTFUCKED", test, null
 
             if should_merge:
                 # get these before we merge!
-                print "\t%d -> %d;" % (bid2, bid1)
+                if graph is not None:
+                    graph[1].append("\t%d -> %d;" % (bid2, bid1))
                 b1_size = self.BM.bins[bid1].binSize
                 b2_size = self.BM.bins[bid2].binSize
 
@@ -803,9 +791,8 @@ class RefineEngine:
                 sq_dists[i,j] = too_big
                 sq_dists[j,i] = too_big
                 dists = squareform(sq_dists)
-                
+        
         #self.BM.plotMultipleBins([[h] for h in bidList])
-        print "};"
         return merged_bids
 
     def shuffleRefineConitgs(self):
@@ -836,7 +823,8 @@ class RefineEngine:
                 print "---"
         
     
-        print "    Removed %d cores leaving %d cores" % (start_num_bins-len(self.BM.bins), len(self.BM.bins))        
+        print "    Removed %d cores leaving %d cores" % (start_num_bins-len(self.BM.bins), len(self.BM.bins))    
+        return []    
 
     def removeDuds(self, ms=20, mv=1000000, verbose=False):
         """Run this after refining to remove scrappy leftovers"""
@@ -855,6 +843,7 @@ class RefineEngine:
                                freeBinnedRowIndices=True,
                                saveBins=False)
         print "    Removed %d cores leaving %d cores" % (len(deleters), len(self.BM.bins))
+        return deleters
 
 #------------------------------------------------------------------------------
 # UTILITIES
@@ -908,7 +897,7 @@ class RefineEngine:
             data = self.PM.transformedCP
         else:
             raise ge.ModeNotAppropriateException("Invlaid mode " + type)
-            
+         
         pc_len = len(data[self.BM.bins[bidList[0]].rowIndices[0]])
         if doBoth:
             # the eventual goal is to produce a dict of RI -> kPCA
@@ -989,6 +978,18 @@ class RefineEngine:
             if doBoth:
                 return (np_reshape(ml_2d, (len(bidList),2)), both_ret)
             return np_reshape(ml_2d, (len(bidList),2))
+
+    def getKCut(self):
+        """Work out the easy cutoff for kmerVal distance"""
+        mean_k_vals = []
+        for bid in self.BM.getBids():
+            bin = self.BM.bins[bid]
+            bin_k_vals = [[self.PM.kmerVals[row_index]] for row_index in bin.rowIndices]
+            k_dist = squareform(cdist(bin_k_vals, bin_k_vals))
+            if len(k_dist) > 0:
+                mean_k_vals.append(np_mean(k_dist))
+        
+        return np_mean(mean_k_vals)# + np_std(mean_k_vals)  
 
 #-----------------------------
 # MERGE TESTING BASED ON KMERS
@@ -1650,7 +1651,18 @@ class RefineEngine:
             self.BM.saveBins()
             
 #------------------------------------------------------------------------------
-# UI and IMAGE RENDERING 
+# UI and IMAGE RENDERING
+
+    def writeGV(self, graph):
+        """Output a valid graphviz dot file"""
+        op = "digraph refine {\n"
+        # render nodes
+        for bid in graph[0].keys():
+            op += graph[0][bid]
+        # render edges
+        op += "\n".join(graph[1])
+        op += "\n};\n"
+        return op
     
     def printRefinePlotterInstructions(self):
         raw_input( "****************************************************************\n"

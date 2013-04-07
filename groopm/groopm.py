@@ -103,12 +103,18 @@ class GroopMOptionsParser():
             print "*******************************************************************************"
             CE = cluster.ClusterEngine(options.dbname,
                                        force=options.force,
-                                       plot=options.plot,
+                                       finalPlot=options.plot,
+                                       plot=options.multiplot,
                                        minSize=options.size,
                                        minVol=options.bp
                                        )
+            if options.graphfile is None:
+                gf = ""
+            else:
+                gf=options.graphfile
             CE.makeCores(timer,
-                         coreCut=options.cutoff)
+                         coreCut=options.cutoff,
+                         gf=gf)
 
         elif(options.subparser_name == 'refine'):
             # refine bin cores
@@ -125,10 +131,16 @@ class GroopMOptionsParser():
                                      dbFileName=options.dbname,
                                      transform=transform,
                                      bids=bids)
+            if options.plot:
+                pfx="REFINED"
+            else:
+                pfx=""
+            print "Refine bins"
             
             RE.refineBins(timer,
                           auto=auto,
-                          saveBins=True)
+                          saveBins=True,
+                          plotFinal=pfx)
 
         elif(options.subparser_name == 'recruit'):
             # make bin cores

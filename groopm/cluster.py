@@ -76,7 +76,7 @@ np_seterr(all='raise')
 
 class ClusterEngine:
     """Top level interface for clustering contigs"""
-    def __init__(self, dbFileName, plot=False, force=False, numImgMaps=1, minSize=5, minVol=1000000):
+    def __init__(self, dbFileName, plot=False, finalPlot=False, force=False, numImgMaps=1, minSize=5, minVol=1000000):
         # worker classes
         self.PM = ProfileManager(dbFileName) # store our data
         self.BM = BinManager(pm=self.PM, minSize=minSize, minVol=minVol)
@@ -96,6 +96,7 @@ class ClusterEngine:
         # misc
         self.forceWriting = force
         self.debugPlots = plot
+        self.finalPlot = finalPlot
         self.imageCounter = 1           # when we print many images
         self.roundNumber = 0            # how many times have we tried to make a bin?
 
@@ -130,14 +131,14 @@ class ClusterEngine:
 #------------------------------------------------------------------------------
 # CORE CONSTRUCTION AND MANAGEMENT
         
-    def makeCores(self, timer, coreCut):
+    def makeCores(self, timer, coreCut, gf=""):
         """Cluster the contigs to make bin cores"""
         # check that the user is OK with nuking stuff...
         if(not self.promptOnOverwrite()):
             return False
 
         # get some data
-        self.PM.loadData(timer, condition="length >= "+str(coreCut))
+        self.PM.loadData(timer, loadRawKmers=True, condition="length >= "+str(coreCut))
         print "    %s" % timer.getTimeStamp()
         
         # transform the data
@@ -156,13 +157,12 @@ class ClusterEngine:
         # condense cores
         print "Refine cores [begin: %d]" % len(self.BM.bins)
         RE = refine.RefineEngine(timer, BM=self.BM)
-        RE.refineBins(timer, auto=True, saveBins=False)
+        if self.finalPlot:
+            prfx = "CORE"
+        else:
+            prfx = ""
+        RE.refineBins(timer, auto=True, saveBins=False, plotFinal=prfx, gf=gf)
         
-        num_binned = len(self.PM.binnedRowIndices.keys())
-        perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
-        print "   ",num_binned,"contigs across",len(self.BM.bins.keys()),"cores (",perc,"% )"
-        print "    %s" % timer.getTimeStamp()
-
         # Now save all the stuff to disk!
         print "Saving bins"
         self.BM.saveBins()
