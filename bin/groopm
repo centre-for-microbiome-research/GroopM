@@ -85,6 +85,7 @@ def printHelp():
         Printing, plotting:
         
     groopm explore      -> Methods for viewing bin layouts
+    groopm highlight    -> Produce high def images
     groopm print        -> Print bin statistics
     groopm plot         -> Plot bins
     
@@ -136,7 +137,7 @@ if __name__ == '__main__':
                                         help='merge similar bins / split chimeric ones',
                                         description='Merge similar bins and split chimeric ones')
     bin_refiner.add_argument('dbname', help="name of the database to open")
-    bin_refiner.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to use (None for all)")
+    bin_refiner.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to use (None for all)")
     bin_refiner.add_argument('-a', '--auto', action="store_true", default=False, help="automatically refine bins")
     bin_refiner.add_argument('-r', '--no_transform', action="store_true", default=False, help="skip data transformation (3 stoits only)")
     bin_refiner.add_argument('-p', '--plot', action="store_true", default=False, help="create plots of bins after refinement")
@@ -161,7 +162,7 @@ if __name__ == '__main__':
                                         description='Extract contigs or reads based on bin affiliations')
     bin_extractor.add_argument('dbname', help="name of the database to open")
     bin_extractor.add_argument('data', nargs='+', help="data file(s) to extract from, bam or fasta")
-    bin_extractor.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to use (None for all)")
+    bin_extractor.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to use (None for all)")
     bin_extractor.add_argument('-c', '--cutoff', type=int, default=0, help="cutoff contig size, ignored for reads (0 for no cutoff)")
     bin_extractor.add_argument('-m', '--mode', default="contigs", help="what to extract [reads, contigs]")
     bin_extractor.add_argument('-o', '--outfolder', default="", help="write to this folder (None for current dir)")
@@ -210,9 +211,25 @@ if __name__ == '__main__':
                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                         help='explore and validate bins')
     bin_explorer.add_argument('dbname', help="name of the database to open")
-    bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot (None for all)")
+    bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to plot (None for all)")
     bin_explorer.add_argument('-c', '--cutoff', default=5000, help="cutoff contig size")
     bin_explorer.add_argument('-m', '--mode', default="points", help="Exploration mode [ids, contigs, points, profile, compare, flyover, unbinned]")
+
+
+    #-------------------------------------------------
+    # produce fancy image for publications
+    bin_highlighter = subparsers.add_parser('highlight',
+                                            formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                            help='highlight specific bins')
+    bin_highlighter.add_argument('dbname', help="name of the database to open")
+    bin_highlighter.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to highlight (None for all)")
+    bin_highlighter.add_argument('-e', '--elevation', type=float, default=25.0, help="elevation in printed image")
+    bin_highlighter.add_argument('-a', '--azimuth', type=float, default=-45.0, help="azimuth in printed image")
+    bin_highlighter.add_argument('-f', '--file', default="gmview", help="name of image file to produce")
+    bin_highlighter.add_argument('--filetype', default="jpg", help="Type of file to produce")
+    bin_highlighter.add_argument('--dpi', default=300, help="Image resolution")
+    bin_highlighter.add_argument('--alpha', default=0.1, type=float,  help="Opacity of background bins")
+    bin_highlighter.add_argument('-i', '--invert', action="store_true", default=False, help="invert colours")
 
     #-------------------------------------------------
     # print bin information       
@@ -220,7 +237,7 @@ if __name__ == '__main__':
                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                         help='print bin information')
     bin_printer.add_argument('dbname', help="name of the database to open")
-    bin_printer.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to print (None for all)")
+    bin_printer.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to print (None for all)")
     bin_printer.add_argument('-o', '--outfile', default="", help="print to file not STDOUT")
     bin_printer.add_argument('-f', '--format', default='summary', help="output format [full, minimal, summary]")
     bin_printer.add_argument('-u', '--unbinned', action="store_true", default=False, help="print unbinned contig IDs too")
@@ -231,7 +248,7 @@ if __name__ == '__main__':
                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                         help='plot bins')
     bin_plotter.add_argument('dbname', help="name of the database to open")
-    bin_plotter.add_argument('-b', '--bids', nargs='+', type=int, help="bin ids to plot (None for all)")
+    bin_plotter.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to plot (None for all)")
     bin_plotter.add_argument('-s', '--sidebyside', action="store_true", default=False, help="plot bins in 3d side by side instead of to file")
     bin_plotter.add_argument('-T', '--together', action="store_true", default=False, help="plot bins in 3d in one figure")
     bin_plotter.add_argument('-k', '--kmers', action="store_true", default=False, help="include kmers in figure [only used for option 'T']")    

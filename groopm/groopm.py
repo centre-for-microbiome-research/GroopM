@@ -229,6 +229,22 @@ class GroopMOptionsParser():
                 BE.plotUnbinned(timer, coreCut=options.cutoff)
             else:
                 print "**Error: unknown mode:",options.mode
+
+        elif(options.subparser_name == 'highlight'):
+            # make bin cores
+            print "*******************************************************************************"
+            print " [[GroopM]] Running in highlighter mode..."
+            print "*******************************************************************************"
+            BE = groopmUtils.BinExplorer(options.dbname, bids=[])
+            BE.plotHighlights(timer,
+                              options.bids,
+                              options.elevation,
+                              options.azimuth,
+                              options.file,
+                              options.filetype,
+                              options.dpi,
+                              options.alpha,
+                              options.invert)
             
         elif(options.subparser_name == 'print'):
             BM = binManager.BinManager(dbFileName=options.dbname)

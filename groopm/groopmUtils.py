@@ -180,6 +180,43 @@ class BinExplorer:
         else:
             self.bids = bids
 
+    def plotHighlights(self, timer, bids, elevation, azimuth, file, filetype, dpi, alpha, invert=False):
+        """Plot a high def image suitable for publication"""
+        self.BM.loadBins(timer,
+                         makeBins=True,
+                         silent=False,
+                         loadContigLengths=True,
+                         loadContigNames=False
+                        )
+        print "Plotting image"
+        fig = plt.figure()
+        bins=[]
+        for bid in bids:
+            bins.append(self.BM.getBin(bid))
+            
+        if not file.endswith(filetype):
+            file += "." + filetype
+        self.PM.renderTransCPData(fileName=file,
+                                  elev=elevation,
+                                  azim=azimuth,
+                                  primaryWidth=6,
+                                  dpi=dpi,
+                                  showAxis=True,
+                                  format=filetype,
+                                  fig=fig,
+                                  highlight=bins,
+                                  alpha=alpha
+                                  )
+        del fig
+
+        if invert:
+            # invert the colors
+            from PIL import Image
+            import PIL.ImageOps    
+            image = Image.open(file)
+            inverted_image = PIL.ImageOps.invert(image)
+            inverted_image.save(file)        
+        
     def plotFlyOver(self, timer, fps=10.0, totalTime=120.0):
         """Plot a flyover of the data with bins being removed"""
         self.BM.loadBins(timer,
@@ -189,6 +226,7 @@ class BinExplorer:
                          loadContigLengths=False,
                          loadContigNames=False
                         )
+
         print "Plotting flyover"
         all_bids = self.BM.getBids()
 
@@ -231,6 +269,7 @@ class BinExplorer:
                 restricted_bids.append(all_bids[current_bid_index])
                 current_bid_index += 1
                 bids_removed += 1                
+        del fig
 
     def plotBinProfiles(self, timer):
         """Plot the distributions of kmer and coverage signatures"""

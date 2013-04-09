@@ -484,7 +484,9 @@ class ProfileManager:
                           dpi=300,
                           format='png',
                           fig=None,
-                          restrictedBids=[]):
+                          highlight=None,
+                          restrictedBids=[],
+                          alpha=1):
         """Plot transformed data in 3D"""
         del_fig = False
         if(fig is None):
@@ -564,7 +566,45 @@ class ProfileManager:
         else:
             ax = fig.add_subplot(111, projection='3d')
             if len(restrictedBids) == 0:
-                ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='none', c=self.contigColors, s=2, marker='.')
+                if highlight is None:
+                    ax.scatter(self.transformedCP[:,0],
+                               self.transformedCP[:,1],
+                               self.transformedCP[:,2],
+                               edgecolors='none',
+                               c=self.contigColors,
+                               s=2,
+                               marker='.')
+                else:
+                    #draw the opague guys first
+                    ax.scatter(self.transformedCP[:,0],
+                               self.transformedCP[:,1],
+                               self.transformedCP[:,2],
+                               edgecolors='none',
+                               c=self.contigColors,
+                               s=2,
+                               marker='.',
+                               alpha=alpha)
+                    
+                    # now replot the highlighted guys
+                    disp_vals = np_array([])
+                    disp_cols = np_array([])
+                    num_points = 0
+                    for bin in highlight:
+                        for row_index in bin.rowIndices:
+                            num_points += 1
+                            disp_vals = np_append(disp_vals, self.transformedCP[row_index])
+                            disp_cols = np_append(disp_cols, self.contigColors[row_index])
+            
+                    # reshape
+                    disp_vals = np_reshape(disp_vals, (num_points, 3))
+                    disp_cols = np_reshape(disp_cols, (num_points, 3))
+                    ax.scatter(disp_vals[:,0],
+                               disp_vals[:,1],
+                               disp_vals[:,2],
+                               edgecolors='none',
+                               c=disp_cols,
+                               s=2,
+                               marker='.')
             else:
                 r_trans = np_array([])
                 r_cols=np_array([])
