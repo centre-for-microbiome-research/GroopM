@@ -298,7 +298,7 @@ class GMDataManager:
                 # Add metadata
                 #------------------------
                 meta_data = (str.join(',',stoitColNames),
-                             len(stoitColNames.split(',')),
+                             len(stoitColNames),
                              str.join(',',kse.kmerCols),
                              kmerSize,
                              len(kse.kmerCols),
@@ -316,7 +316,7 @@ class GMDataManager:
         print "****************************************************************"
         print "Data loaded successfully!"
         print " ->",num_cons,"contigs"
-        print " ->",len(stoitColNames.split(',')),"BAM files"
+        print " ->",len(stoitColNames),"BAM files"
         print "Written to: '"+dbFileName+"'"
         print "****************************************************************"
         print "    %s" % timer.getTimeStamp()
