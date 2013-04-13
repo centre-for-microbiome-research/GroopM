@@ -88,6 +88,7 @@ def printHelp():
     groopm highlight    -> Produce high def images
     groopm print        -> Print bin statistics
     groopm plot         -> Plot bins
+    groopm dump         -> Write database to text file
     
     USE: groopm OPTION -h to see detailed options
     '''
@@ -241,6 +242,17 @@ if __name__ == '__main__':
     bin_printer.add_argument('-o', '--outfile', default="", help="print to file not STDOUT")
     bin_printer.add_argument('-f', '--format', default='summary', help="output format [full, minimal, summary]")
     bin_printer.add_argument('-u', '--unbinned', action="store_true", default=False, help="print unbinned contig IDs too")
+
+    #-------------------------------------------------
+    # dump data to file
+    data_dumper = subparsers.add_parser('dump',
+                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        help='write database to text file')
+    data_dumper.add_argument('dbname', help="name of the database to open")
+    data_dumper.add_argument('-f', '--fields', default="names,bins", help="fields to extract: Build a comma separated list from [names, mers, coverage, lengths, bins] or just use 'all']")
+    data_dumper.add_argument('-o', '--outfile', default="GMdump.csv", help="write data to this file")
+    data_dumper.add_argument('-s', '--separator', default=",", help="data separator")
+    data_dumper.add_argument('--no_headers', action="store_true", default=False, help="don't add headers")
 
     #-------------------------------------------------
     # plot a bin/bins

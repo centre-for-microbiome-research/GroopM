@@ -61,6 +61,7 @@ import bin
 import binManager
 import groopmUtils
 import groopmTimekeeper as gtime
+from mstore import GMDataManager
 
 ###############################################################################
 ###############################################################################
@@ -277,6 +278,33 @@ class GroopMOptionsParser():
                             sideBySide=options.sidebyside,
                             plotEllipsoid=True,
                             folder=options.folder)
+
+        elif(options.subparser_name == 'dump'):
+            print "*******************************************************************************"
+            print " [[GroopM]] Running in data dumping mode..."
+            print "*******************************************************************************"
+        
+            # prep fields. Do this first cause users are mot likely to 
+            # mess this part up!
+            allowable_fields = ['names', 'mers', 'coverage', 'lengths', 'bins', 'all']
+            fields = options.fields.split(',')
+            for field in fields:
+                if field not in allowable_fields:
+                    print "ERROR: field '%s' not recognised. Allowable fields are:" % field
+                    print '\t',",".join(allowable_fields)
+                    return
+            if options.separator == '\\t':
+                separator = '\t'
+            else:
+                separator = options.separator
+                
+            DM = GMDataManager()
+            DM.dumpData(options.dbname,
+                        fields,
+                        options.outfile,
+                        separator,
+                        not options.no_headers)
+        
         return 0
     
 

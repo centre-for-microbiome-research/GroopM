@@ -147,7 +147,7 @@ class GMDataManager:
 #------------------------------------------------------------------------------
 # DB CREATION / INITIALISATION  - PROFILES
 
-    def createDB(self, bamFiles, contigs, dbFileName, timer, kmerSize=4, dumpAll=False, force=False):
+    def createDB(self, bamFiles, contigs, dbFileName, timer, kmerSize=4, force=False):
         """Main wrapper for parsing all input files"""
         # load all the passed vars
         dbFileName = dbFileName
@@ -321,9 +321,6 @@ class GMDataManager:
         print "****************************************************************"
         print "    %s" % timer.getTimeStamp()
 
-        if(dumpAll):
-            self.dumpAll(dbFileName)
-            
         # all good!
         return True
 
@@ -879,57 +876,61 @@ class GMDataManager:
 #------------------------------------------------------------------------------
 # FILE / IO 
 
-    def dumpContigs(self, table):
-        """Raw dump of contig information"""
-        print "-----------------------------------"
-        print "Contigs table"
-        print "-----------------------------------"
-        for row in table:
-            print row['cid'],",",row['length'],",",row['bid']
+    def dumpData(self, dbFileName, fields, outFile, separator, useHeaders):
+        """Dump data to file"""
+        header_strings = []
+        data_arrays = []
+        
+        if fields == ['all']:
+            fields = ['names', 'lengths', 'bins', 'coverage', 'mers']
+        
+        num_fields = len(fields)
+        data_converters = []
 
-    def dumpbins(self, table):
-        """Raw dump of bin information"""
-        print "-----------------------------------"
-        print "Bins table"
-        print "-----------------------------------"
+        for field in fields:
+            if field == 'names':
+                header_strings.append('cid')
+                data_arrays.append(self.getContigNames(dbFileName))
+                data_converters.append(lambda x : x)
 
-    def dumpMeta(self, table):
-        """Raw dump of metadata"""
-        print "-----------------------------------"
-        print "MetaData table"
-        print "-----------------------------------"
-        for row in table:
-            print row['stoitColNames']
-            print row['merColNames']
-            print row['merSize']
-            print row['numMers']
-            print row['numCons']
-            print row['numBins']
-            print row['clustered']
-            print row['complete']
-
-    def dumpAll(self, dbFileName):
-        """Dump all contents of all DBs to screen"""
-        try:
-            with tables.openFile(dbFileName, mode='r') as h5file:
+            elif field == 'lengths':
+                header_strings.append('length')
+                data_arrays.append(self.getContigLengths(dbFileName))
+                data_converters.append(lambda x : str(x))
                 
-                # get the metadata
-                META_row = h5file.root.meta.meta.read()
-                print META_row['stoitColNames']
-    
-                stoitColNames = META_row['stoitColNames'][0].split(",")
-                merSize = META_row['merSize']
-     
-                kse = KmerSigEngine(merSize)
-                conParser = ContigParser()
-                bamParser = BamParser()
-    
-                bamParser.dumpCovTable(h5file.root.profile.coverage, stoitColNames)
-                conParser.dumpTnTable(h5file.root.profile.kms, kse.kmerCols)
-                self.dumpContigs(h5file.root.meta.contigs)
-                self.dumpMeta(h5file.root.meta.meta)
+            elif field == 'bins':
+                header_strings.append('bid')
+                data_arrays.append(self.getBins(dbFileName))
+                data_converters.append(lambda x : str(x))
+                
+            elif field == 'coverage':
+                stoits = self.getStoitColNames(dbFileName).split(',')
+                for stoit in stoits:
+                    header_strings.append(stoit)
+                data_arrays.append(self.getCoverageProfiles(dbFileName))
+                data_converters.append(lambda x : separator.join(["%0.4f" % i for i in x]))
+                
+            elif field == 'mers':
+                mers = self.getMerColNames(dbFileName).split(',')
+                for mer in mers:
+                    header_strings.append(mer)
+                data_arrays.append(self.getKmerSigs(dbFileName))
+                data_converters.append(lambda x : separator.join(["%0.4f" % i for i in x]))
+        
+        try:
+            with open(outFile, 'w') as fh:
+                if useHeaders:
+                    header = separator.join(header_strings) + "\n"
+                    fh.write(header)
+                        
+                num_rows = len(data_arrays[0])
+                for i in range(num_rows):
+                    fh.write(data_converters[0](data_arrays[0][i]))
+                    for j in range(1, num_fields):
+                        fh.write(separator+data_converters[j](data_arrays[j][i]))
+                    fh.write('\n')
         except:
-            print "Error opening database:", dbFileName, exc_info()[0]
+            print "Error opening output file %s for writing" % outFile
             raise
 
 ###############################################################################
@@ -1019,16 +1020,6 @@ class ContigParser:
             if(cid in wanted):
                 storage[cid] = seq
         return storage 
-
-    def dumpTnTable(self, table, kmerCols):
-        """Dump the guts of the TN table"""
-        print "-----------------------------------"
-        print "KmerSig table"
-        print "-----------------------------------"
-        for row in table:
-            for mer in kmerCols:
-                print ",",row[mer],
-            print ""
 
 ###############################################################################
 ###############################################################################
@@ -1168,16 +1159,6 @@ class BamParser:
                     pass
         return (rowwise_links, cov_sigs)
     
-    def dumpCovTable(self, table, stoitColNames):
-        """Dump the guts of the coverage table"""
-        print "-----------------------------------"
-        print "Coverage table"
-        print "-----------------------------------"
-        for row in table:
-            for colName in stoitColNames:
-                print ",",row[colName],
-            print ""
-
 def getBamDescriptor(fullPath):
     """AUX: Reduce a full path to just the file name minus extension"""
     return op_splitext(op_basename(fullPath))[0]
