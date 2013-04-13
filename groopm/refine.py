@@ -359,6 +359,7 @@ class RefineEngine:
 
         sys_stdout.flush()
         kCut = self.getKCut()
+        cCut = self.getCCut()
         graph = None
         if makeGraph:
             # lets make a graph
@@ -387,7 +388,7 @@ class RefineEngine:
 
         # merge bins together
         if mergeSimilarBins:
-            self.mergeSimilarBins(kCut, graph=graph)
+            self.mergeSimilarBins(kCut, cCut, graph=graph)
             print "    %s" % timer.getTimeStamp()
             sys_stdout.flush()
 
@@ -462,9 +463,9 @@ class RefineEngine:
         print "    Identified %d possible chimeras leaving %d cores" % (len(dead_bins), len(self.BM.bins))
         return dead_bins
 
-    def mergeSimilarBins(self, kCut, bids=[], verbose=False, graph=None):
+    def mergeSimilarBins(self, kCut, cCut, bids=[], verbose=False, graph=None):
         """Merge bins which are just crying out to be merged!"""
-        print "    Merging similar bins with kCut %0.4f" % kCut
+        print "    Merging similar bins with kCut %0.4f cCut %0.4f" % (kCut,cCut)
         if bids == []:
             bids = self.BM.getBids()
         # identify merging groups
@@ -472,7 +473,7 @@ class RefineEngine:
         num_bins_removed = 0
         # and then merge them
         for merge in mergers:
-            bins_removed = self.combineMergers(merge, kCut, graph=graph)
+            bins_removed = self.combineMergers(merge, kCut, cCut, graph=graph)
             num_bins_removed += len(bins_removed)
         print "    Merged %d cores leaving %d cores" % (num_bins_removed, len(self.BM.bins))        
         return num_bins_removed                
@@ -713,7 +714,7 @@ class RefineEngine:
 
         return mergers
 
-    def combineMergers(self, bidList, kCut, graph=None):
+    def combineMergers(self, bidList, kCut, cCut, graph=None):
         """Try to merge similar bins in the given list"""
 
         merged_bids = []
@@ -724,6 +725,10 @@ class RefineEngine:
         side = len(bidList)
         sq_dists = cdist(bin_mer_PCAs, bin_mer_PCAs)
         dists = squareform(sq_dists)
+        
+        # raw coverage averages for each bin
+        raw_coverage_centroids = {}
+        
         while True:
             # find the closest pair 
             closest = np_argmin(dists)
@@ -738,21 +743,35 @@ class RefineEngine:
             k_diff = np_abs(self.BM.bins[bid1].kValMean - self.BM.bins[bid2].kValMean)
             #if VVB:
             #    print bid1, bid2, k_diff, 
-            if k_diff < kCut: 
+            mers_OK = False
+            if k_diff <= kCut: 
                 should_merge = True
             else:
                 # not teensy tiny, but is it still OK?
                 (test, null) = self.testMergeMer(bid1, bid2, mer_con_PCAs)
-                if test < null:
-                    should_merge = True
-                    # now we know we should merge based on mers,
-                    # test is the bins lie in the same coverage region
-                    if should_merge:
-                        (test, null) = self.testMergeCoverage(bid1, bid2)
-                        if test < null:
-                            should_merge = True
-                        else:
-                            should_merge = False
+                should_merge = test < null
+            
+            if should_merge:
+                # now we know we should merge based on mers,
+                # test if the bins lie in the same coverage region
+                # get the angle between the two bins
+                try:
+                    c1 = raw_coverage_centroids[bid1]
+                except KeyError:
+                    c1 = np_mean([self.PM.covProfiles[row_index] for row_index in self.BM.bins[bid1].rowIndices], axis=0)
+                    raw_coverage_centroids[bid1] = c1
+                try:
+                    c2 = raw_coverage_centroids[bid2]
+                except KeyError:
+                    c2 = np_mean([self.PM.covProfiles[row_index] for row_index in self.BM.bins[bid2].rowIndices], axis=0)
+                    raw_coverage_centroids[bid2] = c2
+                ang = np_arccos(np_dot(c1,c2) / np_norm(c1) / np_norm(c2))
+                
+                if ang > cCut: 
+                    # if the angle between is not teensy timy 
+                    (test, null) = self.testMergeCoverage(bid1, bid2)
+                    if test >= null:
+                        should_merge = False
 
             if should_merge:
                 # get these before we merge!
@@ -775,7 +794,8 @@ class RefineEngine:
                 # we use the weighted average of the two previous pca positions 
                 # to determine where the newly merged bin should reside
                 bin_mer_PCAs[i] = (bin_mer_PCAs[i] * b1_size + bin_mer_PCAs[j] * b2_size) / (b1_size + b2_size)
-
+                raw_coverage_centroids[bid1] = (raw_coverage_centroids[bid1] * b1_size + raw_coverage_centroids[bid2] * b2_size) / (b1_size + b2_size)
+                
                 # re-calc the distances                 
                 new_dists = cdist([bin_mer_PCAs[i]], bin_mer_PCAs)
                 
@@ -990,6 +1010,28 @@ class RefineEngine:
                 mean_k_vals.append(np_mean(k_dist))
         
         return np_mean(mean_k_vals)# + np_std(mean_k_vals)  
+
+    def getCCut(self):
+        """Work out the easy cutoff for coverage angle difference"""
+        mean_angles = []
+        max_in_bin = 100 # at most XXX contigs per bin
+        for bid in self.BM.getBids():
+            bin = self.BM.bins[bid]
+            if bin.binSize < max_in_bin:
+                sample_size = bin.binSize
+            else:  
+                sample_size = max_in_bin
+            # select a few at random
+            si = np_arange(bin.binSize)
+            shuffle(si)
+            for i in range(sample_size):
+                for j in range(i+1, sample_size):
+                    r1 = bin.rowIndices[si[i]]
+                    r2 = bin.rowIndices[si[j]]
+                    mean_angles.append(np_arccos(np_dot(self.PM.covProfiles[r1],self.PM.covProfiles[r2]) /
+                                                 self.PM.normCoverages[r1]/self.PM.normCoverages[r2]))
+                    
+        return np_mean(mean_angles)
 
 #-----------------------------
 # MERGE TESTING BASED ON KMERS
