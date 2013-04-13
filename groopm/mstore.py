@@ -158,7 +158,7 @@ class GMDataManager:
         conParser = ContigParser()
         bamParser = BamParser()
 
-        cid_2_indices ={}
+        cid_2_indices = {}
         
         # make sure we're only overwriting existing DBs with the users consent
         try:
@@ -188,106 +188,107 @@ class GMDataManager:
                 # (typically 0). Ironically, we don't store the CIDs here, these are saved one time
                 # only in the bin table 
                 #------------------------
-                db_desc = {}
-                ppos = 0
-                ksig_data = None
-                for mer in kse.kmerCols:
-                     db_desc[mer] = tables.FloatCol(pos=ppos)
-                     ppos += 1
                 try:
-                    f = open(contigsFile, "r")
-                    # keep all the contig names so we can check other tables
-                    # contigNames is a dict of type ID -> Length
-                    (ksig_data, contigNames) = conParser.parse(f, kse)
-                    f.close()
+                    with open(contigsFile, "r") as f:
+                        try:
+                            (con_names, con_lengths, con_ksigs) = conParser.parse(f, kse)
+                            num_cons = len(con_names)
+                            cid_2_indices = dict(zip(con_names, range(num_cons)))
+                        except:
+                            print "Error parsing contigs"
+                            raise
                 except:
                     print "Could not parse contig file:",contigsFile,exc_info()[0]
                     raise
 
                 # store the raw calculated kmer sigs in one table
+                db_desc = []
+                for mer in kse.kmerCols:
+                     db_desc.append((mer, float))
                 try:
-                    KMER_table = h5file.createTable(profile_group, 'kms', db_desc, "Kmer signature", expectedrows=len(contigNames))
+                    h5file.createTable(profile_group,
+                                       'kms',
+                                       np.array(con_ksigs, dtype=db_desc),
+                                       title='Kmer signatures',
+                                       expectedrows=num_cons
+                                       )
                 except:
                     print "Error creating KMERSIG table:", exc_info()[0]
                     raise
                 
                 # compute the PCA of the ksigs and store these too
-                db_desc = {'pc1' : tables.FloatCol(pos=0),
-                           'pc2' : tables.FloatCol(pos=1) }               
+                pc_ksigs = conParser.PCAKSigs(con_ksigs)
+                
+                db_desc = [('pc1', float),
+                           ('pc2', float)]
                 try:
-                    KPCA_table = h5file.createTable(profile_group, 'kpca', db_desc, "Kmer signature PCAs", expectedrows=len(contigNames))
+                    h5file.createTable(profile_group,
+                                       'kpca',
+                                       np.array(pc_ksigs, dtype=db_desc),
+                                       title='Kmer signature PCAs',
+                                       expectedrows=num_cons
+                                       )
                 except:
                     print "Error creating KMERVALS table:", exc_info()[0]
                     raise
-
-                try:
-                    conParser.storeSigs(ksig_data, KMER_table, KPCA_table)
-                except:
-                    print "Could not load kmer sigs:",contigsFile,exc_info()[0]
-                    raise
-
+                               
                 #------------------------
                 # Add a table for the contigs
                 #------------------------
-                db_desc = {'cid' : tables.StringCol(512, pos=0),
-                           'bid' : tables.Int32Col(dflt=0,pos=1),
-                           'length' : tables.Int32Col(pos=2) }
-                try:
-                    CONTIG_table = h5file.createTable(meta_group, 'contigs', db_desc, "Contig information", expectedrows=len(contigNames))
-                    cid_2_indices = self.initContigs(CONTIG_table, contigNames)
-                except:
-                    print "Error creating CONTIG table:", exc_info()[0]
-                    raise
+                self.setBinAssignments((h5file, meta_group), 
+                                       image=zip(con_names,
+                                                 [0]*num_cons,
+                                                 con_lengths)
+                                       )
 
                 #------------------------
                 # Add a table for the bins
                 #------------------------
-                db_desc = {'bid' : tables.Int32Col(pos=0),
-                           'numMembers' : tables.Int32Col(dflt=0,pos=1) }
-                try:
-                    BIN_table = h5file.createTable(meta_group, 'bins', db_desc, "Bin information")
-                    BIN_table.flush()
-                except:
-                    print "Error creating BIN table:", exc_info()[0]
-                    raise
+                self.setBinStats(dbFileName, [], firstWrite=True)
+                
                 print "    %s" % timer.getTimeStamp()
 
                 #------------------------
                 # parse bam files
                 #------------------------
                 # build a table template based on the number of bamfiles we have
-                db_desc = {}
-                ppos = 0
-                links = {}
+                db_desc = []
                 for bf in bamFiles:
                     # assume the file is called something like "fred.bam"
                     # we want to rip off the ".bam" part
                     bam_desc = getBamDescriptor(bf)
-                    db_desc[bam_desc] = tables.FloatCol(pos=ppos)
+                    db_desc.append((bam_desc, float))
                     stoitColNames.append(bam_desc)
-                    ppos += 1
+                    
+                (rowwise_links, cov_profiles) = bamParser.parse(bamFiles,
+                                                                con_names,
+                                                                cid_2_indices)
                 try:
-                    COV_table = h5file.createTable(profile_group, 'coverage', db_desc, "Bam based coverage", expectedrows=len(contigNames))
+                    h5file.createTable(profile_group,
+                                       'coverage',
+                                       np.array(cov_profiles, dtype=db_desc),
+                                       title="Bam based coverage",
+                                       expectedrows=num_cons)
                 except:
                     print "Error creating coverage table:", exc_info()[0]
                     raise
 
-                # now fill in coverage details
-                rowwise_links = bamParser.parse(bamFiles, stoitColNames, COV_table, contigNames, cid_2_indices)
-                
                 #------------------------
                 # contig links
                 #------------------------
                 # set table size according to the number of links returned from
                 # the previous call
-                db_desc = {'contig1' : tables.Int32Col(pos=0),
-                           'contig2' : tables.Int32Col(pos=1),
-                           'numReads' : tables.Int32Col(pos=2),
-                           'linkType' : tables.Int32Col(pos=3),
-                           'gap' : tables.Int32Col(pos=4) }
+                db_desc = [('contig1', int),
+                           ('contig2', int),
+                           ('numReads', int),
+                           ('linkType', int),
+                           ('gap', int)]
                 try:
-                    LINKS_table = h5file.createTable(links_group, 'links', db_desc, "ContigLinks", expectedrows=len(rowwise_links))
-                    bamParser.initLinks(rowwise_links, LINKS_table)
+                    h5file.createTable(links_group,
+                                       'links',
+                                       np.array(rowwise_links, dtype=db_desc),
+                                       title="ContigLinks",
+                                       expectedrows=len(rowwise_links))
                 except:
                     print "Error creating links table:", exc_info()[0]
                     raise
@@ -296,39 +297,26 @@ class GMDataManager:
                 #------------------------
                 # Add metadata
                 #------------------------
-                # Create a new group under "/" (root) for storing profile information
-                db_desc = {'stoitColNames' : tables.StringCol(512, pos=0),
-                           'numStoits' : tables.Int32Col(pos=1),
-                           'merColNames' : tables.StringCol(4096,pos=2),
-                           'merSize' : tables.Int32Col(pos=2),
-                           'numMers' : tables.Int32Col(pos=4),
-                           'numCons' : tables.Int32Col(pos=5),
-                           'numBins' : tables.Int32Col(dflt=0, pos=6),
-                           'clustered' : tables.BoolCol(dflt=False, pos=7),                  # set to true after clustering is complete
-                           'complete' : tables.BoolCol(dflt=False, pos=8),                   # set to true after clustering finishing is complete
-                           'formatVersion' : tables.Int32Col(pos=9)
-                           }
-                try:
-                    META_table = h5file.createTable(meta_group, 'meta', db_desc, "Descriptive data", expectedrows=1)
-                    self.initMeta(META_table,
-                                  str.join(',',stoitColNames),
-                                  len(stoitColNames),
-                                  str.join(',',kse.kmerCols),
-                                  kmerSize,
-                                  len(kse.kmerCols),
-                                  len(contigNames),
-                                  __current_GMDB_version__)
-                except:
-                    print "Error creating META table:", exc_info()[0]
-                    raise
+                meta_data = (str.join(',',stoitColNames),
+                             len(stoitColNames.split(',')),
+                             str.join(',',kse.kmerCols),
+                             kmerSize,
+                             len(kse.kmerCols),
+                             num_cons,
+                             0,
+                             False,
+                             False,
+                             __current_GMDB_version__)
+                self.setMeta(h5file, meta_data)
+                
         except:
             print "Error creating database:", dbFileName, exc_info()[0]
             raise
         
         print "****************************************************************"
         print "Data loaded successfully!"
-        print " ->",len(contigNames),"contigs"
-        print " ->",len(stoitColNames),"BAM files"
+        print " ->",num_cons,"contigs"
+        print " ->",len(stoitColNames.split(',')),"BAM files"
         print "Written to: '"+dbFileName+"'"
         print "****************************************************************"
         print "    %s" % timer.getTimeStamp()
@@ -338,37 +326,6 @@ class GMDataManager:
             
         # all good!
         return True
-                
-    def initContigs(self, table, contigNames):
-        """Initialise the contigs table
-        
-        set to 0 for no bin assignment
-        """
-        cid_2_indices = {}
-        outer_index = 0
-        for cid in sorted(contigNames):
-            CONTIG_row = table.row
-            CONTIG_row['cid'] = cid
-            CONTIG_row['length'] = contigNames[cid]
-            CONTIG_row.append()
-            
-            cid_2_indices[cid] = outer_index
-            outer_index += 1
-        table.flush()
-        return cid_2_indices 
-    
-    def initMeta(self, table, stoitColNames, numStoits, merColNames, merSize, numMers, numCons, format):
-        """Initialise the meta-data table"""
-        META_row = table.row
-        META_row['stoitColNames'] = stoitColNames
-        META_row['numStoits'] = numStoits
-        META_row['merColNames'] = merColNames
-        META_row['merSize'] = merSize
-        META_row['numMers'] = numMers
-        META_row['numCons'] = numCons
-        META_row['formatVersion'] = format
-        META_row.append()
-        table.flush()
 
     def promptOnOverwrite(self, dbFileName, minimal=False):
         """Check that the user is ok with overwriting the db"""
@@ -424,77 +381,30 @@ class GMDataManager:
         # two kmerSig PCA's in a separate table
         print "    Calculating and storing the kmerSig PCAs"
 
-        # get the raw kmersigs
-        kmer_sigs = self.getKmerSigs(dbFileName)
-        
-        # make the table we'll store the stuff in
+        # compute the PCA of the ksigs
+        pc_ksigs = self.getKmerSigs(dbFileName)
+
+        db_desc = [('pc1', float),
+                   ('pc2', float)]
         try:
             with tables.openFile(dbFileName, mode='a', rootUEP="/profile") as profile_group:
-                db_desc = {'pc1' : tables.FloatCol(pos=0),
-                           'pc2' : tables.FloatCol(pos=1) }               
                 try:
-                    KPCA_table = profile_group.createTable('/',
-                                                           'kpca',
-                                                           db_desc,
-                                                           "Kmer signature PCAs",
-                                                           expectedrows=np.shape(kmer_sigs)[0]
-                                                           )
+                    profile_group.createTable('/',
+                                              'kpca',
+                                              np.array(pc_ksigs, dtype=db_desc),
+                                              title='Kmer signature PCAs',
+                                              expectedrows=num_cons
+                                              )
                 except:
                     print "Error creating KMERVALS table:", exc_info()[0]
                     raise
-        
-                CP = ContigParser()
-                CP.storeSigPCAs(kmer_sigs, KPCA_table)
         except:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
         
         # update the formatVersion field and we're done
-        self.updateGMDBFormat(dbFileName, 1)
+        self.setGMDBFormat(dbFileName, 1)
         print "*******************************************************************************"
-
-    def updateGMDBFormat(self, dbFileName, version):
-        """Update the GMDB format version"""
-        num_stoits = self.getNumStoits(dbFileName)
-        mer_col_names = self.getMerColNames(dbFileName)
-        mer_size = self.getMerSize(dbFileName)
-        num_mers = self.getNumMers(dbFileName)
-        num_cons = self.getNumCons(dbFileName)
-        stoit_col_names = self.getStoitColNames(dbFileName)
-        try:
-            with tables.openFile(dbFileName, mode='a', rootUEP="/meta") as meta_group:
-                # nuke any previous failed attempts
-                try:
-                    meta_group.removeNode('/', 'tmp_meta')
-                except:
-                    pass
-                # make a new tmp table
-                # Create a new group under "/" (root) for storing profile information
-                db_desc = {'stoitColNames' : tables.StringCol(512, pos=0),
-                           'numStoits' : tables.Int32Col(pos=1),
-                           'merColNames' : tables.StringCol(4096,pos=2),
-                           'merSize' : tables.Int32Col(pos=2),
-                           'numMers' : tables.Int32Col(pos=4),
-                           'numCons' : tables.Int32Col(pos=5),
-                           'numBins' : tables.Int32Col(dflt=0, pos=6),
-                           'clustered' : tables.BoolCol(dflt=False, pos=7),                  # set to true after clustering is complete
-                           'complete' : tables.BoolCol(dflt=False, pos=8),                   # set to true after clustering finishing is complete
-                           'formatVersion' : tables.Int32Col(pos=9)
-                           }
-
-                META_table = meta_group.createTable('/', 'tmp_meta', db_desc, "Descriptive data", expectedrows=1)
-                self.initMeta(META_table,
-                              stoit_col_names,
-                              num_stoits,
-                              mer_col_names,
-                              mer_size,
-                              num_mers,
-                              num_cons,
-                              version)
-                meta_group.renameNode('/', 'meta', 'tmp_meta', overwrite=True)
-        except:
-            print "Error opening DB:",dbFileName, exc_info()[0]
-            raise
 
 #------------------------------------------------------------------------------
 # GET LINKS 
@@ -558,119 +468,46 @@ class GMDataManager:
     def nukeBins(self, dbFileName):
         """Reset all bin information, completely"""
         print "    Clearing all old bin information from",dbFileName
-        contig_names = {}
-        try:
-            with tables.openFile(dbFileName, mode='r') as h5file:
-                # get a dictionary of contigIDs to lengths
-                contig_names = dict(zip(
-                                        [list(x)[0] for x in h5file.root.meta.contigs.readWhere("cid != ''")],
-                                        [list(x)[2] for x in h5file.root.meta.contigs.readWhere("cid != ''")]
-                                        )
-                                    )
-                
-            num_stoits = self.getNumStoits(dbFileName)
-            mer_col_names = self.getMerColNames(dbFileName)
-            mer_size = self.getMerSize(dbFileName)
-            num_mers = self.getNumMers(dbFileName)
-            num_cons = self.getNumCons(dbFileName)
-            stoit_col_names = self.getStoitColNames(dbFileName)
-            formatVersion = self.getGMFormat(dbFileName)
-        except:
-            print "Error opening DB:",dbFileName, exc_info()[0]
-            raise
-        try:
-            with tables.openFile(dbFileName, mode='a', rootUEP="/meta") as meta_group:
-                # clear bin stats
-                # try remove any older failed attempts
-                try:
-                    meta_group.removeNode('/', 'tmp_bins')
-                except:
-                    pass
-                # make a new tmp table
-                db_desc = {'bid' : tables.Int32Col(pos=0), 'numMembers' : tables.Int32Col(dflt=0,pos=1) }
-                BIN_table = meta_group.createTable('/', 'tmp_bins', db_desc, "Bin information")
-                # rename as the bins table
-                meta_group.renameNode('/', 'bins', 'tmp_bins', overwrite=True)       
+        self.setBinStats(dbFileName, [])
+        self.setNumBins(dbFileName, 0)
+        self.setBinAssignments(dbFileName, updates={}, nuke=True)
 
-                # clear contig bin ids
-                # try remove any older failed attempts
-                try:
-                    meta_group.removeNode('/', 'tmp_contigs')
-                except:
-                    pass
-                # make a new tmp table
-                db_desc = {'cid' : tables.StringCol(512, pos=0),
-                           'bid' : tables.Int32Col(dflt=0,pos=1),
-                           'length' : tables.Int32Col(pos=2) }
-                CONTIG_table = meta_group.createTable('/', 'tmp_contigs', db_desc, "Contig information", expectedrows=len(contig_names))
-                cid_2_indices = self.initContigs(CONTIG_table, contig_names)
-                # do the rename
-                meta_group.renameNode('/', 'contigs', 'tmp_contigs', overwrite=True)
-                
-                # we need to reset the num_bins region of meta
-                try:
-                    meta_group.removeNode('/', 'tmp_meta')
-                except:
-                    pass
-                # make a new tmp table
-                # Create a new group under "/" (root) for storing profile information
-                db_desc = {'stoitColNames' : tables.StringCol(512, pos=0),
-                           'numStoits' : tables.Int32Col(pos=1),
-                           'merColNames' : tables.StringCol(4096,pos=2),
-                           'merSize' : tables.Int32Col(pos=2),
-                           'numMers' : tables.Int32Col(pos=4),
-                           'numCons' : tables.Int32Col(pos=5),
-                           'numBins' : tables.Int32Col(dflt=0, pos=6),
-                           'clustered' : tables.BoolCol(dflt=False, pos=7),                  # set to true after clustering is complete
-                           'complete' : tables.BoolCol(dflt=False, pos=8),                   # set to true after clustering finishing is complete
-                           'formatVersion' : tables.Int32Col(pos=9)                           
-                           }
-
-                META_table = meta_group.createTable('/', 'tmp_meta', db_desc, "Descriptive data", expectedrows=1)
-                self.initMeta(META_table,
-                              stoit_col_names,
-                              num_stoits,
-                              mer_col_names,
-                              mer_size,
-                              num_mers,
-                              num_cons,
-                              formatVersion)
-                meta_group.renameNode('/', 'meta', 'tmp_meta', overwrite=True)
-                                
-        except:
-            print "Error opening DB:",dbFileName, exc_info()[0]
-            raise
-
-
-    def setBinStats(self, dbFileName, updates):
+    def setBinStats(self, dbFileName, updates, firstWrite=False):
         """Set bins table 
         
-        updates is a dictionary which looks like:
-        { bid : numMembers }
+        updates is a list of tuples which looks like:
+        [ (bid, numMembers) ]
         """
+        db_desc = [('bid', int),
+                   ('numMembers', int)]
+        bd = np.array(updates, dtype=db_desc)
+
         try:
-            with tables.openFile(dbFileName, mode='a', rootUEP="/meta") as meta_group:
-                # pytables is a little "dumb" thus it's easier to 
-                # make a new table and then copy everything over
+            with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+                mg = h5file.getNode('/', name='meta')
+                if not firstWrite:
+                    t_name = 'tmp_bin'
+                    # nuke any previous failed attempts
+                    try:
+                        h5file.removeNode(mg, 'tmp_bin')
+                    except:
+                        pass
+                else:
+                    t_name = 'bin'
                 
-                # try remove any older failed attempts
                 try:
-                    meta_group.removeNode('/', 'tmp_bins')
+                    h5file.createTable(mg,
+                                       t_name,
+                                       bd,
+                                       title="Bin information",
+                                       expectedrows=1)
                 except:
-                    pass
-                # make a new tmp table
-                db_desc = {'bid' : tables.Int32Col(pos=0), 'numMembers' : tables.Int32Col(dflt=0,pos=1) }
-                BIN_table = meta_group.createTable('/', 'tmp_bins', db_desc, "Bin information")
-                # add in the new stuff
-                for bid in updates.keys(): 
-                    BIN_row = BIN_table.row
-                    BIN_row['bid'] = bid
-                    BIN_row['numMembers'] = updates[bid]
-                    BIN_row.append()
-                BIN_table.flush()
+                    print "Error creating META table:", exc_info()[0]
+                    raise
                 
-                # do the rename
-                meta_group.renameNode('/', 'bins', 'tmp_bins', overwrite=True)
+                if not firstWrite:
+                    # rename the tmp table to overwrite
+                    h5file.renameNode(mg, 'bin', 'tmp_bin', overwrite=True)
         except:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
@@ -684,7 +521,7 @@ class GMDataManager:
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
                 ret_dict = {}
-                all_rows = h5file.root.meta.bins.read()
+                all_rows = h5file.root.meta.bin.read()
                 for row in all_rows:
                     ret_dict[row[0]] = row[1]
                 return ret_dict
@@ -692,7 +529,6 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
         return {}
-        
                 
     def getBins(self, dbFileName, condition='', indices=np.array([])):
         """Load per-contig bins"""
@@ -708,25 +544,83 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
-    def setBinAssignments(self, dbFileName, assignments):
+    def setBinAssignments(self, storage, updates=None, image=None, nuke=False):
         """Set per-contig bins
         
         updates is a dictionary which looks like:
         { tableRow : binValue }
+        if updates is set then storage is the
+        path to the hdf file
+        
+        image is a list of tuples which look like:
+        [(cid, bid, len)]
+        if image is set then storage is a tuple of type:
+        (h5file, group)
         """
-        row_nums = assignments.keys()
+        db_desc = [('cid', '|S512'),
+                   ('bid', int),
+                   ('length', int)]
+        closeh5 = False
+        if updates is not None:
+            # we need to build the image
+            dbFileName = storage
+            contig_names = self.getContigNames(dbFileName)
+            contig_lengths = self.getContigLengths(dbFileName)
+            num_cons = len(contig_lengths)
+            if nuke:
+                # clear all bin assignments
+                bins = [0]*num_cons
+            else:
+                bins = self.getBins(dbFileName)
+            
+            # now apply the updates
+            for tr in updates.keys():
+                bins[tr] = updates[tr] 
+            
+            # and build the image
+            image = np.array(zip(contig_names, bins, contig_lengths),
+                             dtype=db_desc)
+            
+            try:
+                h5file = tables.openFile(dbFileName, mode='a')
+            except:
+                print "Error opening DB:",dbFileName, exc_info()[0]
+                raise                
+            meta_group = h5file.getNode('/', name='meta')
+            closeh5 = True
+            
+        elif image is not None:
+            h5file = storage[0]
+            meta_group = storage[1]
+            num_cons = len(image)
+            image = np.array(image,
+                             dtype=db_desc)
+        else:
+            print "get with the program dude"
+            return
+        
+        # now we write the data
         try:
-            with tables.openFile(dbFileName, mode='a') as h5file:
-                table = h5file.root.meta.contigs
-                for row_num in row_nums:
-                    new_row = np.zeros((1,),dtype=('S512,i4,i4'))
-                    new_row[:] = [(table[row_num][0],assignments[row_num],table[row_num][2])]
-                    table.modifyRows(start=row_num, rows=new_row)
-                table.flush()
+            # get rid of any failed attempts
+            h5file.removeNode(meta_group, 'tmp_contigs')
         except:
-            print "Error opening DB:",dbFileName, exc_info()[0]
+            pass
+        
+        try:
+            h5file.createTable(meta_group,
+                               'tmp_contigs',
+                               image,
+                               title="Contig information",
+                               expectedrows=num_cons)
+        except:
+            print "Error creating CONTIG table:", exc_info()[0]
             raise
-
+        
+        # rename the tmp table to overwrite
+        h5file.renameNode(meta_group, 'contigs', 'tmp_contigs', overwrite=True)  
+        if closeh5:
+            h5file.close()
+        
     def getContigNames(self, dbFileName, condition='', indices=np.array([])):
         """Load contig names"""
         try:
@@ -783,12 +677,79 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
+#------------------------------------------------------------------------------
+# GET / SET METADATA 
+
+    def setMeta(self, h5file, metaData, overwrite=False):
+        """Write metadata into the table
+        
+        metaData should be a tuple of values
+        """
+        db_desc = [('stoitColNames', '|S512'),
+                   ('numStoits', int),
+                   ('merColNames', '|S4096'),
+                   ('merSize', int),
+                   ('numMers', int),
+                   ('numCons', int),
+                   ('numBins', int),
+                   ('clustered', bool),     # set to true after clustering is complete
+                   ('complete', bool),      # set to true after clustering finishing is complete
+                   ('formatVersion', int)]
+        md = np.array([metaData], dtype=db_desc)
+        
+        # get hold of the group
+        mg = h5file.getNode('/', name='meta')
+        
+        if overwrite:
+            t_name = 'tmp_meta'
+            # nuke any previous failed attempts
+            try:
+                h5file.removeNode(mg, 'tmp_meta')
+            except:
+                pass
+        else:
+            t_name = 'meta'
+        
+        try:
+            h5file.createTable(mg,
+                               t_name,
+                               md,
+                               "Descriptive data",
+                               expectedrows=1)
+        except:
+            print "Error creating META table:", exc_info()[0]
+            raise
+        
+        if overwrite:
+            # rename the tmp table to overwrite
+            h5file.renameNode(mg, 'meta', 'tmp_meta', overwrite=True)
+
     def getMetaField(self, dbFileName, fieldName):
         """return the value of fieldName in the metadata tables"""
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
                 # theres only one value
                 return h5file.root.meta.meta.read()[fieldName][0]
+        except:
+            print "Error opening DB:",dbFileName, exc_info()[0]
+            raise
+
+    def setGMDBFormat(self, dbFileName, version):
+        """Update the GMDB format version"""
+        stoit_col_names = self.getStoitColNames(dbFileName)
+        meta_data = (stoit_col_names,
+                    len(stoit_col_names.split(',')),
+                    self.getMerColNames(dbFileName),
+                    self.getMerSize(dbFileName),
+                    self.getNumMers(dbFileName),
+                    self.getNumCons(dbFileName),
+                    self.getNumBins(dbFileName),
+                    self.isClustered(dbFileName),
+                    self.isComplete(dbFileName),
+                    version)
+        try:
+            with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+                self.setMeta(h5file, meta_data, overwrite=True)
         except:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
@@ -826,22 +787,29 @@ class GMDataManager:
         """return the value of numCons in the metadata tables"""
         return self.getMetaField(dbFileName, 'numCons')
 
+    def setNumBins(self, dbFileName, numBins):
+        """set the number of bins"""
+        stoit_col_names = self.getStoitColNames(dbFileName)
+        meta_data = (stoit_col_names,
+                    len(stoit_col_names.split(',')),
+                    self.getMerColNames(dbFileName),
+                    self.getMerSize(dbFileName),
+                    self.getNumMers(dbFileName),
+                    self.getNumCons(dbFileName),
+                    numBins,
+                    self.isClustered(dbFileName),
+                    self.isComplete(dbFileName),
+                    self.getGMFormat(dbFileName))
+        try:
+            with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+                self.setMeta(h5file, meta_data, overwrite=True)
+        except:
+            print "Error opening DB:",dbFileName, exc_info()[0]
+            raise
+
     def getNumBins(self, dbFileName):
         """return the value of numBins in the metadata tables"""
         return self.getMetaField(dbFileName, 'numBins')
-        
-    def setNumBins(self, dbFileName, numBins):
-        """set the number of bins"""
-        try:
-            with tables.openFile(dbFileName, mode='a') as h5file:
-                META_table = h5file.root.meta.meta
-                for META_row in META_table: # there is only one meta row
-                    META_row['numBins'] = numBins
-                    META_row.update()
-                META_table.flush()
-        except:
-            print "Error opening database:", dbFileName, exc_info()[0]
-            raise
         
     def getStoitColNames(self, dbFileName):
         """return the value of stoitColNames in the metadata tables"""
@@ -859,17 +827,24 @@ class GMDataManager:
             print "Error opening database:", dbFileName, exc_info()[0]
             raise
             
-    def setClustered(self, dbFileName, state=True):
+    def setClustered(self, dbFileName, state):
         """Set the state of clustering"""
+        stoit_col_names = self.getStoitColNames(dbFileName)
+        meta_data = (stoit_col_names,
+                    len(stoit_col_names.split(',')),
+                    self.getMerColNames(dbFileName),
+                    self.getMerSize(dbFileName),
+                    self.getNumMers(dbFileName),
+                    self.getNumCons(dbFileName),
+                    self.getNumBins(dbFileName),
+                    state,
+                    self.isComplete(dbFileName),
+                    self.getGMFormat(dbFileName))
         try:
-            with tables.openFile(dbFileName, mode='a') as h5file:
-                META_table = h5file.root.meta.meta
-                for META_row in META_table: # there is only one meta row
-                    META_row['clustered'] = state
-                    META_row.update()
-                META_table.flush()
+            with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+                self.setMeta(h5file, meta_data, overwrite=True)
         except:
-            print "Error opening database:", dbFileName, exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
             
     def isComplete(self, dbFileName):
@@ -881,17 +856,24 @@ class GMDataManager:
             print "Error opening database:", dbFileName, exc_info()[0]
             raise
 
-    def setComplete(self, dbFileName, state=True):
+    def setComplete(self, dbFileName, state):
         """Set the state of completion"""
+        stoit_col_names = self.getStoitColNames(dbFileName)
+        meta_data = (stoit_col_names,
+                    len(stoit_col_names.split(',')),
+                    self.getMerColNames(dbFileName),
+                    self.getMerSize(dbFileName),
+                    self.getNumMers(dbFileName),
+                    self.getNumCons(dbFileName),
+                    self.getNumBins(dbFileName),
+                    self.isClustered(dbFileName),
+                    state,
+                    self.getGMFormat(dbFileName))
         try:
-            with tables.openFile(dbFileName, mode='a') as h5file:
-                META_table = h5file.root.meta.meta
-                for META_row in META_table: # there is only one meta row
-                    META_row['complete'] = state
-                    META_row.update()
-                META_table.flush()
+            with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+                self.setMeta(h5file, meta_data, overwrite=True)
         except:
-            print "Error opening database:", dbFileName, exc_info()[0]
+            print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
 #------------------------------------------------------------------------------
@@ -993,69 +975,42 @@ class ContigParser:
     def parse(self, contigFile, kse):
         """Do the heavy lifting of parsing"""
         print "Parsing contigs"        
-        tmp_storage = {} # save everything here first so we can sort accordingly
+        contigInfo = {} # save everything here first so we can sort accordingly
         for cid,seq,qual in self.readfq(contigFile):
-            tmp_storage[cid] = (kse.getKSig(seq.upper()), len(seq))
+            contigInfo[cid] = (kse.getKSig(seq.upper()), len(seq))
 
-        # get a list of contig names
-        # This array is used like everywhere dude...
-        con_names = {}
-        for cid in sorted(tmp_storage.keys()):     
-            con_names[cid] = tmp_storage[cid][1]
-        return (tmp_storage, con_names)
-        
-    def storeSigs(self, data, kSigTable, kPCATable):
-        """Store the kmersigs and calculate the PCA at the same time"""
-        k_PCA_data = np.array([])
-        rows = 0
-        for cid in sorted(data.keys()):
-            rows += 1
-            cols = 0
-            new_sig = np.array([])     
-            # make a new row
-            KMER_row = kSigTable.row
-            # punch in the data
-            for mer in sorted(data[cid][0].keys()):
-                cols += 1
-                KMER_row[mer] = data[cid][0][mer]
-                new_sig = np.append(new_sig, data[cid][0][mer])
-            KMER_row.append()
-            k_PCA_data = np.append(k_PCA_data, new_sig)
-        kSigTable.flush()
+        # sort the contig names here once!
+        con_names = np.array(sorted(contigInfo.keys()))
+        # keep everything in order...
+        con_lengths = np.array([contigInfo[cid][1] for cid in con_names])
+        con_ksigs = [contigInfo[cid][0] for cid in con_names]
+        return (con_names, con_lengths, con_ksigs)
         
         # store the PCA'd kmersigs
         k_PCA_data = np.reshape(k_PCA_data, (rows,cols))
         self.storeSigPCAs(k_PCA_data, kPCATable)
         
-    def storeSigPCAs(self, data, kPCATable):
-        """Store PCA'd kmer sig data
+    def PCAKSigs(self, kSigs):
+        """PCA kmer sig data
         
-        data is a two dimensional numpy array which is ordered
-        by cid in the same fashion as for all stored data
+        returns an array of tuples [(pc1, pc2), (pc1, pc2), ...]
         """
-        # do the PCA analysis
+        # make a copy
+        data = np.copy(kSigs)
         Center(data,verbose=0)
         p = PCA(data)
         components = p.pc()
         
-        # now make the color profile based on PC1
-        PC1 = np.array([float(i) for i in components[:,0]])
-        PC2 = np.array([float(i) for i in components[:,1]])
-        
+        # only need the first two PCs
+        PCAs = components[:,0:2]
+
         # normalise to fit between 0 and 1
-        PC1 -= np.min(PC1)
-        PC1 /= np.max(PC1)
-        PC2 -= np.min(PC2)
-        PC2 /= np.max(PC2)
+        min  = np.min(PCAs, axis=0)
+        PCAs -= min
+        max  = np.max(PCAs, axis=0)
+        PCAs /= max
         
-        # store in the table
-        for i in range(len(PC1)):
-            KPCA_row = kPCATable.row
-            # punch in the data
-            KPCA_row['pc1'] = PC1[i]
-            KPCA_row['pc2'] = PC2[i]
-            KPCA_row.append()
-        kPCATable.flush()
+        return [tuple(i) for i in PCAs]
 
     def getWantedSeqs(self, contigFile, wanted, storage={}):
         """Do the heavy lifting of parsing"""
@@ -1088,7 +1043,10 @@ class KmerSigEngine:
         self.numMers = len(self.kmerCols)
         
     def makeKmerColNames(self, makeLL=False):
-        """Work out the range of kmers required based on kmer length"""
+        """Work out the range of kmers required based on kmer length
+        
+        returns a list of sorted kmers and optionally a llo dict
+        """
         # build up the big list
         base_words = ("A","C","G","T")
         out_list = ["A","C","G","T"]
@@ -1108,18 +1066,9 @@ class KmerSigEngine:
             if lmer not in ret_list:
                 ret_list.append(lmer)
         if makeLL:
-            return (ret_list, ll_dict)
+            return (sorted(ret_list), ll_dict)
         else:
-            return ret_list
-
-    def getKmerSigWeights(self):
-        """Return a hash of index into kmer sig -> GC %"""
-        kmer_names = self.makeKmerColNames()
-        weights = []
-        compl = s_maketrans('ACGTacgt', '01100110')
-        for kmer in kmer_names:
-            weights.append(sum([float(x) for x in list(kmer.translate(compl))])/float(self.kLen))
-        return weights
+            return sorted(ret_list)
 
     def getGC(self, seq):
         """Get the GC of a sequence"""
@@ -1147,22 +1096,28 @@ class KmerSigEngine:
         return seq.translate(self.compl)[::-1]
     
     def getKSig(self, seq):
-        """Work out kmer signature for a nucleotide sequence"""
+        """Work out kmer signature for a nucleotide sequence
+        
+        returns a tuple of floats which is the kmer sig
+        """
+        # tmp storage
         sig = dict(zip(self.kmerCols, [0.0] * self.numMers))
-        ll = len(seq)
-        for i in range(0,ll-self.kLen+1):
+        # the number fo kmers in this sequence
+        num_mers = len(seq)-self.kLen+1
+        for i in range(0,num_mers):
             try:
                 this_mer = self.llDict[seq[i:i+self.kLen]]
                 try:
                     sig[this_mer] += 1.0
                 except KeyError:
+                    # Ns
                     sig[this_mer] = 1.0
             except KeyError:
+                # typically due to an N in the sequence...
                 pass
 
         # normalise by length and return
-        return dict(zip(self.kmerCols, [ X / ll for X in sig.values()]))
-
+        return tuple([sig[x] / num_mers for x in self.kmerCols])
 
 ###############################################################################
 ###############################################################################
@@ -1173,7 +1128,7 @@ class BamParser:
 
     def __init__(self): pass
     
-    def parse(self, bamFiles, stoitColNames, covTable, contigNames, cid2Indices):
+    def parse(self, bamFiles, contigNames, cid2Indices):
         """Parse multiple bam files and store the results in the main DB
         
         table: a table in an open h5 file like "CID,COV_1,...,COV_n,length"
@@ -1184,39 +1139,34 @@ class BamParser:
         BP = BTBP()
         (links, ref_lengths, coverages) = BP.getLinks(bamFiles, full=False, verbose=True, doCoverage=True, minJoin=5)
 
-        # go through all the contigs sorted by name and write to the DB
-        try:
-            for cid in sorted(contigNames.keys()):
-                # make a new row
-                cov_row = covTable.row
-                # punch in the data
-                for i in range(len(stoitColNames)):
-                    try:
-                        cov = coverages[i][cid]
-                    except KeyError:
-                        # may be no coverage for this contig
-                        cov = 0.0
-                    cov_row[stoitColNames[i]] = cov 
-                cov_row.append()
-            covTable.flush()
-        except:
-            print "Error saving results to DB"
-            raise
+        # go through all the contigs sorted by name.
+        # we want to make an array of tuples of coverage sigs
+        cov_sigs = []
+        bam_range = range(len(bamFiles))
+        for cid in contigNames:
+            tmp_cov = []
+            for i in bam_range:
+                try:
+                    tmp_cov.append(coverages[i][cid])
+                except KeyError:
+                    # may be no coverage for this contig
+                    tmp_cov.append(0.0)
+            cov_sigs.append(tuple(tmp_cov))
         
         # transform the links into something a little easier to parse later
         rowwise_links = []
         for cid in links:
             for link in links[cid]:
                 try:
-                    rowwise_links.append([cid2Indices[cid],          # contig 1 
+                    rowwise_links.append((cid2Indices[cid],          # contig 1 
                                           cid2Indices[link[0]],      # contig 2
                                           int(link[1]),               # numReads
                                           int(link[2]),               # linkType
                                           int(link[3])                # gap
-                                          ])
+                                          ))
                 except KeyError:
                     pass
-        return rowwise_links
+        return (rowwise_links, cov_sigs)
     
     def dumpCovTable(self, table, stoitColNames):
         """Dump the guts of the coverage table"""
@@ -1227,24 +1177,6 @@ class BamParser:
             for colName in stoitColNames:
                 print ",",row[colName],
             print ""
-
-    def initLinks(self, rowwiseLinks, linksTable):
-        # go through all the contigs sorted by name and write to the DB
-        try:
-            for link in rowwiseLinks:
-                # make a new row
-                link_row = linksTable.row
-                # punch in the data
-                link_row['contig1'] = link[0]
-                link_row['contig2'] = link[1]
-                link_row['numReads'] = link[2]
-                link_row['linkType'] = link[3]
-                link_row['gap'] = link[4]
-                link_row.append()
-            linksTable.flush()
-        except:
-            print "Error saving results to DB"
-            raise
 
 def getBamDescriptor(fullPath):
     """AUX: Reduce a full path to just the file name minus extension"""

@@ -124,8 +124,7 @@ class ClusterEngine:
                     else:
                         print "Error, unrecognised choice '"+option.upper()+"'"
                         minimal = True
-            print "Overwriting database",self.PM.dbFileName
-            self.PM.dataManager.nukeBins(self.PM.dbFileName)
+            print "Will Overwrite database",self.PM.dbFileName
         return True
     
 #------------------------------------------------------------------------------
@@ -165,7 +164,7 @@ class ClusterEngine:
         
         # Now save all the stuff to disk!
         print "Saving bins"
-        self.BM.saveBins()
+        self.BM.saveBins(nuke=True)
         print "    %s" % timer.getTimeStamp()
 
     def initialiseCores(self):

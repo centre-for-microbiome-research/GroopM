@@ -211,18 +211,13 @@ class BinManager:
         
         We always overwrite the bins table (It is smallish)
         """
-        if nuke:
-            self.PM.dataManager.nukeBins(self.PM.dbFileName)
-
         # save the bin assignments        
         self.PM.setBinAssignments(
-                                  self.getGlobalBinAssignments(binAssignments) # convert to global indices
+                                  self.getGlobalBinAssignments(binAssignments), # convert to global indices
+                                  nuke=nuke
                                   )
         # overwrite the bins table
         self.setBinStats()
-        
-        # we must have done something
-        self.PM.setClustered()
 
     def getGlobalBinAssignments(self, binAssignments={}):
         """Merge the bids, raw DB indexes and core information so we can save to disk
@@ -252,11 +247,13 @@ class BinManager:
         
         Note that this call effectively nukes the existing table
         """
-        bin_stats = {}
+        # create and array of tuples:
+        # [(bid, size)]
+        bin_stats = []
         for bid in self.getBids():
             # no point in saving empty bins
             if np_size(self.bins[bid].rowIndices) > 0:
-                bin_stats[bid] = np_size(self.bins[bid].rowIndices)
+                bin_stats.append((bid, np_size(self.bins[bid].rowIndices)))
         self.PM.setBinStats(bin_stats)
 
     

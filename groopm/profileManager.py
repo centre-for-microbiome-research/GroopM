@@ -304,15 +304,18 @@ class ProfileManager:
     def setBinStats(self, binStats):
         """Store the valid bin Ids and number of members
                 
-        binStats is a dictionary which looks like:
-        { tableRow : [bid , numMembers] }
+        binStats is a list of tuples which looks like:
+        [ (bid, numMembers) ]
+        Note that this call effectively nukes the existing table
         """
         self.dataManager.setBinStats(self.dbFileName, binStats)
-        self.setNumBins(len(binStats.keys()))
+        self.setNumBins(len(binStats))
 
-    def setBinAssignments(self, assignments):
+    def setBinAssignments(self, assignments, nuke=False):
         """Save our bins into the DB"""
-        self.dataManager.setBinAssignments(self.dbFileName, assignments)
+        self.dataManager.setBinAssignments(self.dbFileName,
+                                           assignments,
+                                           nuke=nuke)
 
     def loadLinks(self):
         """Extra wrapper 'cause I am dumb"""
@@ -353,7 +356,7 @@ class ProfileManager:
         shrinkFn = np_log10
         if(nolog):
             shrinkFn = lambda x:x
-         
+
         self.transformedCP = np_zeros((self.numContigs,3))
         self.corners = np_zeros((self.numStoits,3))
 
