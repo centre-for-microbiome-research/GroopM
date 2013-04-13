@@ -113,7 +113,6 @@ if __name__ == '__main__':
     file_parser.add_argument('dbname', help="name of the database being created")
     file_parser.add_argument('reference', help="fasta file containing bam reference sequences")
     file_parser.add_argument('bamfiles', nargs='+', help="bam files to parse")
-    file_parser.add_argument('-d', '--dump', action="store_true", default=False, help="dump the contents of all tables to screen")
     file_parser.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing DB file without prompting")
         
     #-------------------------------------------------

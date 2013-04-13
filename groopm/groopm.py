@@ -92,7 +92,6 @@ class GroopMOptionsParser():
                                       options.reference,
                                       options.dbname,
                                       timer,
-                                      dumpAll=options.dump,
                                       force=options.force)
             if not success:
                 print options.dbname,"not updated" 
