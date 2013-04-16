@@ -222,7 +222,6 @@ class GMDataManager:
                     print " IMPORTANT! - the following %d contigs have 0 coverage" % len(bad_indices)
                     print " across all stoits. They will not be ignored"
                     print "****************************************************************"
-                    print len(good_indices)
                     for i in bad_indices:
                         print con_names[i]
                     print "****************************************************************"
