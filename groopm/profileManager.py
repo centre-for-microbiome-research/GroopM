@@ -57,7 +57,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
 
-from numpy import shape as np_shape, eye as np_eye, diag as np_diag, abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
+from numpy import copy as np_copy, shape as np_shape, eye as np_eye, diag as np_diag, abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
 from numpy.linalg import norm as np_norm 
 import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist
@@ -361,21 +361,29 @@ class ProfileManager:
         self.corners = np_zeros((self.numStoits,3))
 
         if(not silent):
+            print "    Reticulating splines"
             print "    Dimensionality reduction"
 
+        for i in range(len(self.indices)):
+            self.normCoverages = np_append(self.normCoverages, np_norm(self.covProfiles[i]))
+
         # get the median distance from the origin
+        trim_stoits = False
         if self.numStoits % 2 == 0:
             # if there are an even number of stoits then take the next highest ODD number
-            # and take four of the resulting vectors
-            num_points = self.numStoits + 1 
-            unit_vectors = [(np_cos(i*2*np_pi/num_points),np_sin(i*2*np_pi/num_points)) for i in range(num_points)][1:]
+            trim_stoits = True
+            self.covProfiles = np_append(self.covProfiles, np_reshape([[0.0]*len(self.indices)],(len(self.indices),1)),1)  
+            self.numStoits += 1          
+
+            num_points = self.numStoits 
+            unit_vectors = [(np_cos(i*2*np_pi/num_points),np_sin(i*2*np_pi/num_points)) for i in range(num_points)]
         else:
             # otherwise we are cooking with gas
             unit_vectors = [(np_cos(i*2*np_pi/self.numStoits),np_sin(i*2*np_pi/self.numStoits)) for i in range(self.numStoits)]
-        
+              
         for i in range(len(self.indices)):
             norm = np_norm(self.covProfiles[i])
-            self.normCoverages = np_append(self.normCoverages, norm)
+            #self.normCoverages = np_append(self.normCoverages, norm)
             if(norm != 0):
                 radial = shrinkFn(norm)
             else:
@@ -390,6 +398,7 @@ class ProfileManager:
                 shifted_vector[0] += unit_vectors[j][0] * flat_vector[j]
                 shifted_vector[1] += unit_vectors[j][1] * flat_vector[j]
 
+
             # log scale it towards the centre
             scaling_vector = shifted_vector * self.scaleFactor
             sv_size = np_norm(scaling_vector)
@@ -400,9 +409,6 @@ class ProfileManager:
             self.transformedCP[i,1] = shifted_vector[1]
             self.transformedCP[i,2] = radial
 
-        if(not silent):
-            print "    Reticulating splines"
-            
         # finally scale the matrix to make it equal in all dimensions
         if(min is None):                
             min = np_amin(self.transformedCP, axis=0)
@@ -417,6 +423,12 @@ class ProfileManager:
         # get the corner points
         XYcorners = np_reshape([i for i in np_array(unit_vectors)],
                                (self.numStoits, 2))
+
+        if trim_stoits:
+            # put things back together again...
+            self.numStoits -= 1
+            self.covProfiles = self.covProfiles[:,:self.numStoits]
+        
         for i in range(self.numStoits):
             self.corners[i,0] = XYcorners[i,0]
             self.corners[i,1] = XYcorners[i,1]
