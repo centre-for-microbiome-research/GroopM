@@ -181,12 +181,15 @@ class GMDataManager:
                 meta_group = h5file.createGroup("/", 'meta', 'Associated metadata')
                 links_group = h5file.createGroup("/", 'links', 'Paired read link information')
                 #------------------------
-                # parse contigs and make kmer sigs
+                # parse contigs
                 #
                 # Contig IDs are key. Any keys existing in other files but not in this file will be
                 # ignored. Any missing keys in other files will be given the default profile value 
                 # (typically 0). Ironically, we don't store the CIDs here, these are saved one time
-                # only in the bin table 
+                # only in the bin table
+                #
+                # Before writing to the database we need to make sure that none of them have
+                # 0 coverage @ all stoits. 
                 #------------------------
                 try:
                     with open(contigsFile, "r") as f:
@@ -201,6 +204,64 @@ class GMDataManager:
                     print "Could not parse contig file:",contigsFile,exc_info()[0]
                     raise
 
+                #------------------------
+                # parse bam files
+                #------------------------
+                (rowwise_links, cov_profiles) = bamParser.parse(bamFiles,
+                                                                con_names,
+                                                                cid_2_indices)
+                
+                tot_cov = [sum(profile) for profile in cov_profiles]
+                good_indices = np.nonzero(tot_cov)[0]
+                bad_indices = [i for i in range(num_cons) if i not in good_indices]
+                
+                if len(bad_indices) > 0:
+                    # report the bad contigs to the user
+                    # and strip them before writing to the DB
+                    print "****************************************************************"
+                    print " IMPORTANT! - the following %d contigs have 0 coverage" % len(bad_indices)
+                    print " across all stoits. They will not be ignored"
+                    print "****************************************************************"
+                    print len(good_indices)
+                    for i in bad_indices:
+                        print con_names[i]
+                    print "****************************************************************"
+
+
+                    con_names = con_names[good_indices]
+                    con_lengths = con_lengths[good_indices]
+                
+                # these will need to be tupalized regardless...
+                con_ksigs = [tuple(i) for i in con_ksigs[good_indices]]
+                cov_profiles = [tuple(i) for i in cov_profiles[good_indices]]
+                num_cons = len(con_names)
+                cid_2_indices = dict(zip(con_names, range(num_cons)))
+                
+                #------------------------
+                # write cov profiles
+                #------------------------
+                # build a table template based on the number of bamfiles we have
+                db_desc = []
+                for bf in bamFiles:
+                    # assume the file is called something like "fred.bam"
+                    # we want to rip off the ".bam" part
+                    bam_desc = getBamDescriptor(bf)
+                    db_desc.append((bam_desc, float))
+                    stoitColNames.append(bam_desc)
+                
+                try:
+                    h5file.createTable(profile_group,
+                                       'coverage',
+                                       np.array(cov_profiles, dtype=db_desc),
+                                       title="Bam based coverage",
+                                       expectedrows=num_cons)
+                except:
+                    print "Error creating coverage table:", exc_info()[0]
+                    raise
+
+                #------------------------
+                # write kmersigs
+                #------------------------
                 # store the raw calculated kmer sigs in one table
                 db_desc = []
                 for mer in kse.kmerCols:
@@ -247,31 +308,6 @@ class GMDataManager:
                 self.setBinStats(dbFileName, [], firstWrite=True)
                 
                 print "    %s" % timer.getTimeStamp()
-
-                #------------------------
-                # parse bam files
-                #------------------------
-                # build a table template based on the number of bamfiles we have
-                db_desc = []
-                for bf in bamFiles:
-                    # assume the file is called something like "fred.bam"
-                    # we want to rip off the ".bam" part
-                    bam_desc = getBamDescriptor(bf)
-                    db_desc.append((bam_desc, float))
-                    stoitColNames.append(bam_desc)
-                    
-                (rowwise_links, cov_profiles) = bamParser.parse(bamFiles,
-                                                                con_names,
-                                                                cid_2_indices)
-                try:
-                    h5file.createTable(profile_group,
-                                       'coverage',
-                                       np.array(cov_profiles, dtype=db_desc),
-                                       title="Bam based coverage",
-                                       expectedrows=num_cons)
-                except:
-                    print "Error creating coverage table:", exc_info()[0]
-                    raise
 
                 #------------------------
                 # contig links
@@ -407,7 +443,7 @@ class GMDataManager:
 # GET LINKS 
 
     def restoreLinks(self, dbFileName, indices=[], silent=False):
-        """Restore the links hash for a given set of indicies"""
+        """Restore the links hash for a given set of indices"""
         full_record = []
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
@@ -984,7 +1020,7 @@ class ContigParser:
         con_names = np.array(sorted(contigInfo.keys()))
         # keep everything in order...
         con_lengths = np.array([contigInfo[cid][1] for cid in con_names])
-        con_ksigs = [contigInfo[cid][0] for cid in con_names]
+        con_ksigs = np.array([contigInfo[cid][0] for cid in con_names])
         return (con_names, con_lengths, con_ksigs)
         
         # store the PCA'd kmersigs
@@ -1120,11 +1156,7 @@ class BamParser:
     def __init__(self): pass
     
     def parse(self, bamFiles, contigNames, cid2Indices):
-        """Parse multiple bam files and store the results in the main DB
-        
-        table: a table in an open h5 file like "CID,COV_1,...,COV_n,length"
-        stoitColNames: names of the COV_x columns
-        """
+        """Parse multiple bam files and store the results in the main DB"""
         print "Importing BAM files"
         from bamtyper.utilities import BamParser as BTBP
         BP = BTBP()
@@ -1157,7 +1189,7 @@ class BamParser:
                                           ))
                 except KeyError:
                     pass
-        return (rowwise_links, cov_sigs)
+        return (rowwise_links, np.array(cov_sigs))
     
 def getBamDescriptor(fullPath):
     """AUX: Reduce a full path to just the file name minus extension"""
