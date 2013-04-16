@@ -765,7 +765,10 @@ class RefineEngine:
                 except KeyError:
                     c2 = np_mean([self.PM.covProfiles[row_index] for row_index in self.BM.bins[bid2].rowIndices], axis=0)
                     raw_coverage_centroids[bid2] = c2
-                ang = np_arccos(np_dot(c1,c2) / np_norm(c1) / np_norm(c2))
+                try:
+                    ang = np_arccos(np_dot(c1,c2) / np_norm(c1) / np_norm(c2))
+                except FloatingPointError:
+                    ang = 0.0
                 
                 if ang > cCut: 
                     # if the angle between is not teensy timy 
@@ -1028,8 +1031,12 @@ class RefineEngine:
                 for j in range(i+1, sample_size):
                     r1 = bin.rowIndices[si[i]]
                     r2 = bin.rowIndices[si[j]]
-                    mean_angles.append(np_arccos(np_dot(self.PM.covProfiles[r1],self.PM.covProfiles[r2]) /
-                                                 self.PM.normCoverages[r1]/self.PM.normCoverages[r2]))
+                    try:
+                        ang = np_arccos(np_dot(self.PM.covProfiles[r1],self.PM.covProfiles[r2]) /
+                                                 self.PM.normCoverages[r1]/self.PM.normCoverages[r2])
+                    except FloatingPointError:
+                        ang = 0.0
+                    mean_angles.append(ang)
                     
         return np_mean(mean_angles)
 
