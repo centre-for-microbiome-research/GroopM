@@ -49,7 +49,7 @@ __status__ = "Alpha"
 
 ###############################################################################
 
-from sys import exc_info, exit, stdout
+from sys import exc_info, exit, stdout as sys_stdout
 from operator import itemgetter
 
 from colorsys import hsv_to_rgb as htr
@@ -57,7 +57,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
 
-from numpy import abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
+from numpy import copy as np_copy, shape as np_shape, eye as np_eye, diag as np_diag, abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
 from numpy.linalg import norm as np_norm 
 import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist
@@ -92,21 +92,24 @@ class ProfileManager:
         self.indices = np_array([])        # indices into the data structure based on condition
         self.covProfiles = np_array([])     # coverage based coordinates
         self.transformedCP = np_array([])   # the munged data points
+        self.corners = np_array([])         # the corners of the tranformed space
         self.averageCoverages = np_array([]) # average coverage across all stoits
+        self.normCoverages = np_array([])   # norm of the raw coverage vectors
         self.kmerSigs = np_array([])        # raw kmer signatures
-        self.kmerVals = np_array([])        # PCA'd kmer sigs
+        self.kmerVals = np_array([])        # PCA'd kmer sigs PC1
+        self.kmerVals2 = np_array([])       # PCA'd kmer sigs PC2
 
         self.contigNames = np_array([])
         self.contigLengths = np_array([])
-        self.contigColours = np_array([])   # calculated from kmerVals
+        self.contigColors = np_array([])   # calculated from kmerVals
         
         self.binIds = np_array([])          # list of bin IDs
         # --> end section
 
         # meta                
         self.validBinIds = {}               # valid bin ids -> numMembers
-        self.binnedRowIndicies = {}         # dictionary of those indices which belong to some bin
-        self.restrictedRowIndicies = {}     # dictionary of those indices which can not be binned yet
+        self.binnedRowIndices = {}         # dictionary of those indices which belong to some bin
+        self.restrictedRowIndices = {}     # dictionary of those indices which can not be binned yet
         self.numContigs = 0                 # this depends on the condition given
         self.numStoits = 0                  # this depends on the data which was parsed
 
@@ -118,19 +121,24 @@ class ProfileManager:
         self.scaleFactor = scaleFactor      # scale every thing in the transformed data to this dimension
 
     def loadData(self,
+                 timer,
                  condition="",              # condition as set by another function
                  bids=[],                   # if this is set then only load those contigs with these bin ids
                  verbose=True,              # many to some output messages
                  silent=False,              # some to no output messages
                  loadCovProfiles=True,
                  loadKmerSigs=True,
-                 makeColours=True,
+                 loadRawKmers=False,
+                 makeColors=True,
                  loadContigNames=True,
                  loadContigLengths=True,
                  loadBins=False,
                  loadLinks=False):
         """Load pre-parsed data"""
-        if(verbose):
+        timer.getTimeStamp()
+        if(silent):
+            verbose=False
+        if verbose:
             print "Loading data from:", self.dbFileName
         
         # check to see if we need to override the condition
@@ -139,14 +147,14 @@ class ProfileManager:
             for index in range (1,len(bids)):
                 condition += " | (bid == "+str(bids[index])+")"
             condition += ")"
-        if(silent):
-            verbose=False
         try:
             self.numStoits = self.getNumStoits()
             self.condition = condition
+            self.indices = self.dataManager.getConditionalIndices(self.dbFileName,
+                                                                  condition=condition,
+                                                                  silent=silent)
             if(verbose):
-                print "    Loading indices (", condition,")"
-            self.indices = self.dataManager.getConditionalIndicies(self.dbFileName, condition=condition)
+                print "    Loaded indices with condition:", condition
             self.numContigs = len(self.indices)
             
             if(not silent):
@@ -160,19 +168,27 @@ class ProfileManager:
                 # work out average coverages
                 self.averageCoverages = np_array([sum(i)/self.numStoits for i in self.covProfiles])
 
-            if(loadKmerSigs):
+            if loadRawKmers:
                 if(verbose):
-                    print "    Loading kmer sigs"
+                    print "    Loading RAW kmer sigs"
                 self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indices=self.indices)
 
-                if(makeColours):
+            if(loadKmerSigs):
+                if(verbose):
+                    print "    Loading PCA kmer sigs"
+                #self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indices=self.indices)
+                PCAs = self.dataManager.getKmerPCAs(self.dbFileName, indices=self.indices)
+                self.kmerVals = PCAs[:,0]
+                self.kmerVals2 = PCAs[:,1]
+                
+                if(makeColors):
                     if(verbose):
-                        print "    Creating colour profiles"
-                    self.makeColourProfile()
-                    # use HSV to RGB to generate colours
+                        print "    Creating color profiles"
+                    
+                    # use HSV to RGB to generate colors
                     S = 1       # SAT and VAL remain fixed at 1. Reduce to make
                     V = 1       # Pastels if that's your preference...
-                    self.contigColours = np_array([htr(val, S, V) for val in self.kmerVals])
+                    self.contigColors = np_array([htr(val, S, V) for val in self.kmerVals])
 
             if(loadContigNames):
                 if(verbose):
@@ -183,7 +199,8 @@ class ProfileManager:
                 if(verbose):
                     print "    Loading contig lengths"
                 self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indices=self.indices)
-                print "    Contigs contain %d BP" % ( sum(self.contigLengths) )
+                if(verbose):
+                    print "    Contigs contain %d BP" % ( sum(self.contigLengths) )
             
             if(loadBins):
                 if(verbose):
@@ -197,10 +214,10 @@ class ProfileManager:
                     self.validBinIds = self.getBinStats()
 
                 # fix the binned indices
-                self.binnedRowIndicies = {}
+                self.binnedRowIndices = {}
                 for i in range(len(self.indices)):
                     if(self.binIds[i] != 0):
-                        self.binnedRowIndicies[i] = True 
+                        self.binnedRowIndices[i] = True 
             else:
                 # we need zeros as bin indicies then...
                 self.binIds = np_zeros(len(self.indices))
@@ -212,21 +229,21 @@ class ProfileManager:
             print "Error loading DB:", self.dbFileName, exc_info()[0]
             raise
 
-    def reduceIndicies(self, deadRowIndicies):
+    def reduceIndices(self, deadRowIndices):
         """purge indices from the data structures
         
-        Be sure that deadRowIndicies are sorted ascending
+        Be sure that deadRowIndices are sorted ascending
         """
         # strip out the other values        
-        self.indices = np_delete(self.indices, deadRowIndicies, axis=0)
-        self.covProfiles = np_delete(self.covProfiles, deadRowIndicies, axis=0)
-        self.transformedCP = np_delete(self.transformedCP, deadRowIndicies, axis=0)
-        self.contigNames = np_delete(self.contigNames, deadRowIndicies, axis=0)
-        self.contigLengths = np_delete(self.contigLengths, deadRowIndicies, axis=0)
-        self.contigColours = np_delete(self.contigColours, deadRowIndicies, axis=0)
-        self.kmerSigs = np_delete(self.kmerSigs, deadRowIndicies, axis=0)
-        self.kmerVals = np_delete(self.kmerVals, deadRowIndicies, axis=0)
-        self.binIds = np_delete(self.binIds, deadRowIndicies, axis=0)
+        self.indices = np_delete(self.indices, deadRowIndices, axis=0)
+        self.covProfiles = np_delete(self.covProfiles, deadRowIndices, axis=0)
+        self.transformedCP = np_delete(self.transformedCP, deadRowIndices, axis=0)
+        self.contigNames = np_delete(self.contigNames, deadRowIndices, axis=0)
+        self.contigLengths = np_delete(self.contigLengths, deadRowIndices, axis=0)
+        self.contigColors = np_delete(self.contigColors, deadRowIndices, axis=0)
+        #self.kmerSigs = np_delete(self.kmerSigs, deadRowIndices, axis=0)
+        self.kmerVals = np_delete(self.kmerVals, deadRowIndices, axis=0)
+        self.binIds = np_delete(self.binIds, deadRowIndices, axis=0)
         
 #------------------------------------------------------------------------------
 # GET / SET 
@@ -287,15 +304,18 @@ class ProfileManager:
     def setBinStats(self, binStats):
         """Store the valid bin Ids and number of members
                 
-        binStats is a dictionary which looks like:
-        { tableRow : [bid , numMembers] }
+        binStats is a list of tuples which looks like:
+        [ (bid, numMembers) ]
+        Note that this call effectively nukes the existing table
         """
         self.dataManager.setBinStats(self.dbFileName, binStats)
-        self.setNumBins(len(binStats.keys()))
+        self.setNumBins(len(binStats))
 
-    def setBinAssignments(self, assignments):
+    def setBinAssignments(self, assignments, nuke=False):
         """Save our bins into the DB"""
-        self.dataManager.setBinAssignments(self.dbFileName, assignments)
+        self.dataManager.setBinAssignments(self.dbFileName,
+                                           assignments,
+                                           nuke=nuke)
 
     def loadLinks(self):
         """Extra wrapper 'cause I am dumb"""
@@ -330,32 +350,54 @@ class ProfileManager:
         """Return the average coverage for this contig across all stoits"""
         return sum(self.transformedCP[rowIndex])/self.numStoits
 
-    def transformCP(self, silent=False, nolog=False, min=None, max=None):
+    def transformCP(self, timer, silent=False, nolog=False, min=None, max=None):
         """Do the main ransformation on the coverage profile data"""
+        timer.getTimeStamp()
         shrinkFn = np_log10
         if(nolog):
             shrinkFn = lambda x:x
-         
-        s = (self.numContigs,3)
-        self.transformedCP = np_zeros(s)
+
+        self.transformedCP = np_zeros((self.numContigs,3))
+        self.corners = np_zeros((self.numStoits,3))
 
         if(not silent):
+            print "    Reticulating splines"
             print "    Dimensionality reduction"
 
+        for i in range(len(self.indices)):
+            self.normCoverages = np_append(self.normCoverages, np_norm(self.covProfiles[i]))
+
         # get the median distance from the origin
-        unit_vectors = [(np_cos(i*2*np_pi/self.numStoits),np_sin(i*2*np_pi/self.numStoits)) for i in range(self.numStoits)]
+        trim_stoits = False
+        if self.numStoits % 2 == 0:
+            # if there are an even number of stoits then take the next highest ODD number
+            trim_stoits = True
+            self.covProfiles = np_append(self.covProfiles, np_reshape([[0.0]*len(self.indices)],(len(self.indices),1)),1)  
+            self.numStoits += 1          
+
+            num_points = self.numStoits 
+            unit_vectors = [(np_cos(i*2*np_pi/num_points),np_sin(i*2*np_pi/num_points)) for i in range(num_points)]
+        else:
+            # otherwise we are cooking with gas
+            unit_vectors = [(np_cos(i*2*np_pi/self.numStoits),np_sin(i*2*np_pi/self.numStoits)) for i in range(self.numStoits)]
+              
         for i in range(len(self.indices)):
             norm = np_norm(self.covProfiles[i])
+            #self.normCoverages = np_append(self.normCoverages, norm)
             if(norm != 0):
                 radial = shrinkFn(norm)
             else:
                 radial = norm
             shifted_vector = np_array([0.0,0.0])
-            flat_vector = (self.covProfiles[i] / sum(self.covProfiles[i]))
+            try:
+                flat_vector = (self.covProfiles[i] / sum(self.covProfiles[i]))
+            except FloatingPointError:
+                flat_vector = self.covProfiles[i]
             
             for j in range(self.numStoits):
                 shifted_vector[0] += unit_vectors[j][0] * flat_vector[j]
                 shifted_vector[1] += unit_vectors[j][1] * flat_vector[j]
+
 
             # log scale it towards the centre
             scaling_vector = shifted_vector * self.scaleFactor
@@ -367,106 +409,69 @@ class ProfileManager:
             self.transformedCP[i,1] = shifted_vector[1]
             self.transformedCP[i,2] = radial
 
-        if(not silent):
-            print "    Reticulating splines"
-            
         # finally scale the matrix to make it equal in all dimensions
         if(min is None):                
             min = np_amin(self.transformedCP, axis=0)
+            self.transformedCP -= min
             max = np_amax(self.transformedCP, axis=0)
-            max = max - min
             max = max / (self.scaleFactor-1)
+            self.transformedCP /= max
+        else:
+            self.transformedCP -= min
+            self.transformedCP /= max
 
-        for i in range(0,3):
-            self.transformedCP[:,i] = (self.transformedCP[:,i] -  min[i])/max[i]
+        # get the corner points
+        XYcorners = np_reshape([i for i in np_array(unit_vectors)],
+                               (self.numStoits, 2))
+
+        if trim_stoits:
+            # put things back together again...
+            self.numStoits -= 1
+            self.covProfiles = self.covProfiles[:,:self.numStoits]
+        
+        for i in range(self.numStoits):
+            self.corners[i,0] = XYcorners[i,0]
+            self.corners[i,1] = XYcorners[i,1]
+        # shift the corners to match the space
+        self.corners -= min
+        self.corners /= max
+        # scale the corners to fit the plot
+        cmin = np_amin(self.corners, axis=0)
+        self.corners -= cmin
+        cmax = np_amax(self.corners, axis=0)
+        cmax = cmax / (self.scaleFactor-1)
+        self.corners[:,0] /= cmax[0]
+        self.corners[:,1] /= cmax[1]
+        for i in range(self.numStoits):
+            self.corners[i,2] = self.scaleFactor + 100
 
         return(min,max)
-
-    def makeColourProfile(self):
-        """Make a colour profile based on ksig information"""
-        working_data = np_array(self.kmerSigs, copy=True) 
-        Center(working_data,verbose=0)
-        p = PCA(working_data)
-        components = p.pc()
-        
-        # now make the colour profile based on PC1
-        self.kmerVals = np_array([float(i) for i in components[:,0]])
-        
-        # normalise to fit between 0 and 1
-        self.kmerVals -= np_min(self.kmerVals)
-        self.kmerVals /= np_max(self.kmerVals)
-        if(False):
-            plt.figure(1)
-            plt.subplot(111)
-            plt.plot(components[:,0], components[:,1], 'r.')
-            plt.show()
-        
-    def rotateVectorAndScale(self, point, las, centerVector, delta_max=0.25):
-        """
-        Move a vector closer to the center of the positive quadrant
-        
-        Find the co-ordinates of its projection
-        onto the surface of a hypersphere with radius R
-        
-        What?...  ...First some definitions:
-       
-        For starters, think in 3 dimensions, then take it out to N.
-        Imagine all points (x,y,z) on the surface of a sphere
-        such that all of x,y,z > 0. ie trapped within the positive
-        quadrant.
-       
-        Consider the line x = y = z which passes through the origin
-        and the point on the surface at the "center" of this quadrant.
-        Call this line the "main mapping axis". Let the unit vector 
-        coincident with this line be called A.
-       
-        Now think of any other vector V also located in the positive
-        quadrant. The goal of this function is to move this vector
-        closer to the MMA. Specifically, if we think about the plane
-        which contains both V and A, we'd like to rotate V within this
-        plane about the origin through phi degrees in the direction of
-        A.
-        
-        Once this has been done, we'd like to project the rotated co-ords 
-        onto the surface of a hypersphere with radius R. This is a simple
-        scaling operation.
-       
-        The idea is that vectors closer to the corners should be pertubed
-        more than those closer to the center.
-        
-        Set delta_max as the max percentage of the existing angle to be removed
-        """
-        theta = self.getAngBetween(point, centerVector)
-        A = delta_max/((las)**2)
-        B = delta_max/las
-        delta = 2*B*theta - A *(theta**2) # the amount to shift
-        V_p = point*(1-delta) + centerVector*delta
-        return V_p/np_norm(V_p)
     
-    def rad2deg(self, anglein):
-        return 180*anglein/np_pi
-
-    def getAngBetween(self, P1, P2):
-        """Return the angle between two points (in radians)"""
-        # find the existing angle between them theta
-        c = np_dot(P1,P2)/np_norm(P1)/np_norm(P2) 
-        # rounding errors hurt everyone...
-        if(c > 1):
-            c = 1
-        elif(c < -1):
-            c = -1
-        return np_arccos(c) # in radians
-
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 
+    
+    def plotStoitNames(self, ax):
+        """Plot stoit names on an existing axes"""
+        stoit_names = self.getStoitColNames().split(",")
+        outer_index = 0
+        for corner in self.corners:
+            ax.text(corner[0], 
+                    corner[1], 
+                    corner[2], 
+                    stoit_names[outer_index], 
+                    color='#000000'
+                    )
+            outer_index += 1
 
-    def plotUnbinned(self, coreCut):
+    def plotUnbinned(self, timer, coreCut):
         """Plot all contigs over a certain length which are unbinned"""
-        self.loadData(condition="((length >= "+str(coreCut)+") & (bid == 0))")
-        self.transformCP()
+        self.loadData(timer, condition="((length >= "+str(coreCut)+") & (bid == 0))")
+        self.transformCP(timer)
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
-        ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
+        ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
+        self.plotStoitNames(ax1)
+        
         try:
             plt.show()
             plt.close(fig)
@@ -482,7 +487,21 @@ class ProfileManager:
         self.renderTransData(tag+"_front.png",azim = 0, elev = 0)
         self.renderTransData(tag+"_side.png",azim = 90, elev = 0)
 
-    def renderTransCPData(self, fileName="", show=True, elev=45, azim=45, all=False, showAxis=False, primaryWidth=12, primarySpace=3, dpi=300, format='png', fig=None):
+    def renderTransCPData(self,
+                          fileName="",
+                          show=True,
+                          elev=45,
+                          azim=45,
+                          all=False,
+                          showAxis=False,
+                          primaryWidth=12,
+                          primarySpace=3,
+                          dpi=300,
+                          format='png',
+                          fig=None,
+                          highlight=None,
+                          restrictedBids=[],
+                          alpha=1):
         """Plot transformed data in 3D"""
         del_fig = False
         if(fig is None):
@@ -501,7 +520,7 @@ class ProfileManager:
             }
 
             ax = fig.add_subplot(131, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
             ax.azim = 0
             ax.elev = 0
             ax.set_xlim3d(0,self.scaleFactor)
@@ -521,7 +540,7 @@ class ProfileManager:
             ax.w_zaxis._AXINFO = myAXINFO
             
             ax = fig.add_subplot(132, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
             ax.azim = 90
             ax.elev = 0
             ax.set_xlim3d(0,self.scaleFactor)
@@ -541,7 +560,7 @@ class ProfileManager:
             ax.w_zaxis._AXINFO = myAXINFO
             
             ax = fig.add_subplot(133, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColours, c=self.contigColours, marker='.')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
             ax.azim = 0
             ax.elev = 90
             ax.set_xlim3d(0,self.scaleFactor)
@@ -561,7 +580,58 @@ class ProfileManager:
             ax.w_zaxis._AXINFO = myAXINFO
         else:
             ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='none', c=self.contigColours, s=2, marker='.')
+            if len(restrictedBids) == 0:
+                if highlight is None:
+                    ax.scatter(self.transformedCP[:,0],
+                               self.transformedCP[:,1],
+                               self.transformedCP[:,2],
+                               edgecolors='none',
+                               c=self.contigColors,
+                               s=2,
+                               marker='.')
+                else:
+                    #draw the opague guys first
+                    ax.scatter(self.transformedCP[:,0],
+                               self.transformedCP[:,1],
+                               self.transformedCP[:,2],
+                               edgecolors='none',
+                               c=self.contigColors,
+                               s=2,
+                               marker='.',
+                               alpha=alpha)
+                    
+                    # now replot the highlighted guys
+                    disp_vals = np_array([])
+                    disp_cols = np_array([])
+                    num_points = 0
+                    for bin in highlight:
+                        for row_index in bin.rowIndices:
+                            num_points += 1
+                            disp_vals = np_append(disp_vals, self.transformedCP[row_index])
+                            disp_cols = np_append(disp_cols, self.contigColors[row_index])
+            
+                    # reshape
+                    disp_vals = np_reshape(disp_vals, (num_points, 3))
+                    disp_cols = np_reshape(disp_cols, (num_points, 3))
+                    ax.scatter(disp_vals[:,0],
+                               disp_vals[:,1],
+                               disp_vals[:,2],
+                               edgecolors='none',
+                               c=disp_cols,
+                               s=2,
+                               marker='.')
+            else:
+                r_trans = np_array([])
+                r_cols=np_array([])
+                num_added = 0
+                for i in range(len(self.indices)):
+                    if self.binIds[i] not in restrictedBids:
+                        r_trans = np_append(r_trans, self.transformedCP[i])
+                        r_cols = np_append(r_cols, self.contigColors[i])
+                        num_added += 1
+                r_trans = np_reshape(r_trans, (num_added,3))
+                r_cols = np_reshape(r_cols, (num_added,3))
+                ax.scatter(r_trans[:,0], r_trans[:,1], r_trans[:,2], edgecolors='none', c=r_cols, s=2, marker='.')
             ax.azim = azim
             ax.elev = elev
             ax.set_xlim3d(0,self.scaleFactor)

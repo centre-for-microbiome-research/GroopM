@@ -63,8 +63,9 @@ from scipy.cluster.vq import kmeans,vq
 
 # GroopM imports
 from profileManager import ProfileManager
-from binManager import BinManager
+from binManager import BinManager, CenterFinder
 import groopmTimekeeper as gtime
+import refine
 
 np_seterr(all='raise')      
 
@@ -75,10 +76,10 @@ np_seterr(all='raise')
 
 class ClusterEngine:
     """Top level interface for clustering contigs"""
-    def __init__(self, dbFileName, plot=False, force=False, numImgMaps=1):
+    def __init__(self, dbFileName, plot=False, finalPlot=False, force=False, numImgMaps=1, minSize=5, minVol=1000000):
         # worker classes
         self.PM = ProfileManager(dbFileName) # store our data
-        self.BM = BinManager(pm=self.PM)   # store our bins
+        self.BM = BinManager(pm=self.PM, minSize=minSize, minVol=minVol)
     
         # heat maps
         self.numImgMaps = numImgMaps
@@ -86,17 +87,16 @@ class ClusterEngine:
         self.blurredMaps = np_zeros((self.numImgMaps,self.PM.scaleFactor,self.PM.scaleFactor))
         
         # we need a way to reference from the imageMaps back onto the transformed data
-        self.im2RowIndicies = {}  
+        self.im2RowIndices = {}  
         
         # When blurring the raw image maps I chose a radius to suit my data, you can vary this as you like
         self.blurRadius = 2
         self.span = 30                  # amount we can travel about when determining "hot spots"
         
         # misc
-        self.minSize=10                 # Min number of contigs for a bin to be considered legit
-        self.minVol=1000000             # Override on the min size, if we have this many BP
         self.forceWriting = force
         self.debugPlots = plot
+        self.finalPlot = finalPlot
         self.imageCounter = 1           # when we print many images
         self.roundNumber = 0            # how many times have we tried to make a bin?
 
@@ -124,30 +124,25 @@ class ClusterEngine:
                     else:
                         print "Error, unrecognised choice '"+option.upper()+"'"
                         minimal = True
-            print "Overwriting database",self.PM.dbFileName
-            self.PM.dataManager.nukeBins(self.PM.dbFileName)
+            print "Will Overwrite database",self.PM.dbFileName
         return True
     
 #------------------------------------------------------------------------------
 # CORE CONSTRUCTION AND MANAGEMENT
         
-    def makeCores(self, coreCut, minSize, minVol):
+    def makeCores(self, timer, coreCut, gf=""):
         """Cluster the contigs to make bin cores"""
         # check that the user is OK with nuking stuff...
         if(not self.promptOnOverwrite()):
             return False
 
-        self.minVol = minVol
-        self.minSize = minSize
-
         # get some data
-        timer = gtime.TimeKeeper()
-        self.PM.loadData(condition="length >= "+str(coreCut))
+        self.PM.loadData(timer, loadRawKmers=True, condition="length >= "+str(coreCut))
         print "    %s" % timer.getTimeStamp()
         
         # transform the data
         print "Apply data transformations"
-        self.PM.transformCP()
+        self.PM.transformCP(timer)
         # plot the transformed space (if we've been asked to...)
         if(self.debugPlots):
             self.PM.renderTransCPData()
@@ -160,15 +155,16 @@ class ClusterEngine:
 
         # condense cores
         print "Refine cores [begin: %d]" % len(self.BM.bins)
-        self.BM.autoRefineBins(iterate=True)
-        num_binned = len(self.PM.binnedRowIndicies.keys())
-        perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
-        print "   ",num_binned,"contigs across",len(self.BM.bins.keys()),"cores (",perc,"% )"
-        print "    %s" % timer.getTimeStamp()
-
+        RE = refine.RefineEngine(timer, BM=self.BM)
+        if self.finalPlot:
+            prfx = "CORE"
+        else:
+            prfx = ""
+        RE.refineBins(timer, auto=True, saveBins=False, plotFinal=prfx, gf=gf)
+        
         # Now save all the stuff to disk!
         print "Saving bins"
-        self.BM.saveBins()
+        self.BM.saveBins(nuke=True)
         print "    %s" % timer.getTimeStamp()
 
     def initialiseCores(self):
@@ -206,11 +202,20 @@ class ClusterEngine:
                 self.roundNumber += 1
                 sub_round_number = 1
                 for center_row_indices in partitions:
-                    total_BP = sum([self.PM.contigLengths[i] for i in center_row_indices])
-                    num_contigs = len(center_row_indices)
-                    bin_size = num_contigs
-                    #MM__print "Round: %d tBP: %d tC: %d" % (sub_round_number, total_BP, num_contigs)
-                    if self.isGoodBin(total_BP, num_contigs, ms=5):   # Can we trust very small bins?.
+                    # some of these row indices may have been eaten in a call to 
+                    # bin.recruit. We need to fix this now!
+                    tmp_cri = []
+                    total_BP = 0
+                    bin_size = 0
+                    for ri in center_row_indices:
+                        if ri not in self.PM.binnedRowIndices and ri not in self.PM.restrictedRowIndices:
+                            tmp_cri.append(ri)
+                            total_BP += self.PM.contigLengths[ri]
+                            bin_size += 1
+                    
+                    center_row_indices = np_array(tmp_cri)
+                    #MM__print "Round: %d tBP: %d tC: %d" % (sub_round_number, total_BP, bin_size)
+                    if self.BM.isGoodBin(total_BP, bin_size):   # Can we trust very small bins?.
                         # time to make a bin
                         bin = self.BM.makeNewBin(rowIndices=center_row_indices)
                         #MM__print "NEW:", total_BP, len(center_row_indices)
@@ -219,7 +224,7 @@ class ClusterEngine:
 
                         # Plot?
                         if(self.debugPlots):          
-                            bin.plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName="Image_"+str(self.imageCounter))
+                            bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerVals, self.PM.contigLengths, fileName="Image_"+str(self.imageCounter))
                             self.imageCounter += 1
 
                         # recruit more contigs
@@ -227,21 +232,21 @@ class ClusterEngine:
                                                self.PM.averageCoverages,
                                                self.PM.kmerVals,
                                                self.PM.contigLengths, 
-                                               self.im2RowIndicies, 
-                                               self.PM.binnedRowIndicies, 
-                                               self.PM.restrictedRowIndicies
+                                               self.im2RowIndices, 
+                                               self.PM.binnedRowIndices, 
+                                               self.PM.restrictedRowIndices
                                                )
 
                         if(self.debugPlots):
                             self.plotHeat("HM_%d.%d.png" % (self.roundNumber, sub_round_number), max=max_blur_value, x=max_x, y=max_y)
                             sub_round_number += 1
 
-                        if(self.isGoodBin(self, bin.totalBP, bin_size)):
+                        if(self.BM.isGoodBin(self, bin.totalBP, bin_size)):
                             # Plot?
                             bids_made.append(bin.id)
                             num_bins += 1
                             if(self.debugPlots):          
-                                bin.plotBin(self.PM.transformedCP, self.PM.contigColours, self.PM.kmerVals, fileName="P_BIN_%d"%(bin.id))
+                                bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerVals, self.PM.contigLengths, fileName="P_BIN_%d"%(bin.id))
 
                             # append this bins list of mapped rowIndices to the main list
                             self.updatePostBin(bin)
@@ -250,7 +255,7 @@ class ClusterEngine:
                             print "% 4d"%bin_size,
                         else:
                             # we just throw these indices away for now
-                            self.restrictRowIndicies(bin.rowIndices)
+                            self.restrictRowIndices(bin.rowIndices)
                             self.BM.deleteBins([bin.id], force=True)
                             new_line_counter += 1
                             num_below_cutoff += 1
@@ -258,7 +263,7 @@ class ClusterEngine:
         
                     else:
                         # this partition was too small, restrict these guys we don't run across them again
-                        self.restrictRowIndicies(center_row_indices)
+                        self.restrictRowIndices(center_row_indices)
                         num_below_cutoff += 1
                         #new_line_counter += 1
                         #print center_row_indices
@@ -275,7 +280,7 @@ class ClusterEngine:
                 if(num_bids_made == 0):
                     # nuke the lot!
                     for row_indices in partitions:
-                        self.restrictRowIndicies(row_indices)
+                        self.restrictRowIndices(row_indices)
 
         print "\n     .... .... .... .... .... .... .... .... .... ...."
         
@@ -285,17 +290,6 @@ class ClusterEngine:
             for row_index in self.BM.bins[bid].rowIndices:
                 self.PM.binIds[row_index] = bid 
 
-    def isGoodBin(self, totalBP, binSize, ms=0):
-        """Does this bin meet my exacting requirements?"""
-        if(ms == 0):
-            ms = self.minSize               # let the user choose
-        if(totalBP < self.minVol):          # less than the good volume
-            if(binSize > ms):               # but has enough contigs
-                return True
-        else:                               # contains enough bp to pass regardless of number of contigs
-            return True        
-        return False
-    
     def findNewClusterCenters(self, ss=0):
         """Find a putative cluster"""
         
@@ -325,11 +319,11 @@ class ClusterEngine:
         (x_lower, x_upper) = self.makeCoordRanges(max_x, start_span)
         (y_lower, y_upper) = self.makeCoordRanges(max_y, start_span)
         super_putative_row_indices = []
-        for p in self.im2RowIndicies:
+        for p in self.im2RowIndices:
             if inRange(p[0],x_lower,x_upper) and inRange(p[1],y_lower,y_upper):
-                for row_index in self.im2RowIndicies[p]: 
+                for row_index in self.im2RowIndices[p]: 
                     # check that the point is real and that it has not yet been binned
-                    if row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies:
+                    if row_index not in self.PM.binnedRowIndices and row_index not in self.PM.restrictedRowIndices:
                         # this is an unassigned point. 
                         multiplier = np_log10(self.PM.contigLengths[row_index])
                         self.incrementAboutPoint3D(working_block, p[0]-x_lower, p[1]-y_lower, p[2],multiplier=multiplier)
@@ -367,7 +361,7 @@ class ClusterEngine:
             return [[np_array(putative_center_row_indices)], ret_values]
         else:
             total_BP = sum([self.PM.contigLengths[i] for i in putative_center_row_indices])
-            if not self.isGoodBin(total_BP, len(putative_center_row_indices), ms=5):   # Can we trust very small bins?.
+            if not self.BM.isGoodBin(total_BP, len(putative_center_row_indices), ms=5):   # Can we trust very small bins?.
                 # get out of here but keep trying
                 # the calling function should restrict these indices
                 return [[np_array(putative_center_row_indices)], ret_values]
@@ -407,71 +401,17 @@ class ClusterEngine:
                         id += 1
 
                     partitions = [np_array([putative_center_row_indices[i] for i in tmp_partition_hash_2[key]]) for key in tmp_partition_hash_2.keys()]
-
-                    #pcs = [[self.PM.averageCoverages[i] for i in p] for p in partitions]
-                    #print pcs
                     return [partitions, ret_values]
-            
-    def expandSelection(self, startIndex, vals, stdevCutoff=0.05, maxSpread=0.1):
-        """Expand a selection left and right from a staring index in a list of values
-        
-        Keep expanding unless the stdev of the values goes above the cutoff
-        Return a list of indices into the original list
-        """
-        ret_list = [startIndex]   # this is what we will give back
-        start_val = vals[startIndex]
-        value_store = [start_val]
-        
-        sorted_indices = np_argsort(vals)
-        max_index = len(vals)
-        
-        # set the upper and lower to point to the position
-        # where the start resides 
-        lower_index = 0
-        upper_index = 0
-        for i in range(max_index):
-            if(sorted_indices[i] == startIndex):
-                break
-            lower_index += 1
-            upper_index += 1
-        do_lower = True
-        do_upper = True
-        max_index -= 1
-        
-        while(do_lower or do_upper):
-            if(do_lower):
-                do_lower = False
-                if(lower_index > 0):
-                    try_val = vals[sorted_indices[lower_index - 1]]
-                    if(np_abs(try_val - start_val) < maxSpread):
-                        try_array = value_store + [try_val]
-                        if(np_std(try_array) < stdevCutoff):
-                            value_store = try_array
-                            lower_index -= 1
-                            ret_list.append(sorted_indices[lower_index])
-                            do_lower = True
-            if(do_upper):
-                do_upper = False
-                if(upper_index < max_index):
-                    try_val = vals[sorted_indices[upper_index + 1]]
-                    if(np_abs(try_val - start_val) < maxSpread):
-                        try_array = value_store + [try_val]
-                        if(np_std(try_array) < stdevCutoff):
-                            value_store = try_array
-                            upper_index += 1
-                            ret_list.append(sorted_indices[upper_index])
-                            do_upper = True
-        return sorted(ret_list)
 
     def partitionVals(self, vals, stdevCutoff=0.04, maxSpread=0.15):
         """Work out where shifts in kmer/coverage vals happen"""
+        cf = CenterFinder()
         partitions = []
         working_list = list(vals)
         fix_dict = dict(zip(range(len(working_list)),range(len(working_list))))
         while(len(working_list) > 2):
-            cf = CenterFinder()
             c_index = cf.findArrayCenter(working_list)
-            expanded_indices = self.expandSelection(c_index, working_list, stdevCutoff=stdevCutoff, maxSpread=maxSpread)
+            expanded_indices = cf.expandSelection(c_index, working_list, stdevCutoff=stdevCutoff, maxSpread=maxSpread)
             # fix any munges from previous deletes
             morphed_indices = [fix_dict[i] for i in expanded_indices]
             partitions.append(morphed_indices)
@@ -518,49 +458,6 @@ class ClusterEngine:
         if(len(working_list) > 0):
             partitions.append(fix_dict.values())       
         return partitions
-
-#------------------------------------------------------------------------------
-# CORE MANAGEMENT 
-
-    def condenseCores(self, auto=False):
-        """Itterative wrapper for the BinManager method"""
-        condensing_round = 0
-        num_cores_condensed = 0
-        while True: # do while loop anyone?
-            condensing_round += 1
-            (num_cores_condensed,continue_merge) = self.BM.condenseBins(verbose=True,
-                                                                        auto=auto      
-                                                                       )
-            if(num_cores_condensed == 0):
-                break
-            else:
-                print "    Core condensing round:", condensing_round, "Incorporated", num_cores_condensed, "cores into larger cores"
-        
-        num_binned = len(self.PM.binnedRowIndicies.keys())
-        perc = "%.2f" % round((float(num_binned)/float(self.PM.numContigs))*100,2)
-        print "   ",num_binned,"contigs are distributed across",len(self.BM.bins.keys()),"cores (",perc,"% )"
-            
-        return 
-
-    def removeOutliersWrapper(self, mode="kmer"):
-        """remove the outliers for all bins"""
-        print "    Removing outliers"
-        for bid in self.BM.bins:
-            self.removeOutliers(bid, mode=mode)
-
-    def removeOutliers(self, bid, fixBinnedRI=True, mode="kmer"):
-        """remove outliers for a single bin"""
-        dead_row_indices = self.BM.bins[bid].findOutliers(self.PM.transformedCP, self.PM.kmerVals, mode=mode)
-        if(len(dead_row_indices)>0):
-            if(fixBinnedRI):
-                for row_index in dead_row_indices:
-                    self.setRowIndexUnassigned(row_index)
-            self.BM.bins[bid].purge(dead_row_indices,
-                                    self.PM.transformedCP,
-                                    self.PM.averageCoverages,
-                                    self.PM.kmerVals,
-                                    self.PM.contigLengths,
-                                    self.PM.kmerVals)
         
 #------------------------------------------------------------------------------
 # DATA MAP MANAGEMENT 
@@ -569,21 +466,21 @@ class ClusterEngine:
         """Load the transformed data into the main image maps"""
         # reset these guys... JIC
         self.imageMaps = np_zeros((self.numImgMaps,self.PM.scaleFactor,self.PM.scaleFactor))
-        self.im2RowIndicies = {}
+        self.im2RowIndices = {}
         
         # add to the grid wherever we find a contig
         row_index = -1
         for point in np_around(self.PM.transformedCP):
             row_index += 1
             # can only bin things once!
-            if row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies:
+            if row_index not in self.PM.binnedRowIndices and row_index not in self.PM.restrictedRowIndices:
                 # add to the row_index dict so we can relate the 
                 # map back to individual points later
                 p = tuple(point)
-                if p in self.im2RowIndicies:
-                    self.im2RowIndicies[p].append(row_index)
+                if p in self.im2RowIndices:
+                    self.im2RowIndices[p].append(row_index)
                 else:
-                    self.im2RowIndicies[p] = [row_index]
+                    self.im2RowIndices[p] = [row_index]
                 
                 # now increment in the grid
                 # for each point we encounter we incrmement
@@ -757,8 +654,8 @@ class ClusterEngine:
         
         Use only during initial core creation
         """        
-        if(rowIndex not in self.PM.restrictedRowIndicies and rowIndex not in self.PM.binnedRowIndicies):
-            self.PM.binnedRowIndicies[rowIndex] = True
+        if(rowIndex not in self.PM.restrictedRowIndices and rowIndex not in self.PM.binnedRowIndices):
+            self.PM.binnedRowIndices[rowIndex] = True
             # now update the image map, decrement
             self.decrementViaRowIndex(rowIndex)
 
@@ -767,17 +664,17 @@ class ClusterEngine:
         
         Use only during initial core creation
         """
-        if(rowIndex in self.PM.restrictedRowIndicies and rowIndex not in self.PM.binnedRowIndicies):
-            del self.PM.binnedRowIndicies[rowIndex]
+        if(rowIndex in self.PM.restrictedRowIndices and rowIndex not in self.PM.binnedRowIndices):
+            del self.PM.binnedRowIndices[rowIndex]
             # now update the image map, increment
             self.incrementViaRowIndex(rowIndex)
 
-    def restrictRowIndicies(self, indices):
+    def restrictRowIndices(self, indices):
         """Add these indices to the restricted list"""
         for row_index in indices:
             # check that it's not binned or already restricted
-            if(row_index not in self.PM.restrictedRowIndicies and row_index not in self.PM.binnedRowIndicies):
-                self.PM.restrictedRowIndicies[row_index] = True
+            if(row_index not in self.PM.restrictedRowIndices and row_index not in self.PM.binnedRowIndices):
+                self.PM.restrictedRowIndices[row_index] = True
                 # now update the image map, decrement
                 self.decrementViaRowIndex(row_index)
     
@@ -802,12 +699,12 @@ class ClusterEngine:
             realz = self.PM.scaleFactor - z - 1
             for x in range(x_lower, x_upper):
                 for y in range(y_lower, y_upper):
-                    if((x,y,realz) in self.im2RowIndicies):
-                        for row_index in self.im2RowIndicies[(x,y,realz)]:
-                            if row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies:
+                    if((x,y,realz) in self.im2RowIndices):
+                        for row_index in self.im2RowIndices[(x,y,realz)]:
+                            if row_index not in self.PM.binnedRowIndices and row_index not in self.PM.restrictedRowIndices:
                                 num_points += 1
                                 disp_vals = np_append(disp_vals, self.PM.transformedCP[row_index])
-                                disp_cols = np_append(disp_cols, self.PM.contigColours[row_index])
+                                disp_cols = np_append(disp_cols, self.PM.contigColors[row_index])
         
         # make a black mark at the max values
         small_span = self.span/2
@@ -818,9 +715,9 @@ class ClusterEngine:
             realz = self.PM.scaleFactor - z - 1
             for x in range(x_lower, x_upper):
                 for y in range(y_lower, y_upper):
-                    if((x,y,realz) in self.im2RowIndicies):
-                        for row_index in self.im2RowIndicies[(x,y,realz)]:
-                            if row_index not in self.PM.binnedRowIndicies and row_index not in self.PM.restrictedRowIndicies:
+                    if((x,y,realz) in self.im2RowIndices):
+                        for row_index in self.im2RowIndices[(x,y,realz)]:
+                            if row_index not in self.PM.binnedRowIndices and row_index not in self.PM.restrictedRowIndices:
                                 num_points += 1
                                 disp_vals = np_append(disp_vals, self.PM.transformedCP[row_index])
                                 disp_cols = np_append(disp_cols, htr(0,0,0))
@@ -892,96 +789,6 @@ class ClusterEngine:
 
         plt.close(fig)
         del fig
-
-###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
-
-class CenterFinder:
-    """When a plain old mean won't cut it
-
-    Uses a balloon hitting algorithm. Imagine walking along a "path",
-    (through the array) hitting a balloon into the air each time you
-    come across a value. Gravity is bringing the balloon down. If we plot
-    the height of the ball vs array index then the highest the balloon
-    reaches is the index in the center of the densest part of the array 
-    """
-    def __init__(self): pass
-    
-    def findArrayCenter(self, vals):
-        """Find the center of the numpy array vals, return the index of the center"""
-        # parameters
-        current_val_max = -1
-        delta = 0
-        bounce_amount = 0.1
-        height = 0
-        last_val= 0
-
-        working = np_array([])
-        final_index = -1
-        
-        # sort and normalise between 0 -> 1
-        sorted_indices = np_argsort(vals)
-        vals_sorted = [vals[i] for i in sorted_indices]
-        vals_sorted -= vals_sorted[0]
-        if(vals_sorted[-1] != 0):
-            vals_sorted /= vals_sorted[-1]        
-
-        #print vals_sorted
-        
-        # run through in one direction
-        for val in vals_sorted:
-            # calculate delta
-            delta = val - last_val
-            # reduce the current value according to the delta value
-            height = self.reduceViaDelta(height, bounce_amount, delta)
-            # bounce the ball up
-            height += bounce_amount
-            
-            # store the height
-            working = np_append(working, height)
-            final_index += 1
-
-            # save the last val            
-            last_val = val
-
-        current_val_max = -1
-        height = 0
-        last_val = 0
-        
-        #print "===W==="
-        #print working
-        #print "===E==="
-        
-        # run through in the reverse direction
-        vals_sorted = vals_sorted[::-1]
-        for val in vals_sorted:
-            if last_val == 0:
-                delta = 0
-            else:
-                delta = last_val - val
-            height = self.reduceViaDelta(height, bounce_amount, delta)
-            height += bounce_amount
-            # add to the old heights
-            working[final_index] += height
-            final_index -= 1
-            last_val = val
-
-        #print working
-        #print "==EEE=="
-
-        # find the original index!
-        return sorted_indices[np_argmax(working)]
-    
-    def reduceViaDelta(self, height, bounce_amount, delta):
-        """Reduce the height of the 'ball'"""
-        perc = (delta / bounce_amount)**0.5
-        if(perc > 1):
-            #print height, delta, 1, " H: ", 0
-            return 0
-        #print height, delta, (1-perc), " H: ", (height * (1-perc)) 
-        return height * (1-perc)
 
 ###############################################################################
 ###############################################################################

@@ -138,11 +138,11 @@ class Rainbow:
         self.scaleMultiplier = (self.upperScale - self.lowerScale)/(self.upperBound - self.lowerBound)
     
     def getValue(self, val):
-        """Get a raw value, not a colour"""
+        """Get a raw value, not a color"""
         return (math.cos(val) + self.RB_lower_offset) * self.RB_divisor
 
-    def getColour(self, val):
-        """Return a colour for the given value.
+    def getColor(self, val):
+        """Return a color for the given value.
         
         If nothing makes sense. return black
         """
