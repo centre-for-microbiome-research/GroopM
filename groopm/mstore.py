@@ -137,7 +137,7 @@ class GMDataManager:
     'length' : tables.Int32Col(pos=2)
     
     ** Bins **
-    table = 'bin'
+    table = 'bins'
     'bid'        : tables.Int32Col(pos=0)
     'numMembers' : tables.Int32Col(pos=1)
 
@@ -415,6 +415,7 @@ class GMDataManager:
 
         # compute the PCA of the ksigs
         pc_ksigs = self.getKmerSigs(dbFileName)
+        num_cons = len(pc_ksigs)
 
         db_desc = [('pc1', float),
                    ('pc2', float)]
@@ -518,14 +519,14 @@ class GMDataManager:
             with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
                 mg = h5file.getNode('/', name='meta')
                 if not firstWrite:
-                    t_name = 'tmp_bin'
+                    t_name = 'tmp_bins'
                     # nuke any previous failed attempts
                     try:
-                        h5file.removeNode(mg, 'tmp_bin')
+                        h5file.removeNode(mg, 'tmp_bins')
                     except:
                         pass
                 else:
-                    t_name = 'bin'
+                    t_name = 'bins'
                 
                 try:
                     h5file.createTable(mg,
@@ -539,7 +540,7 @@ class GMDataManager:
                 
                 if not firstWrite:
                     # rename the tmp table to overwrite
-                    h5file.renameNode(mg, 'bin', 'tmp_bin', overwrite=True)
+                    h5file.renameNode(mg, 'bins', 'tmp_bins', overwrite=True)
         except:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
@@ -553,7 +554,7 @@ class GMDataManager:
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
                 ret_dict = {}
-                all_rows = h5file.root.meta.bin.read()
+                all_rows = h5file.root.meta.bins.read()
                 for row in all_rows:
                     ret_dict[row[0]] = row[1]
                 return ret_dict
