@@ -180,7 +180,7 @@ class BinExplorer:
         else:
             self.bids = bids
 
-    def plotHighlights(self, timer, bids, elevation, azimuth, file, filetype, dpi, alpha, invert=False):
+    def plotHighlights(self, timer, bids, elevation, azimuth, file, filetype, dpi, alpha, invert=False, show=False):
         """Plot a high def image suitable for publication"""
         self.BM.loadBins(timer,
                          makeBins=True,
@@ -191,11 +191,15 @@ class BinExplorer:
         print "Plotting image"
         fig = plt.figure()
         bins=[]
-        for bid in bids:
-            bins.append(self.BM.getBin(bid))
-            
-        if not file.endswith(filetype):
+        if bids is not None:
+            for bid in bids:
+                bins.append(self.BM.getBin(bid))
+
+        if show:
+            file=""
+        elif not file.endswith(filetype):
             file += "." + filetype
+                
         self.PM.renderTransCPData(fileName=file,
                                   elev=elevation,
                                   azim=azimuth,

@@ -230,6 +230,7 @@ if __name__ == '__main__':
     bin_highlighter.add_argument('--dpi', default=300, help="Image resolution")
     bin_highlighter.add_argument('--alpha', default=0.1, type=float,  help="Opacity of background bins")
     bin_highlighter.add_argument('-i', '--invert', action="store_true", default=False, help="invert colours")
+    bin_highlighter.add_argument('-s', '--show', action="store_true", default=False, help="load image in viewer only")
 
     #-------------------------------------------------
     # print bin information       

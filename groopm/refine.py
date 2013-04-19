@@ -58,14 +58,49 @@ from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
-
-from numpy import arange as numpy_arange, copy as np_copy, arange as np_arange, ravel as np_ravel, ones as np_ones, eye as np_eye, shape as np_shape, around as np_around, argmax as np_argmax, arccos as np_cos, dot as np_dot, sum as np_sum, abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
+from numpy import (abs as np_abs,
+                   amax as np_amax,
+                   amin as np_amin,
+                   append as np_append,
+                   arange as np_arange,
+                   arccos as np_arccos,
+                   arccos as np_cos,
+                   argmax as np_argmax,
+                   argmin as np_argmin,
+                   argsort as np_argsort,
+                   around as np_around,
+                   array as np_array,
+                   ceil as np_ceil,
+                   concatenate as np_concatenate,
+                   copy as np_copy,
+                   cos as np_cos,
+                   delete as np_delete,
+                   dot as np_dot,
+                   eye as np_eye,
+                   max as np_max,
+                   mean as np_mean,
+                   median as np_median,
+                   min as np_min,
+                   ones as np_ones,
+                   pi as np_pi,
+                   ravel as np_ravel,
+                   reshape as np_reshape,
+                   seterr as np_seterr,
+                   shape as np_shape,
+                   sin as np_sin,
+                   size as np_size,
+                   sort as np_sort,
+                   sqrt as np_sqrt,
+                   std as np_std,
+                   sum as np_sum,
+                   where as np_where,
+                   zeros as np_zeros) 
 from numpy.linalg import norm as np_norm 
 from numpy.random import shuffle as shuffle, randint as randint
 
 from scipy.spatial import KDTree as kdt
 from scipy.cluster.vq import kmeans,vq,whiten,kmeans2
-from scipy.spatial.distance import cdist, pdist, squareform
+from scipy.spatial.distance import cdist, squareform
 
 # GroopM imports
 from binManager import BinManager
@@ -170,7 +205,7 @@ class RefineEngine:
             user_option = self.promptOnPlotterRefine()
             
             if(user_option == 'Q'):
-                print 'Hasta luego mi amigo'
+                print '\nBye!'
                 return
 
             elif(user_option == 'E'):
@@ -734,7 +769,7 @@ class RefineEngine:
             closest = np_argmin(dists)
             if dists[closest] == too_big:
                 break
-            (i,j) = self.small2indices(closest, side-1)
+            (i,j) = self.PM.small2indices(closest, side-1)
             bid1 = bidList[i]
             bid2 = bidList[j]
             should_merge = False                
@@ -871,16 +906,10 @@ class RefineEngine:
 #------------------------------------------------------------------------------
 # UTILITIES
 
-    def small2indices(self, index, side):
-        """Return the indices of the comparative items
-        when given an index into a condensed distance matrix
-        """
-        step = 0
-        while index >= (side-step):
-            index = index - side + step 
-            step += 1
-        return (step, step + index + 1)
-    
+    def findBestBid(self, row_index):
+        """Find the bid which is the best match for this row index"""
+        pass
+
     def rePCA(self,
               bidList,
               mode='mer',
