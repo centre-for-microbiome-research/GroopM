@@ -51,7 +51,7 @@ __status__ = "Alpha"
 
 import sys
 from random import *
-from math import *
+import math
 import sys
 import numpy as np
 import os

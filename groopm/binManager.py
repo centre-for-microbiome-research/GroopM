@@ -196,10 +196,10 @@ class BinManager:
                     print "Number of stoits != 3. You need to transform"
                     self.PM.transformCP(timer, silent=silent, min=min, max=max)
             if not silent:
-                print "    Making bins"
+                print "    Making bin objects"
             self.makeBins(self.getBinMembers())
             if not silent:
-                print "    Loaded %d bins" % len(self.bins)
+                print "    Loaded %d bins from database" % len(self.bins)
         if not silent:
             print "    %s" % timer.getTimeStamp()
             sys_stdout.flush()

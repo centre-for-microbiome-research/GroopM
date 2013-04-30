@@ -235,7 +235,7 @@ class ProfileManager:
             
             if(loadBins):
                 if(verbose):
-                    print "    Loading bins"
+                    print "    Loading bin assignments"
                 self.binIds = self.dataManager.getBins(self.dbFileName, indices=self.indices)
                 if len(bids) != 0: # need to make sure we're not restricted in terms of bins
                     tmp_bids = self.getBinStats()
@@ -477,7 +477,6 @@ class ProfileManager:
 
     def transformCP(self, timer, silent=False, nolog=False, min=None, max=None):
         """Do the main ransformation on the coverage profile data"""
-        timer.getTimeStamp()
         shrinkFn = np_log10
         if(nolog):
             shrinkFn = lambda x:x

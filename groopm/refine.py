@@ -54,6 +54,9 @@ from Queue import Queue
 from operator import itemgetter
 import readline
 
+from PIL import Image
+import rainbow
+
 from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d, Axes3D
@@ -70,6 +73,7 @@ from numpy import (abs as np_abs,
                    argsort as np_argsort,
                    around as np_around,
                    array as np_array,
+                   bincount as np_bincount,
                    ceil as np_ceil,
                    concatenate as np_concatenate,
                    copy as np_copy,
@@ -96,7 +100,9 @@ from numpy import (abs as np_abs,
                    where as np_where,
                    zeros as np_zeros) 
 from numpy.linalg import norm as np_norm 
-from numpy.random import shuffle as shuffle, randint as randint
+from numpy.random import (randint as randint,
+                          random as random,
+                          shuffle as shuffle)
 
 from scipy.spatial import KDTree as kdt
 from scipy.cluster.vq import kmeans,vq,whiten,kmeans2
@@ -109,7 +115,7 @@ from ellipsoid import EllipsoidTool
 from PCA import PCA, Center
 import groopmTimekeeper as gtime
 import groopmExceptions as ge
-
+from som import SOM
 np_seterr(all='raise')     
 
 ###############################################################################
@@ -386,7 +392,7 @@ class RefineEngine:
                        mergeSimilarBins=True,
                        removeDuds=True,
                        nukeOutliers=True,
-                       shuffleRefine=False,
+                       shuffleRefine=True,
                        verbose=False,
                        plotAfterOB=False,
                        makeGraph=False):
@@ -853,33 +859,101 @@ class RefineEngine:
         #self.BM.plotMultipleBins([[h] for h in bidList])
         return merged_bids
 
+    def buildSOM(self, maskBoundaries=False, defineBins=False):
+        """Build, train and return a SOM for the given bids"""
+        bids = self.BM.getBids()
+        v_dim = 4 # trans cov  + 1st pca kmers
+        som_side = np_max([100, len(bids)*5])
+        # produce the actual training data
+        # this is the bin centroid values
+        training_data = np_zeros((len(bids),v_dim))
+        i = 0
+        for bid in bids:
+            training_data[i,:-1] = np_mean([self.PM.transformedCP[row_index] for row_index in self.BM.bins[bid].rowIndices], axis=0)
+            training_data[i,-1] = np_mean([self.PM.kmerVals[row_index] for row_index in self.BM.bins[bid].rowIndices], axis=0)
+            i += 1
+
+        # normalise the data so it fits between 0 and 1
+        # but make sure that the max global CP and mer values are
+        # used to scale
+        minz = np_zeros((v_dim))
+        minz[:-1] = np_min(self.PM.transformedCP, axis=0)
+        minz[-1] = np_min(self.PM.kmerVals, axis=0)
+
+        maxz = np_zeros((v_dim))
+        maxz[:-1] = np_max(self.PM.transformedCP, axis=0)
+        maxz[-1] = np_max(self.PM.kmerVals, axis=0)
+
+        maxz -= minz
+        training_data -= minz
+        training_data /= maxz
+
+        # during training, use the max and min vals of
+        # the actual traingin data
+        tminz = np_min(training_data, axis=0)
+        tmaxz = np_max(training_data, axis=0)
+
+        # set training in motion
+        SS = SOM(som_side, v_dim, lc=tminz, uc=tmaxz)
+        SS.train(training_data, vectorSubSet=len(bids)*10)#, weightImgFileName="fred")
+
+        SS.renderWeights("barry")
+        if maskBoundaries:
+            SS.makeBoundaryMask(plotMaskFile="larry.png")
+            SS.maskBoundaries()
+        if defineBins:
+            SS.defineBinRegions(bids, training_data)        
+            SS.renderBoundaryMask("larry_clean.png")
+        if maskBoundaries:
+            SS.maskBoundaries(addNoise=True)
+        SS.renderWeights("marry")
+
+
+        return (SS, minz, maxz, som_side)
+
     def shuffleRefineConitgs(self):
         """refine bins by shuffling contigs around"""
         print "    Start shuffle refinement"
-        start_num_bins = len(self.BM.bins)
         bids = self.BM.getBids()
+        start_num_bins = len(bids)
+        v_dim = 4
         
-        # assume bin distributions have been made!
-        # get an array of bin centroids
-        bin_centroids = np_array([])
-        for bid in bids:
-           bin_centroids = np_append(bin_centroids,
-                                     np_mean([self.PM.covProfiles[row_index] for row_index in self.BM.bins[bid].rowIndices], axis=0))
-        print np_shape(bin_centroids)
-        print (len(self.BM.bins), self.PM.numStoits)
-        bin_centroids = np_reshape(bin_centroids, (len(self.BM.bins), self.PM.numStoits))
+        (SS, minz, maxz, side) = self.buildSOM(maskBoundaries=True, defineBins=True)
+
         
         for bid in bids:
-            print "===================="
-            print bid
             bin = self.BM.bins[bid]
-            for row_index in bin.rowIndices:
-                i = 0
-                for cent in bin_centroids:
-                    #print bids[i], row_index, self.BM.getAngleBetweenVectors(self.PM.covProfiles[row_index], cent)
-                    i += 1
-                print "---"
+            block = np_zeros((bin.binSize,v_dim))
+            block[:,:-1] = self.PM.transformedCP[bin.rowIndices]
+            block[:,-1] = self.PM.kmerVals[bin.rowIndices]
+
+            block -= minz
+            block /= maxz
+            img_size = (SS.side,SS.side)
+            img_points = np_zeros(img_size)
+            img = Image.new("RGB", img_size)
+            points = []
+            for b in block:
+                points.append(SS.weights.bestMatch(b))
         
+            max = 0
+            for point in points:
+                img_points[point[0],point[1]] += 1
+                if(max < img_points[point[0],point[1]]):
+                    max = img_points[point[0],point[1]]
+            max += 1
+            resolution = 200
+            if(max < resolution):
+                resolution = max - 1
+            if resolution < 2:
+                resolution = 2
+            RB = rainbow.Rainbow(0, max, resolution, "gbr")
+            for point in points:
+                img.putpixel((point[1],point[0]), RB.getColor(img_points[point[0],point[1]]))
+            
+                
+            img = img.resize((SS.side*10, SS.side*10),Image.NEAREST)
+            img.save("PLACED_%d.png" % bid)
     
         print "    Removed %d cores leaving %d cores" % (start_num_bins-len(self.BM.bins), len(self.BM.bins))    
         return []    
@@ -1131,7 +1205,7 @@ class RefineEngine:
         test_T_score = C_funct(FRI,RRI,merPCAs,merAlphas) / ( F_funct(FRI,FRI,merPCAs,merAlphas) + R_funct(RRI,RRI,merPCAs,merAlphas))            
 
         T_scores = []
-        index_array = numpy_arange(x_size)
+        index_array = np_arange(x_size)
         fsi = np_arange(front_sample_size)
         rsi = np_arange(front_sample_size, front_sample_size+rear_sample_size)
         for i in range(null_loops):
@@ -1353,7 +1427,7 @@ class RefineEngine:
         test_T_score = C_funct(FRI,RRI,covAlphas) / ( F_funct(FRI,FRI,covAlphas) + R_funct(RRI,RRI,covAlphas))            
         
         T_scores = []
-        index_array = numpy_arange(x_size)
+        index_array = np_arange(x_size)
         fsi = np_arange(front_sample_size)
         rsi = np_arange(front_sample_size, front_sample_size+rear_sample_size)
         for i in range(null_loops):
