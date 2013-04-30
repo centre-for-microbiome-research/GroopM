@@ -414,7 +414,9 @@ class GMDataManager:
         print "    Calculating and storing the kmerSig PCAs"
 
         # compute the PCA of the ksigs
-        pc_ksigs = self.getKmerSigs(dbFileName)
+        ksigs = self.getKmerSigs(dbFileName)
+        CP = ContigParser()
+        pc_ksigs = CP.PCAKSigs(ksigs)
         num_cons = len(pc_ksigs)
 
         db_desc = [('pc1', float),
