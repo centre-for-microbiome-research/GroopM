@@ -85,6 +85,9 @@ class TorusMesh:
         else:
             self.columns = columns
         self.dimension = dimension
+        self.shape = (self.rows,self.columns,self.dimension)
+        self.flatShape = (self.rows*self.columns,self.dimension)
+        self.size = self.dimension*self.rows*self.columns
         
         # we use these values in dist many many times
         self.halfRow = float(self.rows)/2
@@ -93,12 +96,12 @@ class TorusMesh:
         # the first two dimensions repesent points on the surface
         # the remainder represent values
         if(randomize):
-            self.nodes = np.random.random(self.dimension*self.rows*self.columns).reshape((self.rows,self.columns,self.dimension))
+            self.nodes = np.random.random(self.size).reshape(self.shape)
         else:
-            self.nodes = np.zeros(self.dimension*self.rows*self.columns).reshape((self.rows,self.columns,self.dimension))
+            self.nodes = np.zeros(self.size).reshape(self.shape)
 
         # make an array of flattened nodes
-        self.flatNodes = self.nodes.reshape((self.rows*self.columns,self.dimension))
+        self.flatNodes = self.nodes.reshape(self.flatShape)
         
         # work out the central vector and corresponding max angle
         c_vec = np.ones((self.dimension))
@@ -107,8 +110,14 @@ class TorusMesh:
         top_vec = np.zeros_like(self.cVec)
         top_vec[0] = 1
         self.maxAngle = self.getAngBetweenNormed(top_vec, self.cVec)
-        
 
+    def fixFlatNodes(self, weights=None):
+        """Make sure everything is in sync"""
+        if weights is not None:
+            self.nodes = weights
+        self.flatNodes = self.nodes.reshape(self.flatShape)
+        return self.flatNodes     
+            
 #------------------------------------------------------------------------------
 # WORKING WITH THE DATA
 
@@ -123,10 +132,10 @@ class TorusMesh:
 
     def buildVarianceSurface(self):
         """Work out the difference between each point and it's eight neighbours"""
-        diff_array = np.zeros((self.rows, self.columns, self.dimension))
-        shift_array = np.zeros((self.rows, self.columns, self.dimension))
-        shift_array2 = np.zeros((self.rows, self.columns, self.dimension))
-        shift_diff = np.zeros((self.rows, self.columns, self.dimension))
+        diff_array = np.zeros(self.shape)
+        shift_array = np.zeros(self.shape)
+        shift_array2 = np.zeros(self.shape)
+        shift_diff = np.zeros(self.shape)
 
         # shift horizontal
         # ---
@@ -225,14 +234,16 @@ class TorusMesh:
             ret_array.append("\n")
         return "".join(ret_array)
 
-    def renderSurface(self, fileName):
+    def renderSurface(self, fileName, nodes=None):
         """make an image of the weights in the som"""
+        if nodes is None:
+            nodes = self.nodes
         try:
             img = Image.new("RGB", (self.columns, self.rows))
             for r in range(self.rows):
                 # build a color value for a vector value
                 for c in range(self.columns):
-                    col = self.getColor(self.nodes[r,c])
+                    col = self.getColor(nodes[r,c])
                     img.putpixel((c,r), (col[0], col[1], col[2]))
             img = img.resize((self.columns*10, self.rows*10),Image.NEAREST)
             img.save(fileName)

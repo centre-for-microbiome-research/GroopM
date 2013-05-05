@@ -106,8 +106,11 @@ class SOM:
         # initialise the nodes to random values between 0 -> 1
         self.weights = TM(self.side, dimension=self.dimension, randomize=True)
         
-        # usable area
+        # cutoff for turning the VS_flat into a boundary mask
+        # this is a magic number, but it seems to work OK
+        self.maskCutoff = 16
         self.boundaryMask = np.zeros((self.side,self.side)) 
+        self.VS_flat = np.zeros((self.side,self.side))
         
         # bin assignments
         self.binAssignments = np.zeros((self.side,self.side)) # the 0 bin is 'not assigned'
@@ -213,16 +216,39 @@ class SOM:
 #------------------------------------------------------------------------------
 # TRAINING
         
-    def train(self, trainVector, iterations=1000, vectorSubSet=1000, weightImgFileName="", epsilom=0.001):
+    def train(self,
+              trainVector,
+              weights=None,
+              iterations=1000,
+              vectorSubSet=1000,
+              weightImgFileNamePrefix="",
+              epsilom=0.0001,
+              influenceRate=0.4,
+              mask=None,
+              radius=0.,
+              silent=True
+              ):
         """Train the SOM
         Train vector is a list of numpy arrays
         """
         
-        print " Start training. Max:", iterations, "iterations"
-
+        if not silent:
+            print "    Start SOM training. Side: %d Max: %d iterations" % (self.side, iterations)
+        if radius == 0.0:
+            radius = self.radius
+        
+        # we can use a dummy set of weights, or the *true* weights
+        if weights is None:
+            replace_weights = True
+            weights = self.weights.nodes
+            flat_nodes = self.weights.flatNodes
+        else:
+            flat_nodes = np.reshape(weights, np.shape(self.weights.flatNodes))
+            replace_weights = False
+            
         # over time we'll shrink the radius of nodes which
         # are influenced by the current training node
-        time_constant = iterations/log(self.radius)
+        time_constant = iterations/log(radius)
         
         # we would ideally like to select guys from the training set at random
         if(len(trainVector) <= vectorSubSet):
@@ -233,21 +259,18 @@ class SOM:
             cut_off = vectorSubSet
         
         for i in range(1, iterations+1):
-            sys.stdout.write("\r Iteration: % 4d of % 4d" % (i, iterations))
-            sys.stdout.flush()                
+            if not silent:
+                sys.stdout.write("\r    Iteration: % 4d of % 4d" % (i, iterations))
+                sys.stdout.flush()                
 
 #--------
 # Make stamp
             # gaussian decay on radius and amount of influence
-            radius_decaying=self.radius*exp(-1.0*i/time_constant)
+            radius_decaying=radius*exp(-1.0*i/time_constant)
             if(radius_decaying < 2):
-                return
+                return weights
             
-            #phi = radius_decaying/3
-            #rad_div_val = (phi)**2
-            #front_multiplier = 1/np.sqrt(2 * np.pi * phi)
-            front_multiplier = 0.4
-            grad = -1 * front_multiplier / radius_decaying
+            grad = -1 * influenceRate / radius_decaying
             # we will make a "stamp" to speed things up
             max_radius = int(radius_decaying)
             q_stamp = np.zeros((max_radius+1,max_radius+1))
@@ -261,7 +284,7 @@ class SOM:
                     check_dist = np.round(true_dist+0.00001)
                     if(check_dist <= radius_decaying):
                         # influence is propotional to distance
-                        influence = true_dist*grad + front_multiplier
+                        influence = true_dist*grad + influenceRate
                         q_stamp[row, col] = influence
                         q_stamp[col, row] = influence
 
@@ -278,7 +301,7 @@ class SOM:
             # bottom left
             stamp[max_radius:,:max_radius+1] += np.rot90(q_stamp,3)
             # center
-            stamp[max_radius, max_radius] = front_multiplier
+            stamp[max_radius, max_radius] = influenceRate
             
             
             # now find where the useless info is and cull it from the stamp
@@ -305,15 +328,15 @@ class SOM:
             worksheet = np.zeros(self.dimension*self.side*self.side*9).reshape((self.side*3,
                                                                                 self.side*3,
                                                                                 self.dimension))
-            worksheet[0:self.side,0:self.side] = self.weights.nodes
-            worksheet[0:self.side,self.side:self.side*2] = self.weights.nodes
-            worksheet[0:self.side,self.side*2:self.side*3] = self.weights.nodes
-            worksheet[self.side:self.side*2,0:self.side] = self.weights.nodes
-            worksheet[self.side:self.side*2,self.side:self.side*2] = self.weights.nodes
-            worksheet[self.side:self.side*2,self.side*2:self.side*3] = self.weights.nodes
-            worksheet[self.side*2:self.side*3,0:self.side] = self.weights.nodes
-            worksheet[self.side*2:self.side*3,self.side:self.side*2] = self.weights.nodes
-            worksheet[self.side*2:self.side*3,self.side*2:self.side*3] = self.weights.nodes
+            worksheet[0:self.side,0:self.side] = weights
+            worksheet[0:self.side,self.side:self.side*2] = weights
+            worksheet[0:self.side,self.side*2:self.side*3] = weights
+            worksheet[self.side:self.side*2,0:self.side] = weights
+            worksheet[self.side:self.side*2,self.side:self.side*2] = weights
+            worksheet[self.side:self.side*2,self.side*2:self.side*3] = weights
+            worksheet[self.side*2:self.side*3,0:self.side] = weights
+            worksheet[self.side*2:self.side*3,self.side:self.side*2] = weights
+            worksheet[self.side*2:self.side*3,self.side*2:self.side*3] = weights
 
             # make a set of "delta nodes"
             # these contain the changes to the set of grid nodes
@@ -324,7 +347,7 @@ class SOM:
             for j in index_array:
                 # find the best match between then training vector and the
                 # current grid, inlined for greater speed
-                loc = np.argmin(cdist(self.weights.flatNodes, [trainVector[j]]))
+                loc = np.argmin(cdist(flat_nodes, [trainVector[j]]))
                 row = int(loc/self.side)
                 col = loc-(row*self.side)
                 
@@ -347,47 +370,64 @@ class SOM:
             deltasheet[self.side:2*self.side,self.side:2*self.side] += deltasheet[2*self.side:3*self.side,self.side:2*self.side]
 
             # add the deltas to the grid nodes and clip to keep between 0 and 1
-            self.weights.nodes = np.clip(self.weights.nodes + deltasheet[self.side:2*self.side,self.side:2*self.side], 0, 1)
+            if mask is None:
+                weights = np.clip(weights + deltasheet[self.side:2*self.side,self.side:2*self.side], 0, 1)
+            else:
+                delta_fold = deltasheet[self.side:2*self.side,self.side:2*self.side]
+                for (r,c) in mask.keys():
+                    weights[r,c] = np.clip(weights[r,c] + delta_fold[r,c], 0, 1)
+                    flat_nodes = weights.reshape(self.weights.flatShape)
+            
+            if replace_weights == True:
+                flat_nodes = self.weights.fixFlatNodes(weights=weights)
             
             # make a tmp image, perhaps
-            if(weightImgFileName != ""):
-                filename = "%s_%04d.jpg" % (weightImgFileName, i)
+            if(weightImgFileNamePrefix != ""):
+                filename = "%s_%04d.jpg" % (weightImgFileNamePrefix, i)
                 print " writing: %s" % filename
                 self.weights.renderSurface(filename)
 
+        return weights
+
     def makeBoundaryMask(self, plotMaskFile=""):
-        """Make a mask for cutting out boudaries"""
+        """Make a mask for cutting out boundaries"""
         # First create the mask
         VS = self.weights.buildVarianceSurface()
-        VS_flat = np.array([[int(j) for j in i] for i in np.array(VS[:,:,0] + VS[:,:,1] + VS[:,:,2] + VS[:,:,3])*250]).reshape((self.side, self.side))
-        # 10 is a magic number, but it seems to work OK
-        self.boundaryMask = np.where(VS_flat > 10, 1., 0.)
+#        self.VS_flat = np.array([[int(j) for j in i] for i in np.array(VS[:,:,0] + VS[:,:,1] + VS[:,:,2] + VS[:,:,3])*250]).reshape((self.side, self.side))
+        self.VS_flat = np.array(VS[:,:,0] + VS[:,:,1] + VS[:,:,2] + VS[:,:,3]).reshape((self.side, self.side)) * 250
+        self.boundaryMask = np.where(self.VS_flat > self.maskCutoff, 1., 0.)
 
         if plotMaskFile != "":
             self.renderBoundaryMask(plotMaskFile)
 
-    def maskBoundaries(self, addNoise=False):
+    def maskBoundaries(self, addNoise=False, weights=None, mask=None, doFlat=False):
         """mask boundaries and add some random noise to
         some non-masked areas if asked to"""
         max_noise = 0.1
         noise_targets = 3
+        if weights is None:
+            weights = self.weights.nodes
+        if mask is None:
+            mask = self.boundaryMask
         for r in range(self.side):
             for c in range(self.side):
-                if self.boundaryMask[r,c] == 1:
+                if mask[r,c] == 1:
                     # on the boundary, mask as -1's
-                    self.weights.nodes[r,c] = [-1.]*self.dimension
+                    weights[r,c] = [-1.]*self.dimension
                 elif addNoise:
                     if randint(10) <= noise_targets:
                         # add some noise
                         noise_amount = random() * max_noise + 1.0
-                        self.weights.nodes[r,c] *= noise_amount 
-        self.weights.flatNodes = self.weights.nodes.reshape((self.weights.rows*self.weights.columns,self.weights.dimension))
+                        weights[r,c] *= noise_amount 
+        if doFlat:
+            self.weights.fixFlatNodes()
 
-    def defineBinRegions(self, bids, binProfiles):
+    def defineBinRegions(self, bids, binProfiles, render=False):
         """Work out which bins go where"""
         rcols = {}
         rand_col_lower = 15
         rand_col_upper = 200
+        bp_map = {}
         
         # use a flood fill algorithm to color in adjacent spots
         # and assign bins to unmasked points
@@ -395,13 +435,14 @@ class SOM:
             # find out where this bin matches bestest
             [row, col] = self.weights.bestMatch(binProfiles[i])
             bid = bids[i]
-            self.expandAssign(row, col, bid)
+            bp_map[bid] = binProfiles[i]
             rcols[bid] = (randrange(rand_col_lower, rand_col_upper),
                           randrange(rand_col_lower, rand_col_upper),
                           randrange(rand_col_lower, rand_col_upper)
                          )
-            
-        self.renderBoundaryMask("parry.png", rcols)
+            self.expandAssign(row, col, bid, bp_map)
+        if render:
+            self.renderBoundaryMask("S3.png", colMap=rcols)
 
         # now clean up the mask
         for r in range(self.side):
@@ -409,27 +450,92 @@ class SOM:
                 if self.boundaryMask[r,c] == 0 and self.binAssignments[r,c] == 0:
                     # unmasked AND unassigned
                     self.boundaryMask[r,c] = 1
-        
-        self.renderBoundaryMask("parry_clean.png", rcols)
+        if render:
+            self.renderBoundaryMask("S4.png", colMap=rcols)
 
-    def expandAssign(self, startR, startC, bid):
-        """A floodfill algorithm, used to assign more and more
-        points to a bin"""
+    def expandAssign(self, startR, startC, bid, binProfileMap):
+        """Based on floodfill, add more points to a bin assignment"""
+        # get all the points within this region
+        points = self.floodFill(startR, startC, self.boundaryMask)
+        collision_bid = 0
+        for (r,c) in points.keys():
+            if self.binAssignments[r,c] != 0:
+                if self.binAssignments[r,c] != bid:
+                    # we have already assigned this point to a bin
+                    # most likely we need to set the mask cutoff higher, but just for this region
+                    collision_bid = self.binAssignments[r,c]
+                    #print "\n", (r,c), "already assigned to bin %d, trying to reassign to bin %d" % (collision_bid, bid)
+                    re_calc_mask = True
+                    break
+            self.binAssignments[r,c] = bid
+
+        if collision_bid != 0:
+            resolved = False
+            [crow, ccol] = self.weights.bestMatch(binProfileMap[collision_bid])   # where the old bin's floodfill started
+            mc = self.maskCutoff
+            # we can't do anything if we can't lower the cutoff...
+            while mc >= 2:
+                # rebuild the mask with a new cutoff
+                mc = mc/2
+                mask = np.copy(self.boundaryMask)
+                for (r,c) in points.keys():
+                    if self.VS_flat[r,c] > mc: 
+                        mask[r,c] = 1.
+                    else:
+                        mask[r,c] = 0.
+                #self.renderBoundaryMask("MASK_%d_%d_%f.png" % (bid, collision_bid, mc), mask)
+                collision_points = self.floodFill(crow, ccol, mask)
+                new_points = self.floodFill(startR, startC, mask)
+                #print len(collision_points.keys()), len(new_points.keys())
+                #print collision_points.keys()[0] in new_points
+                if len(collision_points.keys()) == 0 or len(new_points.keys()) == 0:
+                    continue
+                # there should be no overlap
+                if collision_points.keys()[0] not in new_points:
+                    # we have resolved the issue
+                    resolved = True
+                    # now we need to fix the binAssignments and boundary mask
+                    self.boundaryMask = mask
+                    for (r,c) in points.keys():
+                        if (r,c) in new_points:
+                            # assign this point to the new bid
+                            self.binAssignments[r,c] = bid
+                        elif (r,c) in collision_points:
+                            # point in the new mask
+                            self.binAssignments[r,c] = collision_bid
+                        else:
+                            self.binAssignments[r,c] = 0.
+                    break
+                
+            if not resolved:
+                print "Cannot repair map, bin %d may be incorrectly merged with bin %d" % (bid, collision_bid)
+                return
+                 
+    def makeBinMask(self, profile, fileName="", dim=False):
+        """Return a mask of the region this profile falls in"""
+        [r, c] = self.weights.bestMatch(profile)
+        points = self.floodFill(r, c, self.boundaryMask)
+        if fileName != "":       
+            ret_mask = np.ones_like(self.boundaryMask)
+            for (r,c) in points.keys():
+                ret_mask[r,c] = 0      
+            self.renderBoundaryMask(fileName, mask=ret_mask)
+            
+        return points
+
+    def floodFill(self, startR, startC, mask):
+        """Return all points affected by a flood fill operation at the given point"""
+        points = {}
         toFill = set()
         toFill.add((startR, startC))
         seen = {(startR, startC) : True}
         while len(toFill) != 0:
             (r,c) = toFill.pop()
-            if self.boundaryMask[r,c] == 1:
+            if mask[r,c] == 1:
                 # we are at the boundary of a region
                 continue
-            if self.binAssignments[r,c] != 0:
-                if self.binAssignments[r,c] != bid:
-                    # we have already assigned this point to a bin
-                    # oops...
-                    print (r,c), "already assigned to bin %d, trying to reassign to bin %d" % (self.binAssignments[r,c], bid)
-                    continue
-            self.binAssignments[r,c] = bid
+            
+            points[(r,c)] = True
             
             # don't forget we're on a torus
             if r == 0: rm1 = self.side - 1
@@ -444,19 +550,32 @@ class SOM:
             if (rp1,c) not in seen: toFill.add((rp1,c)); seen[(rp1,c)] = True
             if (r,cm1) not in seen: toFill.add((r,cm1)); seen[(r,cm1)] = True
             if (r,cp1) not in seen: toFill.add((r,cp1)); seen[(r,cp1)] = True
+        
+        return points
                     
     def secondsToStr(self, t):
         rediv = lambda ll,b : list(divmod(ll[0],b)) + ll[1:]
         return "%d:%02d:%02d.%03d" % tuple(reduce(rediv,[[t*1000,],1000,60,60]))
 
 #------------------------------------------------------------------------------
+# CLASSIFICATION
+
+    def classifyContig(self, profile):
+        """Classify this contig"""
+        [r,c] = self.weights.bestMatch(profile)
+        return int(self.binAssignments[r,c])
+
+#------------------------------------------------------------------------------
 # IO and IMAGE RENDERING
 
-    def renderWeights(self, tag):
+    def renderWeights(self, tag, weights=None):
         """Render the surface weights"""
         filename = tag+".png"
-        self.weights.renderSurface(filename)
-
+        if weights is None:
+            self.weights.renderSurface(filename)
+        else:
+            self.weights.renderSurface(filename, nodes=weights)
+            
     def renderRegions(self, tag, palette):
         """Render the regions
         palette is a hash of bid -> color
@@ -475,13 +594,15 @@ class SOM:
             print sys.exc_info()[0]
             raise
         
-    def renderBoundaryMask(self, fileName, colMap=None):
+    def renderBoundaryMask(self, fileName, mask=None, colMap=None):
         """Plot the boundary mask"""
+        if mask is None:
+            mask = self.boundaryMask
         try:
             img = Image.new("RGB", (self.side, self.side))
             for r in range(self.side):
                 for c in range(self.side):
-                    if self.boundaryMask[r,c] == 0:
+                    if mask[r,c] == 0:
                         if colMap is not None:
                             try:
                                 col = colMap[self.binAssignments[r,c]]

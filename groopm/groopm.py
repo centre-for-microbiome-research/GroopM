@@ -130,7 +130,8 @@ class GroopMOptionsParser():
             RE = refine.RefineEngine(timer,
                                      dbFileName=options.dbname,
                                      transform=transform,
-                                     bids=bids)
+                                     bids=bids,
+                                     loadContigNames = True)
             if options.plot:
                 pfx="REFINED"
             else:
