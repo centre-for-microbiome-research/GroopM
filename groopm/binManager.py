@@ -123,10 +123,15 @@ np_seterr(all='raise')
 
 class BinManager:
     """Class used for manipulating bins"""
-    def __init__(self, dbFileName="", pm=None, minSize=10, minVol=1000000):
+    def __init__(self,
+                 dbFileName="",
+                 pm=None,
+                 minSize=10,
+                 minVol=1000000,
+                 squish=False):
         # data storage
         if(dbFileName != ""):
-            self.PM = ProfileManager(dbFileName)
+            self.PM = ProfileManager(dbFileName, squish=squish)
         elif(pm is not None):
             self.PM = pm
         
@@ -137,6 +142,7 @@ class BinManager:
         # misc
         self.minSize=minSize           # Min number of contigs for a bin to be considered legit
         self.minVol=minVol             # Override on the min size, if we have this many BP
+        self.squish=squish
         
 
 #------------------------------------------------------------------------------
@@ -168,6 +174,11 @@ class BinManager:
                 condition="length >= 0"
             else:
                 condition='bid != 0'
+        
+        # no point squishin' if we don't transform
+        if transform == False:
+            self.squish = False
+            
         # if we're going to make bins then we'll need kmer sigs
         if(makeBins):
             loadKmerSigs=True
@@ -186,6 +197,11 @@ class BinManager:
                          loadBins=True,
                          loadLinks=loadLinks
                         )
+        
+        # exit if no bins loaded
+        if self.PM.numContigs == 0:
+            return
+        
         if(makeBins):
             if transform:
                 self.PM.transformCP(timer, silent=silent, min=min, max=max)
@@ -1363,8 +1379,13 @@ class BinManager:
                     color=bin_centroid_colors[outer_index]
                     )
             outer_index += 1
-        
-        if not ignoreRanges:
+        if ignoreRanges:
+            mm = np_max(bin_centroid_points, axis=0)
+            ax.set_xlim3d(0, mm[0])
+            ax.set_ylim3d(0, mm[1])
+            ax.set_zlim3d(0, mm[2])
+            
+        else:
             self.plotStoitNames(ax)
             ax.set_xlim3d(0, 1000)
             ax.set_ylim3d(0, 1000)

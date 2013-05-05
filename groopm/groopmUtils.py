@@ -171,8 +171,14 @@ def makeSurePathExists(path):
 
 class BinExplorer:
     """Inspect bins, used for validation"""
-    def __init__(self, dbFileName, bids=[]):
-        self.BM = binManager.BinManager(dbFileName=dbFileName)   # bins
+    def __init__(self,
+                 dbFileName,
+                 bids=[],
+                 transform=True,
+                 squish=False):
+        self.transform = transform
+        self.BM = binManager.BinManager(dbFileName=dbFileName,
+                                        squish=squish)   # bins
         self.PM = self.BM.PM
         self.PM2 = None
         if bids is None:
@@ -186,40 +192,43 @@ class BinExplorer:
                          makeBins=True,
                          silent=False,
                          loadContigLengths=True,
-                         loadContigNames=False
-                        )
-        print "Plotting image"
-        fig = plt.figure()
-        bins=[]
-        if bids is not None:
-            for bid in bids:
-                bins.append(self.BM.getBin(bid))
-
-        if show:
-            file=""
-        elif not file.endswith(filetype):
-            file += "." + filetype
-                
-        self.PM.renderTransCPData(fileName=file,
-                                  elev=elevation,
-                                  azim=azimuth,
-                                  primaryWidth=6,
-                                  dpi=dpi,
-                                  showAxis=True,
-                                  format=filetype,
-                                  fig=fig,
-                                  highlight=bins,
-                                  alpha=alpha
-                                  )
-        del fig
-
-        if invert:
-            # invert the colors
-            from PIL import Image
-            import PIL.ImageOps    
-            image = Image.open(file)
-            inverted_image = PIL.ImageOps.invert(image)
-            inverted_image.save(file)        
+                         loadContigNames=False,
+                         transform = self.transform)
+        if len(self.BM.bins) == 0:
+            print "Sorry, no bins to plot"
+        else:
+            print "Plotting image"
+            fig = plt.figure()
+            bins=[]
+            if bids is not None:
+                for bid in bids:
+                    bins.append(self.BM.getBin(bid))
+    
+            if show:
+                file=""
+            elif not file.endswith(filetype):
+                file += "." + filetype
+                    
+            self.PM.renderTransCPData(fileName=file,
+                                      elev=elevation,
+                                      azim=azimuth,
+                                      primaryWidth=6,
+                                      dpi=dpi,
+                                      showAxis=True,
+                                      format=filetype,
+                                      fig=fig,
+                                      highlight=bins,
+                                      alpha=alpha
+                                      )
+            del fig
+    
+            if invert:
+                # invert the colors
+                from PIL import Image
+                import PIL.ImageOps    
+                image = Image.open(file)
+                inverted_image = PIL.ImageOps.invert(image)
+                inverted_image.save(file)        
         
     def plotFlyOver(self, timer, fps=10.0, totalTime=120.0):
         """Plot a flyover of the data with bins being removed"""
@@ -228,115 +237,150 @@ class BinExplorer:
                          silent=False,
                          bids=self.bids,
                          loadContigLengths=False,
-                         loadContigNames=False
-                        )
-
-        print "Plotting flyover"
-        all_bids = self.BM.getBids()
-
-        # control image form and output
-        current_azim = 45.0
-        current_elev = 0.0
-        current_frame = 0.0
-        total_frames = fps * totalTime
-        total_azim_shift = 720.0
-        total_elev_shift = 360.0
-        azim_increment = total_azim_shift / total_frames
-        elev_increment = total_elev_shift / total_frames
-        
-        print "Need",total_frames,"frames:"
-        # we need to know when to remove each bin
-        bid_remove_rate = float(len(all_bids)) / total_frames
-        bids_removed = 0
-        current_bid_index = 0
-        current_bid = all_bids[current_bid_index]
-        restricted_bids = []
-        fig = plt.figure()
-        while(current_frame < total_frames):
-            print "Frame",int(current_frame)
-            file_name = "%04d" % current_frame +".jpg"
-            self.PM.renderTransCPData(fileName=file_name,
-                                         elev=current_elev,
-                                         azim=current_azim,
-                                         primaryWidth=6,
-                                         dpi=200,
-                                         showAxis=True,
-                                         format='jpeg',
-                                         fig=fig,
-                                         restrictedBids = restricted_bids
-                                         )
-            current_frame += 1
-            current_azim += azim_increment
-            current_elev += elev_increment
-            print bid_remove_rate*current_frame, current_frame, "BR:",bids_removed, int(bid_remove_rate*current_frame) 
-            while bids_removed < int(bid_remove_rate*current_frame):
-                restricted_bids.append(all_bids[current_bid_index])
-                current_bid_index += 1
-                bids_removed += 1                
-        del fig
+                         loadContigNames=False,
+                         transform = self.transform)
+        if len(self.BM.bins) == 0:
+            print "Sorry, no bins to plot"
+        else:
+            print "Plotting flyover"
+            all_bids = self.BM.getBids()
+    
+            # control image form and output
+            current_azim = 45.0
+            current_elev = 0.0
+            current_frame = 0.0
+            total_frames = fps * totalTime
+            total_azim_shift = 720.0
+            total_elev_shift = 360.0
+            azim_increment = total_azim_shift / total_frames
+            elev_increment = total_elev_shift / total_frames
+            
+            print "Need",total_frames,"frames:"
+            # we need to know when to remove each bin
+            bid_remove_rate = float(len(all_bids)) / total_frames
+            bids_removed = 0
+            current_bid_index = 0
+            current_bid = all_bids[current_bid_index]
+            restricted_bids = []
+            fig = plt.figure()
+            while(current_frame < total_frames):
+                print "Frame",int(current_frame)
+                file_name = "%04d" % current_frame +".jpg"
+                self.PM.renderTransCPData(fileName=file_name,
+                                             elev=current_elev,
+                                             azim=current_azim,
+                                             primaryWidth=6,
+                                             dpi=200,
+                                             showAxis=True,
+                                             format='jpeg',
+                                             fig=fig,
+                                             restrictedBids = restricted_bids
+                                             )
+                current_frame += 1
+                current_azim += azim_increment
+                current_elev += elev_increment
+                print bid_remove_rate*current_frame, current_frame, "BR:",bids_removed, int(bid_remove_rate*current_frame) 
+                while bids_removed < int(bid_remove_rate*current_frame):
+                    restricted_bids.append(all_bids[current_bid_index])
+                    current_bid_index += 1
+                    bids_removed += 1                
+            del fig
 
     def plotBinProfiles(self, timer):
         """Plot the distributions of kmer and coverage signatures"""
-        self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
-        print "Plotting bin profiles"
-        self.BM.plotProfileDistributions()
+        self.BM.loadBins(timer,
+                         makeBins=True,
+                         silent=False,
+                         bids=self.bids,
+                         transform=self.transform)
+        if len(self.BM.bins) == 0:
+            print "Sorry, no bins to plot"
+        else:
+            print "Plotting bin profiles"
+            self.BM.plotProfileDistributions()
 
-    def plotContigs(self, timer):
+    def plotContigs(self, timer, coreCut, all=False):
         """plot contigs"""
-        print "Plotting bin contigs"
-        self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
-        self.BM.plotMultipleBins([self.bids], squash=True)
+        if all:
+            print "Plotting all contigs"
+            self.PM.plotAll(timer, coreCut, transform=self.transform)
+        else:
+            self.BM.loadBins(timer,
+                             makeBins=True,
+                             silent=False,
+                             bids=self.bids,
+                             transform=self.transform)
+            if len(self.BM.bins) == 0:
+                print "Sorry, no bins to plot"
+            else:
+                print "Plotting binned contigs"
+                if self.bids == []:
+                    self.bids = self.BM.getBids()
+                self.BM.plotMultipleBins([self.bids], squash=True)
     
     def plotPoints(self, timer):
         """plot points"""
-        print "Plotting bin points"
-        self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
-        self.BM.plotBinPoints()
-    
-    def kmerSig2GC(self, sig_weightings, sig):
-        """Calculate the GC content of a contig working from its kmer sig"""
-        GC = 0
-        outer_index = 0
-        for s in sig:
-            GC += s * sig_weightings[outer_index]
-            outer_index += 1
-        return GC
+        self.BM.loadBins(timer,
+                         makeBins=True,
+                         silent=False,
+                         bids=self.bids,
+                         transform=self.transform)
+        if len(self.BM.bins) == 0:
+            print "Sorry, no bins to plot"
+        else:
+            print "Plotting bin points"
+            self.BM.plotBinPoints()
     
     def plotSideBySide(self, timer, coreCut):
         """Plot cores side by side with their contigs"""
-        print "Plotting side by side graphs"        
         self.PM2 = binManager.ProfileManager(dbFileName=self.BM.PM.dbFileName)
         self.PM2.loadData(timer,
                           condition="length >= "+str(coreCut),
                           bids=self.bids,
                           loadContigNames=False,
-                          loadContigLengths=True
+                          loadContigLengths=True,
                           )
-        (min,max) = self.PM2.transformCP(timer)
+        if self.transform:
+            (min,max) = self.PM2.transformCP(timer)
+        else:
+            min = 0
+            max = 0
+
         self.BM.loadBins(timer,
                          makeBins=True,
                          loadContigNames=False,
                          bids=self.bids,
                          silent=False,
                          min=min,
-                         max=max)
-        print "Creating side by side plots"
-        (bin_centroid_points, bin_centroid_colors, bin_ids) = self.BM.findCoreCentres()
-        self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colors)
+                         max=max,
+                         transform=self.transform)
+        if len(self.BM.bins) == 0:
+            print "Sorry, no bins to plot"
+        else:
+            print "Plotting side by side graphs"        
+            (bin_centroid_points, bin_centroid_colors, bin_ids) = self.BM.findCoreCentres()
+            self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colors)
 
     def plotIds(self, timer):
         """Make a 3d plot of the bins but use IDs instead of points
         
         This function will help users know which bins to merge
         """
-        print "Plotting bin IDs"        
-        self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
-        self.BM.plotBinIds()
+        self.BM.loadBins(timer,
+                         makeBins=True,
+                         silent=False,
+                         bids=self.bids,
+                         transform=self.transform)
+        if len(self.BM.bins) == 0:
+            print "Sorry, no bins to plot"
+        else:
+            print "Plotting bin IDs"        
+            self.BM.plotBinIds()
 
     def plotUnbinned(self, timer, coreCut):
-        print "Plotting unbinned contigs"        
         """Plot all contigs over a certain length which are unbinned"""
-        self.PM.plotUnbinned(timer, coreCut)
+        print "Plotting unbinned contigs"        
+        self.PM.plotUnbinned(timer, coreCut, transform=self.transform)
             
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING 

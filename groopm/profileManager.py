@@ -112,7 +112,7 @@ class ProfileManager:
     
     Mostly a wrapper around a group of numpy arrays and a pytables quagmire
     """
-    def __init__(self, dbFileName, force=False, scaleFactor=1000):
+    def __init__(self, dbFileName, force=False, scaleFactor=1000, squish=False):
         # data
         self.dataManager = GMDataManager()  # most data is saved to hdf
         self.dbFileName = dbFileName        # db containing all the data we'd like to use
@@ -149,6 +149,7 @@ class ProfileManager:
         # misc
         self.forceWriting = force           # overwrite existng values silently?
         self.scaleFactor = scaleFactor      # scale every thing in the transformed data to this dimension
+        self.squish = squish
 
     def loadData(self,
                  timer,
@@ -186,6 +187,10 @@ class ProfileManager:
             if(verbose):
                 print "    Loaded indices with condition:", condition
             self.numContigs = len(self.indices)
+            
+            if self.numContigs == 0:
+                print "    ERROR: No contigs loaded using condition:", condition
+                return
             
             if(not silent):
                 print "    Working with: %d contigs" % self.numContigs
@@ -476,7 +481,7 @@ class ProfileManager:
         return (step, step + index + 1)
 
     def transformCP(self, timer, silent=False, nolog=False, min=None, max=None):
-        """Do the main ransformation on the coverage profile data"""
+        """Do the main transformation on the coverage profile data"""
         shrinkFn = np_log10
         if(nolog):
             shrinkFn = lambda x:x
@@ -486,8 +491,11 @@ class ProfileManager:
 
         if(not silent):
             print "    Reticulating splines"
-            print "    Dimensionality reduction"
-
+            if self.squish:
+                print "    Dimensionality reduction with extra squish"
+            else:
+                print "    Dimensionality reduction"
+                
         unit_vectors = [(np_cos(i*2*np_pi/self.numStoits),np_sin(i*2*np_pi/self.numStoits)) for i in range(self.numStoits)]
 
         # make sure the bams are ordered consistently
@@ -539,6 +547,7 @@ class ProfileManager:
         # shift the corners to match the space
         self.corners -= min
         self.corners /= max
+        
         # scale the corners to fit the plot
         cmin = np_amin(self.corners, axis=0)
         self.corners -= cmin
@@ -549,6 +558,19 @@ class ProfileManager:
         for i in range(self.numStoits):
             self.corners[i,2] = self.scaleFactor + 100
 
+
+        if self.squish:
+            # find the centre of the plot
+            centre_stick = np_mean(self.corners, axis=0)
+            centre_stick[2] = 0.
+            self.transformedCP -= centre_stick
+            # squish up
+            for i in range(len(self.transformedCP)):
+                shift = (self.transformedCP[i][2] / self.scaleFactor)
+                mult = np_array([shift, shift, 1.])
+                self.transformedCP[i] *= mult
+            self.transformedCP += centre_stick
+         
         return(min,max)
     
 #------------------------------------------------------------------------------
@@ -566,10 +588,44 @@ class ProfileManager:
                     )
             outer_index += 1
 
-    def plotUnbinned(self, timer, coreCut):
+    def plotUnbinned(self, timer, coreCut, transform=True):
         """Plot all contigs over a certain length which are unbinned"""
         self.loadData(timer, condition="((length >= "+str(coreCut)+") & (bid == 0))")
-        self.transformCP(timer)
+        
+        if transform:
+            self.transformCP(timer)
+        else:
+            if self.numStoits == 3:
+                self.transformedCP = self.covProfiles
+            else:
+                print "Number of stoits != 3. You need to transform"
+                self.transformCP(timer)            
+            
+        fig = plt.figure()
+        ax1 = fig.add_subplot(111, projection='3d')
+        ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
+        self.plotStoitNames(ax1)
+        
+        try:
+            plt.show()
+            plt.close(fig)
+        except:
+            print "Error showing image", exc_info()[0]
+            raise
+        del fig
+
+    def plotAll(self, timer, coreCut, transform=True):
+        """Plot all contigs over a certain length which are unbinned"""
+        self.loadData(timer, condition="((length >= "+str(coreCut)+"))")
+        if transform:
+            self.transformCP(timer)
+        else:
+            if self.numStoits == 3:
+                self.transformedCP = self.covProfiles
+            else:
+                print "Number of stoits != 3. You need to transform"
+                self.transformCP(timer)            
+
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
         ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')

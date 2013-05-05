@@ -128,6 +128,7 @@ if __name__ == '__main__':
     core_builder.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing DB file without prompting")
     core_builder.add_argument('-g', '--graphfile', help="output graph of micro bin mergers")
     core_builder.add_argument('-p', '--plot', action="store_true", default=False, help="create plots of bins after basic refinement")
+    core_builder.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
     core_builder.add_argument('--multiplot', action="store_true", default=False, help="create plots during core creation - MAKES MANY IMAGES!")
 
     #-------------------------------------------------
@@ -140,6 +141,7 @@ if __name__ == '__main__':
     bin_refiner.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to use (None for all)")
     bin_refiner.add_argument('-a', '--auto', action="store_true", default=False, help="automatically refine bins")
     bin_refiner.add_argument('-r', '--no_transform', action="store_true", default=False, help="skip data transformation (3 stoits only)")
+    bin_refiner.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
     bin_refiner.add_argument('-p', '--plot', action="store_true", default=False, help="create plots of bins after refinement")
 
     #-------------------------------------------------
@@ -153,6 +155,7 @@ if __name__ == '__main__':
     bin_expander.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing db file without prompting")
     bin_expander.add_argument('-s', '--step', default=200, type=int, help="step size for iterative recruitment")
     bin_expander.add_argument('-i', '--inclusivity', default=2.5, type=float, help="make recruitment more or less inclusive")
+    bin_expander.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
 
     #-------------------------------------------------
     # extract reads and contigs from saved
@@ -212,8 +215,10 @@ if __name__ == '__main__':
                                         help='explore and validate bins')
     bin_explorer.add_argument('dbname', help="name of the database to open")
     bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to plot (None for all)")
-    bin_explorer.add_argument('-c', '--cutoff', default=5000, help="cutoff contig size")
-    bin_explorer.add_argument('-m', '--mode', default="points", help="Exploration mode [ids, contigs, points, profile, compare, flyover, unbinned]")
+    bin_explorer.add_argument('-c', '--cutoff', default=1000, help="cutoff contig size")
+    bin_explorer.add_argument('-m', '--mode', default="points", help="Exploration mode [binpoints, binids, allcontigs, unbinnedcontigs, binnedcontigs, compare, flyover]")
+    bin_explorer.add_argument('-r', '--no_transform', action="store_true", default=False, help="skip data transformation (3 stoits only)")
+    bin_explorer.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
 
 
     #-------------------------------------------------
@@ -231,6 +236,7 @@ if __name__ == '__main__':
     bin_highlighter.add_argument('--alpha', default=0.1, type=float,  help="Opacity of background bins")
     bin_highlighter.add_argument('-i', '--invert', action="store_true", default=False, help="invert colours")
     bin_highlighter.add_argument('-s', '--show', action="store_true", default=False, help="load image in viewer only")
+    bin_highlighter.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
 
     #-------------------------------------------------
     # print bin information       
@@ -266,6 +272,7 @@ if __name__ == '__main__':
     bin_plotter.add_argument('-k', '--kmers', action="store_true", default=False, help="include kmers in figure [only used for option 'T']")    
     bin_plotter.add_argument('-t', '--tag', default="BIN", help="tag to add to output filename")
     bin_plotter.add_argument('-f', '--folder', default="", help="save plots in folder")    
+    bin_plotter.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
         
     #-------------------------------------------------
     # get and check options
