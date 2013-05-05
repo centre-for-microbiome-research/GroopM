@@ -51,16 +51,46 @@ __status__ = "Alpha"
 
 from sys import exc_info, exit, stdout as sys_stdout
 from operator import itemgetter
-
 from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
-
-from numpy import copy as np_copy, shape as np_shape, eye as np_eye, diag as np_diag, abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
+from numpy import (abs as np_abs,
+                   amax as np_amax,
+                   amin as np_amin,
+                   append as np_append,
+                   arange as np_arange,
+                   arccos as np_arccos,
+                   argmin as np_argmin,
+                   argsort as np_argsort,
+                   array as np_array,
+                   ceil as np_ceil,
+                   concatenate as np_concatenate,
+                   copy as np_copy,
+                   cos as np_cos,
+                   delete as np_delete,
+                   diag as np_diag,
+                   eye as np_eye,
+                   log10 as np_log10,
+                   max as np_max,
+                   mean as np_mean,
+                   median as np_median,
+                   min as np_min,
+                   pi as np_pi,
+                   reshape as np_reshape,
+                   seterr as np_seterr,
+                   shape as np_shape,
+                   sin as np_sin,
+                   size as np_size,
+                   sort as np_sort,
+                   sqrt as np_sqrt,
+                   std as np_std,
+                   transpose as np_transpose,
+                   where as np_where,
+                   zeros as np_zeros)
 from numpy.linalg import norm as np_norm 
 import scipy.ndimage as ndi
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import cdist, squareform
 from scipy.spatial import KDTree as kdt
 from scipy.stats import f_oneway, distributions
 
@@ -98,7 +128,7 @@ class ProfileManager:
         self.kmerSigs = np_array([])        # raw kmer signatures
         self.kmerVals = np_array([])        # PCA'd kmer sigs PC1
         self.kmerVals2 = np_array([])       # PCA'd kmer sigs PC2
-
+        self.stoitColNames = np_array([])
         self.contigNames = np_array([])
         self.contigLengths = np_array([])
         self.contigColors = np_array([])   # calculated from kmerVals
@@ -164,7 +194,8 @@ class ProfileManager:
                 if(verbose):
                     print "    Loading coverage profiles"
                 self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indices=self.indices)
-
+                self.normCoverages = np_array([np_norm(self.covProfiles[i]) for i in range(len(self.indices))])
+                
                 # work out average coverages
                 self.averageCoverages = np_array([sum(i)/self.numStoits for i in self.covProfiles])
 
@@ -204,7 +235,7 @@ class ProfileManager:
             
             if(loadBins):
                 if(verbose):
-                    print "    Loading bins"
+                    print "    Loading bin assignments"
                 self.binIds = self.dataManager.getBins(self.dbFileName, indices=self.indices)
                 if len(bids) != 0: # need to make sure we're not restricted in terms of bins
                     tmp_bids = self.getBinStats()
@@ -224,6 +255,8 @@ class ProfileManager:
                 
             if(loadLinks):
                 self.loadLinks()
+                
+            self.stoitColNames = self.getStoitColNames()
             
         except:
             print "Error loading DB:", self.dbFileName, exc_info()[0]
@@ -279,7 +312,7 @@ class ProfileManager:
         
     def getStoitColNames(self):
         """return the value of stoitColNames in the metadata tables"""
-        return self.dataManager.getStoitColNames(self.dbFileName)
+        return np_array(self.dataManager.getStoitColNames(self.dbFileName).split(","))
     
     def isClustered(self):
         """Has the data been clustered already"""
@@ -350,9 +383,100 @@ class ProfileManager:
         """Return the average coverage for this contig across all stoits"""
         return sum(self.transformedCP[rowIndex])/self.numStoits
 
+    def shuffleBAMs(self):
+        """Make the data transformation deterministic by reordering the bams"""
+        # first we should make a subset of the total data
+        # we'd like to take it down to about 1500 or so RI's
+        # but we'd like to do this in a repeatable way 
+        ideal_contig_num = 1500
+        sub_cons = range(len(self.indices))
+        while len(sub_cons) > ideal_contig_num:
+            # select every second contig when sorted by norm cov
+            cov_sorted = np_argsort(self.normCoverages[sub_cons])
+            sub_cons = np_array([sub_cons[cov_sorted[i*2]] for i in range(int(len(sub_cons)/2))])
+            
+            if len(sub_cons) > ideal_contig_num:
+                # select every second contig when sorted by mer PC1
+                mer_sorted = np_argsort(self.kmerVals[sub_cons])
+                sub_cons = np_array([sub_cons[mer_sorted[i*2]] for i in range(int(len(sub_cons)/2))])
+
+        # now that we have a subset, calculate the distance between each of the untransformed vectors
+        num_sc = len(sub_cons)
+        # log shift the coverages towards the origin
+        sub_covs = np_transpose([self.covProfiles[i]*(np_log10(self.normCoverages[i])/self.normCoverages[i]) for i in sub_cons])
+        sq_dists = cdist(sub_covs,sub_covs,'cityblock')
+        dists = squareform(sq_dists)
+        
+        # initialise a list of left, right neighbours
+        lr_dict = {}
+        for i in range(self.numStoits):
+            lr_dict[i] = []
+            
+        too_big = 10000
+        while True:
+            closest = np_argmin(dists)
+            if dists[closest] == too_big:
+                break
+            (i,j) = self.small2indices(closest, self.numStoits-1)
+            lr_dict[j].append(i)
+            lr_dict[i].append(j)
+            
+            # mark these guys as neighbours
+            if len(lr_dict[i]) == 2:
+                # no more than 2 neighbours
+                sq_dists[i,:] = too_big
+                sq_dists[:,i] = too_big
+                sq_dists[i,i] = 0.0            
+            if len(lr_dict[j]) == 2:
+                # no more than 2 neighbours
+                sq_dists[j,:] = too_big
+                sq_dists[:,j] = too_big
+                sq_dists[j,j] = 0.0            
+
+            # fix the dist matrix
+            sq_dists[j,i] = too_big
+            sq_dists[i,j] = too_big
+            dists = squareform(sq_dists)        
+            
+        # now make the ordering
+        ordering = [0, lr_dict[0][0]]
+        done = 2
+        while done < self.numStoits:
+            last = ordering[done-1]
+            if lr_dict[last][0] == ordering[done-2]:
+                ordering.append(lr_dict[last][1])
+                last = lr_dict[last][1]
+            else:
+                ordering.append(lr_dict[last][0])
+                last = lr_dict[last][0]
+            done+=1
+            
+        # reshuffle the contig order!
+        # yay for bubble sort!
+        ordering = [0,2,1,4,3]
+        ordering = np_array(ordering)
+        working = np_arange(self.numStoits)
+        for i in range(1, self.numStoits):
+            # where is this guy in the list
+            loc = list(working).index(ordering[i])
+            if loc != i:
+                # swap the columns
+                self.covProfiles[:,[i,loc]] = self.covProfiles[:,[loc,i]]
+                self.stoitColNames[[i,loc]] = self.stoitColNames[[loc,i]]
+                working[[i,loc]] = working[[loc,i]]
+
+    def small2indices(self, index, side):
+        """Return the indices of the comparative items
+        when given an index into a condensed distance matrix
+        """
+        step = 0
+        while index >= (side-step):
+            index = index - side + step 
+            step += 1
+        return (step, step + index + 1)
+
     def transformCP(self, timer, silent=False, nolog=False, min=None, max=None):
         """Do the main ransformation on the coverage profile data"""
-        timer.getTimeStamp()
         shrinkFn = np_log10
         if(nolog):
             shrinkFn = lambda x:x
@@ -364,30 +488,13 @@ class ProfileManager:
             print "    Reticulating splines"
             print "    Dimensionality reduction"
 
-        for i in range(len(self.indices)):
-            self.normCoverages = np_append(self.normCoverages, np_norm(self.covProfiles[i]))
+        unit_vectors = [(np_cos(i*2*np_pi/self.numStoits),np_sin(i*2*np_pi/self.numStoits)) for i in range(self.numStoits)]
 
-        # get the median distance from the origin
-        trim_stoits = False
-        if self.numStoits % 2 == 0:
-            # if there are an even number of stoits then take the next highest ODD number
-            trim_stoits = True
-            self.covProfiles = np_append(self.covProfiles, np_reshape([[0.0]*len(self.indices)],(len(self.indices),1)),1)  
-            self.numStoits += 1          
-
-            num_points = self.numStoits 
-            unit_vectors = [(np_cos(i*2*np_pi/num_points),np_sin(i*2*np_pi/num_points)) for i in range(num_points)]
-        else:
-            # otherwise we are cooking with gas
-            unit_vectors = [(np_cos(i*2*np_pi/self.numStoits),np_sin(i*2*np_pi/self.numStoits)) for i in range(self.numStoits)]
+        # make sure the bams are ordered consistently
+        if self.numStoits > 3:
+            self.shuffleBAMs()
               
         for i in range(len(self.indices)):
-            norm = np_norm(self.covProfiles[i])
-            #self.normCoverages = np_append(self.normCoverages, norm)
-            if(norm != 0):
-                radial = shrinkFn(norm)
-            else:
-                radial = norm
             shifted_vector = np_array([0.0,0.0])
             try:
                 flat_vector = (self.covProfiles[i] / sum(self.covProfiles[i]))
@@ -398,16 +505,17 @@ class ProfileManager:
                 shifted_vector[0] += unit_vectors[j][0] * flat_vector[j]
                 shifted_vector[1] += unit_vectors[j][1] * flat_vector[j]
 
-
             # log scale it towards the centre
             scaling_vector = shifted_vector * self.scaleFactor
             sv_size = np_norm(scaling_vector)
-            if(sv_size > 1):
+            if sv_size > 1:
                 shifted_vector /= shrinkFn(sv_size)
 
             self.transformedCP[i,0] = shifted_vector[0]
             self.transformedCP[i,1] = shifted_vector[1]
-            self.transformedCP[i,2] = radial
+            # should always work cause we nuked
+            # all 0 coverage vecs in parse
+            self.transformedCP[i,2] = shrinkFn(self.normCoverages[i])
 
         # finally scale the matrix to make it equal in all dimensions
         if(min is None):                
@@ -424,14 +532,10 @@ class ProfileManager:
         XYcorners = np_reshape([i for i in np_array(unit_vectors)],
                                (self.numStoits, 2))
 
-        if trim_stoits:
-            # put things back together again...
-            self.numStoits -= 1
-            self.covProfiles = self.covProfiles[:,:self.numStoits]
-        
         for i in range(self.numStoits):
             self.corners[i,0] = XYcorners[i,0]
             self.corners[i,1] = XYcorners[i,1]
+
         # shift the corners to match the space
         self.corners -= min
         self.corners /= max
@@ -452,13 +556,12 @@ class ProfileManager:
     
     def plotStoitNames(self, ax):
         """Plot stoit names on an existing axes"""
-        stoit_names = self.getStoitColNames().split(",")
         outer_index = 0
         for corner in self.corners:
             ax.text(corner[0], 
                     corner[1], 
                     corner[2], 
-                    stoit_names[outer_index], 
+                    self.stoitColNames[outer_index], 
                     color='#000000'
                     )
             outer_index += 1

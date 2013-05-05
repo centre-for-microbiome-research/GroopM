@@ -59,8 +59,45 @@ from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
-
-from numpy import arange as numpy_arange, copy as np_copy, arange as np_arange, ravel as np_ravel, ones as np_ones, eye as np_eye, shape as np_shape, around as np_around, argmax as np_argmax, arccos as np_cos, dot as np_dot, sum as np_sum, abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
+from numpy import (abs as np_abs,
+                   amax as np_amax,
+                   amin as np_amin,
+                   append as np_append,
+                   arange as np_arange,
+                   arange as numpy_arange,
+                   arccos as np_arccos,
+                   arccos as np_cos,
+                   argmax as np_argmax,
+                   argmin as np_argmin,
+                   argsort as np_argsort,
+                   around as np_around,
+                   array as np_array,
+                   ceil as np_ceil,
+                   concatenate as np_concatenate,
+                   copy as np_copy,
+                   cos as np_cos,
+                   delete as np_delete,
+                   dot as np_dot,
+                   eye as np_eye,
+                   log10 as np_log10,
+                   max as np_max,
+                   mean as np_mean,
+                   median as np_median,
+                   min as np_min,
+                   ones as np_ones,
+                   pi as np_pi,
+                   ravel as np_ravel,
+                   reshape as np_reshape,
+                   seterr as np_seterr,
+                   shape as np_shape,
+                   sin as np_sin,
+                   size as np_size,
+                   sort as np_sort,
+                   sqrt as np_sqrt,
+                   std as np_std,
+                   sum as np_sum,
+                   where as np_where,
+                   zeros as np_zeros)
 from numpy.linalg import norm as np_norm 
 from numpy.random import shuffle as shuffle
 import scipy.ndimage as ndi
@@ -159,10 +196,10 @@ class BinManager:
                     print "Number of stoits != 3. You need to transform"
                     self.PM.transformCP(timer, silent=silent, min=min, max=max)
             if not silent:
-                print "    Making bins"
+                print "    Making bin objects"
             self.makeBins(self.getBinMembers())
             if not silent:
-                print "    Loaded %d bins" % len(self.bins)
+                print "    Loaded %d bins from database" % len(self.bins)
         if not silent:
             print "    %s" % timer.getTimeStamp()
             sys_stdout.flush()

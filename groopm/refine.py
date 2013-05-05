@@ -54,18 +54,60 @@ from Queue import Queue
 from operator import itemgetter
 import readline
 
+from PIL import Image
+import rainbow
+
 from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
-
-from numpy import arange as numpy_arange, copy as np_copy, arange as np_arange, ravel as np_ravel, ones as np_ones, eye as np_eye, shape as np_shape, around as np_around, argmax as np_argmax, arccos as np_cos, dot as np_dot, sum as np_sum, abs as np_abs, amax as np_amax, amin as np_amin, append as np_append, arccos as np_arccos, argmin as np_argmin, argsort as np_argsort, array as np_array, ceil as np_ceil, concatenate as np_concatenate, delete as np_delete, log10 as np_log10, max as np_max, mean as np_mean, median as np_median, min as np_min, pi as np_pi, reshape as np_reshape, seterr as np_seterr, size as np_size, sort as np_sort, sqrt as np_sqrt, std as np_std, where as np_where, zeros as np_zeros, cos as np_cos, sin as np_sin
+from numpy import (abs as np_abs,
+                   amax as np_amax,
+                   amin as np_amin,
+                   append as np_append,
+                   arange as np_arange,
+                   arccos as np_arccos,
+                   arccos as np_cos,
+                   argmax as np_argmax,
+                   argmin as np_argmin,
+                   argsort as np_argsort,
+                   around as np_around,
+                   array as np_array,
+                   bincount as np_bincount,
+                   ceil as np_ceil,
+                   concatenate as np_concatenate,
+                   copy as np_copy,
+                   cos as np_cos,
+                   delete as np_delete,
+                   dot as np_dot,
+                   eye as np_eye,
+                   max as np_max,
+                   mean as np_mean,
+                   median as np_median,
+                   min as np_min,
+                   ones as np_ones,
+                   ones_like as np_ones_like,
+                   pi as np_pi,
+                   ravel as np_ravel,
+                   reshape as np_reshape,
+                   seterr as np_seterr,
+                   shape as np_shape,
+                   sin as np_sin,
+                   size as np_size,
+                   sort as np_sort,
+                   sqrt as np_sqrt,
+                   std as np_std,
+                   sum as np_sum,
+                   where as np_where,
+                   zeros as np_zeros) 
 from numpy.linalg import norm as np_norm 
-from numpy.random import shuffle as shuffle, randint as randint
+from numpy.random import (randint as randint,
+                          random as random,
+                          shuffle as shuffle)
 
 from scipy.spatial import KDTree as kdt
 from scipy.cluster.vq import kmeans,vq,whiten,kmeans2
-from scipy.spatial.distance import cdist, pdist, squareform
+from scipy.spatial.distance import cdist, squareform
 
 # GroopM imports
 from binManager import BinManager
@@ -74,13 +116,16 @@ from ellipsoid import EllipsoidTool
 from PCA import PCA, Center
 import groopmTimekeeper as gtime
 import groopmExceptions as ge
-
+from som import SOM
 np_seterr(all='raise')     
 
 ###############################################################################
 ###############################################################################
 ###############################################################################
 ###############################################################################
+
+# dimension of our SOM
+SOMDIM = 4 # trans cov  + 1st pca kmers
 
 class RefineEngine:
     """Workhorse wrapper for bin refinement"""
@@ -170,7 +215,7 @@ class RefineEngine:
             user_option = self.promptOnPlotterRefine()
             
             if(user_option == 'Q'):
-                print 'Hasta luego mi amigo'
+                print '\nBye!'
                 return
 
             elif(user_option == 'E'):
@@ -351,7 +396,7 @@ class RefineEngine:
                        mergeSimilarBins=True,
                        removeDuds=True,
                        nukeOutliers=True,
-                       shuffleRefine=False,
+                       shuffleRefine=True,
                        verbose=False,
                        plotAfterOB=False,
                        makeGraph=False):
@@ -404,7 +449,7 @@ class RefineEngine:
             sys_stdout.flush()
 
         if shuffleRefine:
-            nuked = self.shuffleRefineConitgs()
+            nuked = self.shuffleRefineConitgs(timer)
             print "    %s" % timer.getTimeStamp()
             sys_stdout.flush()
             if makeGraph:
@@ -734,7 +779,7 @@ class RefineEngine:
             closest = np_argmin(dists)
             if dists[closest] == too_big:
                 break
-            (i,j) = self.small2indices(closest, side-1)
+            (i,j) = self.PM.small2indices(closest, side-1)
             bid1 = bidList[i]
             bid2 = bidList[j]
             should_merge = False                
@@ -818,35 +863,234 @@ class RefineEngine:
         #self.BM.plotMultipleBins([[h] for h in bidList])
         return merged_bids
 
-    def shuffleRefineConitgs(self):
-        """refine bins by shuffling contigs around"""
-        print "    Start shuffle refinement"
-        start_num_bins = len(self.BM.bins)
+    def buildSOM(self,
+                 timer,
+                 maskBoundaries=False,
+                 defineBins=False,
+                 retrain=False,
+                 render=False,
+                 silent=False,
+                 animateFilePrefix=""):
+        """Build, train and return a SOM for the given bids"""
         bids = self.BM.getBids()
         
-        # assume bin distributions have been made!
-        # get an array of bin centroids
-        bin_centroids = np_array([])
+        som_side = np_max([100, len(bids)*5])
+        # produce the actual training data
+        # this is the bin centroid values
+        training_data = np_zeros((len(bids),SOMDIM))
+        i = 0
         for bid in bids:
-           bin_centroids = np_append(bin_centroids,
-                                     np_mean([self.PM.covProfiles[row_index] for row_index in self.BM.bins[bid].rowIndices], axis=0))
-        print np_shape(bin_centroids)
-        print (len(self.BM.bins), self.PM.numStoits)
-        bin_centroids = np_reshape(bin_centroids, (len(self.BM.bins), self.PM.numStoits))
-        
+            training_data[i,:-1] = np_mean([self.PM.transformedCP[row_index] for row_index in self.BM.bins[bid].rowIndices], axis=0)
+            training_data[i,-1] = np_mean([self.PM.kmerVals[row_index] for row_index in self.BM.bins[bid].rowIndices], axis=0)
+            i += 1
+
+        # normalise the data so it fits between 0 and 1
+        # but make sure that the max global CP and mer values are
+        # used to scale
+        minz = np_zeros((SOMDIM))
+        minz[:-1] = np_min(self.PM.transformedCP, axis=0)
+        minz[-1] = np_min(self.PM.kmerVals, axis=0)
+
+        maxz = np_zeros((SOMDIM))
+        maxz[:-1] = np_max(self.PM.transformedCP, axis=0)
+        maxz[-1] = np_max(self.PM.kmerVals, axis=0)
+
+        maxz -= minz
+        training_data -= minz
+        training_data /= maxz
+
+        # during training, use the max and min vals of
+        # the actual training data
+        tminz = np_min(training_data, axis=0)
+        tmaxz = np_max(training_data, axis=0)
+
+        # set training in motion
+        SS = SOM(som_side, SOMDIM, lc=tminz, uc=tmaxz)
+        SS.train(training_data,
+                 influenceRate=0.15,
+                 iterations=800,
+                 silent=silent,
+                 weightImgFileNamePrefix=animateFilePrefix)
+        print "    --"
+        print "    %s" % timer.getTimeStamp()
+        if render:
+            SS.renderWeights("S1")
+
+        if maskBoundaries:
+            if not silent:
+                print "    Creating boundary mask"
+            # make a boundary mask
+            if render:
+                SS.makeBoundaryMask(plotMaskFile="S2.png")
+            else:
+                SS.makeBoundaryMask()
+            SS.maskBoundaries()
+        if defineBins:
+            # assign regions on som surface to specific bins
+            if not silent:
+                print "    Defining bin regions"
+            SS.defineBinRegions(bids, training_data, render=render)        
+            if render:
+                SS.renderBoundaryMask(plotMaskFile="S5.png")
+        if maskBoundaries:
+            # mask out regions where we don't like it
+            if not silent:
+                print "    Masking SOM classifier"
+            SS.maskBoundaries(addNoise=False, doFlat=True)
+        if render:
+            SS.renderWeights("S6")
+
+        print "    %s" % timer.getTimeStamp()
+        if retrain:
+            # retrain bin regions using contigs from the bin
+            if not silent:
+                print "    Retraining SOM classifier"
+            for i in range(len(bids)):
+                bid = bids[i]
+                sys_stdout.write("\r    Retraining on bin: %d (%d of %d)" % (bid, i+1, len(bids)))
+                sys_stdout.flush()                
+                bin = self.BM.bins[bid]
+                
+                # make a training set of just this node's contigs
+                block = np_zeros((bin.binSize,SOMDIM))
+                block[:,:-1] = self.PM.transformedCP[bin.rowIndices]
+                block[:,-1] = self.PM.kmerVals[bin.rowIndices]
+                
+                # global normalisation
+                block -= minz
+                block /= maxz
+                
+                # mask out all other bins
+                bin_mask_points = SS.makeBinMask(training_data[i])
+                bin_mask = np_ones_like(SS.boundaryMask)
+                for (r,c) in bin_mask_points.keys():
+                    bin_mask[r,c] = 0      
+                weights = np_copy(SS.weights.nodes)
+                SS.maskBoundaries(weights=weights, mask=bin_mask)
+                
+                # train on the set of dummy weights
+                weights = SS.train(block,
+                                   weights=weights,
+                                   iterations=50,
+                                   mask=bin_mask_points,
+                                   radius=som_side/5,
+                                   influenceRate=0.1)
+
+                # update the torusMesh values appropriately
+                for (r,c) in bin_mask_points.keys():
+                    SS.weights.nodes[r,c] = weights[r,c]
+                SS.weights.fixFlatNodes()
+                
+                if render:
+                    SS.renderWeights("S_%d"%bid)
+            print "    --"
+        if render:
+            SS.renderWeights("S7")
+
+        return (SS, minz, maxz, som_side)
+
+    def shuffleRefineConitgs(self, timer, inclusivity=2):
+        """refine bins by shuffling contigs around"""
+        print "    Start shuffle refinement"
+
+        # first, build a SOM
+        bids = self.BM.getBids()
+        bin_c_lengths = {}      # bid => [len,len,...]
         for bid in bids:
-            print "===================="
-            print bid
-            bin = self.BM.bins[bid]
-            for row_index in bin.rowIndices:
-                i = 0
-                for cent in bin_centroids:
-                    #print bids[i], row_index, self.BM.getAngleBetweenVectors(self.PM.covProfiles[row_index], cent)
-                    i += 1
-                print "---"
+            bin_c_lengths[bid] = [self.PM.contigLengths[row_index] for row_index in self.BM.bins[bid].rowIndices]
+
+        start_num_bins = len(bids)
+        (SS, minz, maxz, side) = self.buildSOM(timer,
+                                               maskBoundaries=True,
+                                               defineBins=True,
+                                               retrain=True)
+
+        print "    %s" % timer.getTimeStamp()
         
-    
-        print "    Removed %d cores leaving %d cores" % (start_num_bins-len(self.BM.bins), len(self.BM.bins))    
+        # now do the shuffle refinement, keep an eye out for
+        new_assignments = {}
+        wrongs = {}
+        news = {}
+        rights = {}
+        
+        # we load all contigs into the block 
+        block = np_zeros((len(self.PM.transformedCP),SOMDIM))
+        block[:,:-1] = self.PM.transformedCP
+        block[:,-1] = self.PM.kmerVals
+        # apply sane normalisation
+        block -= minz
+        block /= maxz
+
+        for i in range(len(self.PM.indices)):
+            putative_bid = SS.classifyContig(block[i])
+            if self.BM.bins[putative_bid].binSize > 1:
+                # stats f**k up on single contig bins, soz...
+                length_wrong = self.GT.isMaxOutlier(self.PM.contigLengths[i],
+                                                    bin_c_lengths[putative_bid]
+                                                    )
+                if not length_wrong:
+                    # fits length cutoff
+                    (covZ,merZ) = self.BM.scoreContig(i, putative_bid)
+                    if covZ <= inclusivity and merZ <= inclusivity:
+                        # we can recruit
+                        try:
+                            new_assignments[putative_bid].append(i)
+                        except KeyError:
+                            new_assignments[putative_bid] = [i]
+                        old_bid = self.PM.binIds[i]
+                        if old_bid != 0: 
+                            if putative_bid != old_bid:
+                                try:
+                                    wrongs[old_bid] += 1
+                                except KeyError:
+                                    wrongs[old_bid] = 1
+                            else:
+                                try:
+                                    rights[putative_bid] += 1
+                                except KeyError:
+                                    rights[putative_bid] = 1
+                                
+                        else:
+                            try:
+                                news[putative_bid] += 1
+                            except KeyError:
+                                news[putative_bid] = 1
+                            
+        for bid in bids:
+            print bid, self.BM.bins[bid].binSize,
+            if bid in wrongs:
+                print wrongs[bid],
+            else:
+                print "0",
+            if bid in rights:
+                print rights[bid],
+            else:
+                print "0",
+            if bid in news:
+                print news[bid]
+            else:
+                print "0"
+        
+        # now get ready for saving.
+        # first, we nuke all the bins
+        self.BM.deleteBins(bids, force=True, freeBinnedRowIndices=False, saveBins=False)
+
+        # these are profile manager variables. We will overwrite
+        # these here so that everything stays in sync..
+        self.PM.binIds = np_zeros((len(self.PM.indices))) # list of bin IDs
+        self.PM.validBinIds = {}              # { bid : numMembers }
+        self.PM.binnedRowIndices = {}         # dictionary of those indices which belong to some bin
+        self.PM.restrictedRowIndices = {}     # dictionary of those indices which can not be binned yet
+
+        # now we rebuild all the bins but with the new assignments
+        for bid in new_assignments:
+            row_indices = np_array(new_assignments[bid])
+            new_bin = self.BM.makeNewBin(rowIndices=row_indices, bid=bid)
+            self.PM.validBinIds[bid] = len(row_indices)
+            for row_index in row_indices:
+                self.PM.binIds[row_index] = bid
+                self.PM.binnedRowIndices[row_index] = True
+                
         return []    
 
     def removeDuds(self, ms=20, mv=1000000, verbose=False):
@@ -871,16 +1115,10 @@ class RefineEngine:
 #------------------------------------------------------------------------------
 # UTILITIES
 
-    def small2indices(self, index, side):
-        """Return the indices of the comparative items
-        when given an index into a condensed distance matrix
-        """
-        step = 0
-        while index >= (side-step):
-            index = index - side + step 
-            step += 1
-        return (step, step + index + 1)
-    
+    def findBestBid(self, row_index):
+        """Find the bid which is the best match for this row index"""
+        pass
+
     def rePCA(self,
               bidList,
               mode='mer',
@@ -1102,7 +1340,7 @@ class RefineEngine:
         test_T_score = C_funct(FRI,RRI,merPCAs,merAlphas) / ( F_funct(FRI,FRI,merPCAs,merAlphas) + R_funct(RRI,RRI,merPCAs,merAlphas))            
 
         T_scores = []
-        index_array = numpy_arange(x_size)
+        index_array = np_arange(x_size)
         fsi = np_arange(front_sample_size)
         rsi = np_arange(front_sample_size, front_sample_size+rear_sample_size)
         for i in range(null_loops):
@@ -1324,7 +1562,7 @@ class RefineEngine:
         test_T_score = C_funct(FRI,RRI,covAlphas) / ( F_funct(FRI,FRI,covAlphas) + R_funct(RRI,RRI,covAlphas))            
         
         T_scores = []
-        index_array = numpy_arange(x_size)
+        index_array = np_arange(x_size)
         fsi = np_arange(front_sample_size)
         rsi = np_arange(front_sample_size, front_sample_size+rear_sample_size)
         for i in range(null_loops):
@@ -1504,92 +1742,10 @@ class RefineEngine:
         inters /= (lr1*lr2)
         return inters/(R1_intras + R2_intras)
 
-    def makeUpperLower(self, vals, tol, decimals=0):
-        """ make upper and lower cutoffs"""
-        mean = np_mean(vals)
-        try:
-            stdev = np_std(vals)
-        except FloatingPointError:
-            stdev = 0
-        if decimals == 0:
-            return (mean + tol*stdev, mean - tol*stdev)
-        else:
-            return (np_around(mean + tol*stdev,decimals=decimals),
-                    np_around(mean - tol*stdev,decimals=decimals))
-
-    def getClosestBID(self,
-                      searchIndex,
-                      searchTree,
-                      tdm,
-                      gt2riLookup,
-                      neighbourList={},
-                      k=101,
-                      verbose=False
-                      ):
-        """Find the bin ID which would best describe the placement of the contig
-        
-        The neighbourlist is a hash of type:
-        
-        row_index : [neighbour, neighbour, neighbour, ...]
-        
-        This is built on the fly and added to or updated as need be
-        """
-        # find the k nearest neighbours for the query contig
-        if k < 21:
-            k = 21
-        if k > 101:
-            k = 101
-        if k > len(tdm):
-            k = len(tdm)
-
-        try:
-            t_list = neighbourList[searchIndex]
-            if len(t_list) != k:
-                # must have made a change, we'll fix it here
-                t_list = searchTree.query(tdm[searchIndex],k=k)[1]
-                neighbourList[searchIndex] = t_list
-        except KeyError:
-            # first time, we need to do the search
-            t_list = searchTree.query(tdm[searchIndex],k=k)[1]
-            neighbourList[searchIndex] = t_list
-            
-        # calculate the distribution of neighbouring bins
-        refined_t_list = {}
-        for index in t_list:
-            row_index = gt2riLookup[index]
-            try:
-                cbid = self.PM.binIds[row_index]
-                if cbid != 0: # don't want these guys
-                    try:
-                        refined_t_list[cbid] += 1
-                    except KeyError:
-                        refined_t_list[cbid] = 1
-            except KeyError:
-                pass
-
-        if verbose:
-            print k, refined_t_list,
-            
-        # work out the most prominent BID
-        max_bid = 0
-        max_count = 0
-        for cbid in refined_t_list:
-            if refined_t_list[cbid] > max_count:
-                max_count = refined_t_list[cbid]
-                max_bid = cbid
-        if verbose:
-            print self.PM.contigNames[searchIndex], "**",max_bid,max_count,"**"                        
-            for cbid in refined_t_list:
-                print "[", cbid, ",", refined_t_list[cbid], "]",
-            print
-        # we're done!
-        return (max_bid, neighbourList, refined_t_list)
-
-
 #------------------------------------------------------------------------------
 # RECRUITMENT
 
-    def recruitWrapper(self, timer, inclusivity=2, step=200, saveBins=False):
+    def recruitWrapper(self, timer, inclusivity=2, step=200, nukeAll=False, saveBins=False):
         """Recuit more contigs to the bins"""
         print "Recruiting unbinned contigs"
         # make a list of all the cov and kmer vals
@@ -1598,24 +1754,11 @@ class RefineEngine:
         total_expanded = 0
         total_binned = 0
         total_unbinned = 0
+        bin_c_lengths = {}
         total_contigs = len(self.PM.indices)
         shortest_binned = 1000000000          # we need to know this
         shortest_unbinned = 1000000000
         
-        # we need to get a list of bin centroids
-        (bin_centroid_points,
-         bin_centroid_colors,
-         bin_centroid_kvals,
-         bids) = self.BM.findCoreCentres(getKVals=True)
-        # centroids
-        tdm_centroid = np_append(bin_centroid_points,
-                                 1000*np_reshape(bin_centroid_kvals,(len(bin_centroid_kvals),1)),
-                                 1)
-        search_tree = kdt(tdm_centroid)
-        # contigs
-        tdm = np_append(self.PM.transformedCP,
-                        1000*np_reshape(self.PM.kmerVals,(len(self.PM.kmerVals),1)),
-                        1)
         # for stats, work out number binned and unbinned and relative lengths
         unbinned = {}
         for row_index in range(len(self.PM.indices)):
@@ -1648,41 +1791,68 @@ class RefineEngine:
         print "    BEGIN: %0.4f" % perc_binned +"%"+" of %d requested contigs in bins" % total_contigs
         print "    %d contigs unbinned" % total_unbinned
         
-        # go through the steps we decided on
-        for cutoff in steps:
-            print "    Recruiting contigs above: %d" % cutoff
-            newly_binned = [0]
-            this_step_binned = 0 
-            while len(newly_binned) > 0:
-                newly_binned = []
-                affected_bids = []
-                for row_index in unbinned:
-                    if unbinned[row_index] >= cutoff:
-                        # meets our criteria
-                        putative_bid = int(bids[search_tree.query(tdm[row_index])[1]])
-                        if self.BM.bins[putative_bid].binSize > 1:
-                            (covZ,merZ) = self.BM.scoreContig(row_index, putative_bid)
-                            if covZ <= inclusivity and merZ <= inclusivity:
-                                # we can recruit
-                                self.BM.bins[putative_bid].rowIndices = np_append(self.BM.bins[putative_bid].rowIndices,
-                                                                               row_index
-                                                                            ) 
-                                affected_bids.append(putative_bid)
-                                newly_binned.append(row_index)
-                                this_step_binned += 1
-                                total_binned += 1
-                                total_expanded += 1
-    
-                # remove any binned contigs from the unbinned list
-                for row_index in newly_binned:
-                    del unbinned[row_index]
+        # build the classifier on all the existing bins
+        (SS, minz, maxz, side) = self.buildSOM(timer,
+                                               maskBoundaries=True,
+                                               defineBins=True,
+                                               retrain=True)
 
-                # remake bin stats
-                for bid in affected_bids:
-                    self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
-                                               self.PM.averageCoverages,
-                                               self.PM.kmerVals,
-                                               self.PM.contigLengths)      
+        print "    %s" % timer.getTimeStamp()
+                            
+        # go through the steps we decided on
+        affected_bids = list(np_copy(self.BM.getBids()))
+        for cutoff in steps:
+            # work out the bin length, mer, etc stats
+            for bid in affected_bids:
+                bin_c_lengths[bid] = [self.PM.contigLengths[row_index] for row_index in self.BM.bins[bid].rowIndices]
+                self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
+                                           self.PM.averageCoverages,
+                                           self.PM.kmerVals,
+                                           self.PM.contigLengths)      
+            affected_bids = []
+            this_step_binned = 0
+            new_binned = []
+
+            # load the unbinned guys into a block
+            unbinned_rows = []
+            unbinned_lens = []
+            for row_index in unbinned:
+                if unbinned[row_index] >= cutoff:
+                    unbinned_rows.append(row_index)
+                    unbinned_lens.append(unbinned[row_index])
+            block = np_zeros((len(unbinned_rows),SOMDIM))
+            block[:,:-1] = self.PM.transformedCP[unbinned_rows]
+            block[:,-1] = self.PM.kmerVals[unbinned_rows]
+            # apply sane normalisation
+            block -= minz
+            block /= maxz
+
+            print "    Recruiting contigs above: %d (%d contigs)" % (cutoff, len(unbinned_rows))
+
+            for i in range(len(unbinned_rows)):
+                putative_bid = SS.classifyContig(block[i])
+                if self.BM.bins[putative_bid].binSize > 1:
+                    # stats f**k up on single contig bins, soz...
+                    length_wrong = self.GT.isMaxOutlier(unbinned_lens[i],
+                                                        bin_c_lengths[putative_bid]
+                                                        )
+                    if not length_wrong:
+                        # fits length cutoff
+                        (covZ,merZ) = self.BM.scoreContig(unbinned_rows[i], putative_bid)
+                        if covZ <= inclusivity and merZ <= inclusivity:
+                            # we can recruit
+                            self.BM.bins[putative_bid].rowIndices = np_append(self.BM.bins[putative_bid].rowIndices,
+                                                                              unbinned_rows[i]
+                                                                              ) 
+                            affected_bids.append(putative_bid)
+                            this_step_binned += 1
+                            total_binned += 1
+                            total_expanded += 1
+                            new_binned.append(unbinned_rows[i])
+                
+            # need only check this guy once
+            for row_index in new_binned:
+                del unbinned[row_index]
 
             print "    Recruited: %d contigs" % this_step_binned
             print "    %s" % timer.getTimeStamp()
@@ -1695,8 +1865,10 @@ class RefineEngine:
         print "    END: %0.4f" % perc_binned +"%"+" of %d requested contigs in bins" % total_contigs
         print "    %s" % timer.getTimeStamp()
         sys_stdout.flush()        
+        
         # now save
         if(saveBins):
+            print "Saving bins"
             self.BM.saveBins()
             
 #------------------------------------------------------------------------------

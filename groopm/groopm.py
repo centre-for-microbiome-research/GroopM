@@ -130,7 +130,8 @@ class GroopMOptionsParser():
             RE = refine.RefineEngine(timer,
                                      dbFileName=options.dbname,
                                      transform=transform,
-                                     bids=bids)
+                                     bids=bids,
+                                     loadContigNames = True)
             if options.plot:
                 pfx="REFINED"
             else:
@@ -244,7 +245,8 @@ class GroopMOptionsParser():
                               options.filetype,
                               options.dpi,
                               options.alpha,
-                              options.invert)
+                              options.invert,
+                              options.show)
             
         elif(options.subparser_name == 'print'):
             BM = binManager.BinManager(dbFileName=options.dbname)
