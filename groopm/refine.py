@@ -136,12 +136,13 @@ class RefineEngine:
                  transform=True,
                  getUnbinned=False,
                  loadContigNames=False,
-                 bids=[]
+                 bids=[],
+                 squish=False
                  ):
         # worker classes
         if BM is None:
             # make our own ones from scratch
-            self.BM = BinManager(dbFileName=dbFileName)
+            self.BM = BinManager(dbFileName=dbFileName, squish=squish)
             self.BM.loadBins(timer,
                              bids=bids,
                              makeBins=True,
@@ -157,6 +158,7 @@ class RefineEngine:
         
         # make pretty ellipses for fun and profit
         self.ET = EllipsoidTool()
+        
         # pay attention to contig lengths when including in bins use grubbs test
         self.GT = GrubbsTester()
         

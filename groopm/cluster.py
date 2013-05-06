@@ -76,9 +76,17 @@ np_seterr(all='raise')
 
 class ClusterEngine:
     """Top level interface for clustering contigs"""
-    def __init__(self, dbFileName, plot=False, finalPlot=False, force=False, numImgMaps=1, minSize=5, minVol=1000000):
+    def __init__(self,
+                 dbFileName,
+                 plot=False,
+                 finalPlot=False,
+                 force=False,
+                 numImgMaps=1,
+                 minSize=5,
+                 minVol=1000000,
+                 squish=False):
         # worker classes
-        self.PM = ProfileManager(dbFileName) # store our data
+        self.PM = ProfileManager(dbFileName, squish=squish) # store our data
         self.BM = BinManager(pm=self.PM, minSize=minSize, minVol=minVol)
     
         # heat maps

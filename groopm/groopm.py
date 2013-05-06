@@ -106,8 +106,8 @@ class GroopMOptionsParser():
                                        finalPlot=options.plot,
                                        plot=options.multiplot,
                                        minSize=options.size,
-                                       minVol=options.bp
-                                       )
+                                       minVol=options.bp,
+                                       squish=options.squish)
             if options.graphfile is None:
                 gf = ""
             else:
@@ -131,7 +131,8 @@ class GroopMOptionsParser():
                                      dbFileName=options.dbname,
                                      transform=transform,
                                      bids=bids,
-                                     loadContigNames = True)
+                                     loadContigNames=True,
+                                     squish=options.squish)
             if options.plot:
                 pfx="REFINED"
             else:
@@ -151,8 +152,8 @@ class GroopMOptionsParser():
             RE = refine.RefineEngine(timer,
                                      dbFileName=options.dbname,
                                      getUnbinned=True,
-                                     loadContigNames=False
-                                     )
+                                     loadContigNames=False,
+                                     squish=options.squish)
 
             RE.recruitWrapper(timer,
                               inclusivity=options.inclusivity,
@@ -210,24 +211,28 @@ class GroopMOptionsParser():
             print "*******************************************************************************"
             print " [[GroopM]] Running in bin '%s' explorer mode..." % options.mode
             print "*******************************************************************************"
+            transform=True^options.no_transform
             bids = []
             if options.bids is not None:
                 bids = options.bids
-            BE = groopmUtils.BinExplorer(options.dbname, bids=bids)
-            if(options.mode == 'points'):
+            BE = groopmUtils.BinExplorer(options.dbname,
+                                         bids=bids,
+                                         transform=transform,
+                                         squish=options.squish)
+            if(options.mode == 'binpoints'):
                 BE.plotPoints(timer)
-            elif(options.mode == 'contigs'):
-                BE.plotContigs(timer)
-            elif(options.mode == 'ids'):
+            elif(options.mode == 'binids'):
                 BE.plotIds(timer)
+            elif(options.mode == 'allcontigs'):
+                BE.plotContigs(timer, coreCut=options.cutoff, all=True)
+            elif(options.mode == 'unbinnedcontigs'):
+                BE.plotUnbinned(timer, coreCut=options.cutoff)
+            elif(options.mode == 'binnedcontigs'):
+                BE.plotContigs(timer, coreCut=options.cutoff)
             elif(options.mode == 'flyover'):
                 BE.plotFlyOver(timer)
-            elif(options.mode == 'profile'):
-                BE.plotBinProfiles(timer)
             elif(options.mode == 'compare'):
                 BE.plotSideBySide(timer, coreCut=options.cutoff)
-            elif(options.mode == 'unbinned'):
-                BE.plotUnbinned(timer, coreCut=options.cutoff)
             else:
                 print "**Error: unknown mode:",options.mode
 
