@@ -234,16 +234,22 @@ class SOM:
         
         if not silent:
             print "    Start SOM training. Side: %d Max: %d iterations" % (self.side, iterations)
+        
         if radius == 0.0:
             radius = self.radius
-        
+
         # we can use a dummy set of weights, or the *true* weights
         if weights is None:
             replace_weights = True
             weights = self.weights.nodes
             flat_nodes = self.weights.flatNodes
+            rows = self.side
+            cols = self.side
         else:
-            flat_nodes = np.reshape(weights, np.shape(self.weights.flatNodes))
+            shape = np.shape(weights)
+            rows = shape[0]
+            cols = shape[1]
+            flat_nodes = weights.reshape((rows*cols, self.dimension))
             replace_weights = False
             
         # over time we'll shrink the radius of nodes which
@@ -325,18 +331,18 @@ class SOM:
                 index_array = rand_index_array[:cut_off]
 #--------
 # Make worksheet
-            worksheet = np.zeros(self.dimension*self.side*self.side*9).reshape((self.side*3,
-                                                                                self.side*3,
-                                                                                self.dimension))
-            worksheet[0:self.side,0:self.side] = weights
-            worksheet[0:self.side,self.side:self.side*2] = weights
-            worksheet[0:self.side,self.side*2:self.side*3] = weights
-            worksheet[self.side:self.side*2,0:self.side] = weights
-            worksheet[self.side:self.side*2,self.side:self.side*2] = weights
-            worksheet[self.side:self.side*2,self.side*2:self.side*3] = weights
-            worksheet[self.side*2:self.side*3,0:self.side] = weights
-            worksheet[self.side*2:self.side*3,self.side:self.side*2] = weights
-            worksheet[self.side*2:self.side*3,self.side*2:self.side*3] = weights
+            worksheet = np.zeros(self.dimension*rows*cols*9).reshape((rows*3,
+                                                                      cols*3,
+                                                                      self.dimension))
+            worksheet[0:rows,0:cols] = weights
+            worksheet[0:rows,cols:cols*2] = weights
+            worksheet[0:rows,cols*2:cols*3] = weights
+            worksheet[rows:rows*2,0:cols] = weights
+            worksheet[rows:rows*2,cols:cols*2] = weights
+            worksheet[rows:rows*2,cols*2:cols*3] = weights
+            worksheet[rows*2:rows*3,0:cols] = weights
+            worksheet[rows*2:rows*3,cols:cols*2] = weights
+            worksheet[rows*2:rows*3,cols*2:cols*3] = weights
 
             # make a set of "delta nodes"
             # these contain the changes to the set of grid nodes
@@ -348,35 +354,36 @@ class SOM:
                 # find the best match between then training vector and the
                 # current grid, inlined for greater speed
                 loc = np.argmin(cdist(flat_nodes, [trainVector[j]]))
-                row = int(loc/self.side)
-                col = loc-(row*self.side)
+                row = int(loc/cols)
+                col = loc-(row*cols)
                 
                 # row col represent the center of the stamp
-                weights_patch = worksheet[self.side+row-stamp_radius:self.side+row+stamp_radius+1,
-                                          self.side+col-stamp_radius:self.side+col+stamp_radius+1]
+                weights_patch = worksheet[rows+row-stamp_radius:rows+row+stamp_radius+1,
+                                          cols+col-stamp_radius:cols+col+stamp_radius+1]
                 weights_patch = -1*(weights_patch - trainVector[j])
+                #print row, col, rows, cols, stamp_radius, np.shape(weights_patch), np.shape(weights_patch[:,:,0]), np.shape(stamp), np.shape(deltasheet[rows+row-stamp_radius:rows+row+stamp_radius+1,cols+col-stamp_radius:cols+col+stamp_radius+1]) 
                 weights_patch[:,:,0] *= stamp
                 weights_patch[:,:,1] *= stamp
                 weights_patch[:,:,2] *= stamp
                 weights_patch[:,:,3] *= stamp
 
-                deltasheet[self.side+row-stamp_radius:self.side+row+stamp_radius+1,
-                           self.side+col-stamp_radius:self.side+col+stamp_radius+1] += weights_patch
+                deltasheet[rows+row-stamp_radius:rows+row+stamp_radius+1,
+                           cols+col-stamp_radius:cols+col+stamp_radius+1] += weights_patch
                            
             # now fold the deltas and update the weights
-            deltasheet[:,self.side:2*self.side] += deltasheet[:,0:self.side] 
-            deltasheet[:,self.side:2*self.side] += deltasheet[:,2*self.side:3*self.side] 
-            deltasheet[self.side:2*self.side,self.side:2*self.side] += deltasheet[0:self.side,self.side:2*self.side]                 
-            deltasheet[self.side:2*self.side,self.side:2*self.side] += deltasheet[2*self.side:3*self.side,self.side:2*self.side]
+            deltasheet[:,cols:2*cols] += deltasheet[:,0:cols] 
+            deltasheet[:,cols:2*cols] += deltasheet[:,2*cols:3*cols] 
+            deltasheet[rows:2*rows,cols:2*cols] += deltasheet[0:rows,cols:2*cols]                 
+            deltasheet[rows:2*rows,cols:2*cols] += deltasheet[2*rows:3*rows,cols:2*cols]
 
             # add the deltas to the grid nodes and clip to keep between 0 and 1
             if mask is None:
-                weights = np.clip(weights + deltasheet[self.side:2*self.side,self.side:2*self.side], 0, 1)
+                weights = np.clip(weights + deltasheet[rows:2*rows,cols:2*cols], 0, 1)
             else:
-                delta_fold = deltasheet[self.side:2*self.side,self.side:2*self.side]
+                delta_fold = deltasheet[rows:2*rows,cols:2*cols]
                 for (r,c) in mask.keys():
                     weights[r,c] = np.clip(weights[r,c] + delta_fold[r,c], 0, 1)
-                    flat_nodes = weights.reshape(self.weights.flatShape)
+                    flat_nodes = weights.reshape((rows*cols, self.dimension))
             
             if replace_weights == True:
                 flat_nodes = self.weights.fixFlatNodes(weights=weights)
@@ -407,10 +414,17 @@ class SOM:
         noise_targets = 3
         if weights is None:
             weights = self.weights.nodes
+            rows = self.side
+            cols = self.side
+        else:
+            shape = np.shape(weights)
+            rows = shape[0]
+            cols = shape[1]
+            
         if mask is None:
             mask = self.boundaryMask
-        for r in range(self.side):
-            for c in range(self.side):
+        for r in range(rows):
+            for c in range(cols):
                 if mask[r,c] == 1:
                     # on the boundary, mask as -1's
                     weights[r,c] = [-1.]*self.dimension
@@ -535,7 +549,7 @@ class SOM:
                 # we are at the boundary of a region
                 continue
             
-            points[(r,c)] = True
+            points[(r,c)] = [r,c]
             
             # don't forget we're on a torus
             if r == 0: rm1 = self.side - 1

@@ -947,49 +947,84 @@ class RefineEngine:
             # retrain bin regions using contigs from the bin
             if not silent:
                 print "    Retraining SOM classifier"
+            SS.renderWeights("ff")
             for i in range(len(bids)):
                 bid = bids[i]
                 sys_stdout.write("\r    Retraining on bin: %d (%d of %d)" % (bid, i+1, len(bids)))
-                sys_stdout.flush()                
-                bin = self.BM.bins[bid]
-                
-                # make a training set of just this node's contigs
-                block = np_zeros((bin.binSize,SOMDIM))
-                block[:,:-1] = self.PM.transformedCP[bin.rowIndices]
-                block[:,-1] = self.PM.kmerVals[bin.rowIndices]
-                
-                # global normalisation
-                block -= minz
-                block /= maxz
-                
-                # mask out all other bins
-                bin_mask_points = SS.makeBinMask(training_data[i])
-                bin_mask = np_ones_like(SS.boundaryMask)
-                for (r,c) in bin_mask_points.keys():
-                    bin_mask[r,c] = 0      
-                weights = np_copy(SS.weights.nodes)
-                SS.maskBoundaries(weights=weights, mask=bin_mask)
-                
-                # train on the set of dummy weights
-                weights = SS.train(block,
-                                   weights=weights,
-                                   iterations=50,
-                                   mask=bin_mask_points,
-                                   radius=som_side/5,
-                                   influenceRate=0.1)
-
-                # update the torusMesh values appropriately
-                for (r,c) in bin_mask_points.keys():
-                    SS.weights.nodes[r,c] = weights[r,c]
-                SS.weights.fixFlatNodes()
-                
-                if render:
-                    SS.renderWeights("S_%d"%bid)
+                sys_stdout.flush()
+                self.retrainSOM(SS,
+                                bid,
+                                SS.makeBinMask(training_data[i]),
+                                som_side,
+                                minz,
+                                maxz,
+                                silent=silent,
+                                render=render)
+            SS.renderWeights("gg")
             print "    --"
+
         if render:
             SS.renderWeights("S7")
 
         return (SS, minz, maxz, som_side)
+
+    def retrainSOM(self,
+                   SS,
+                   bid,
+                   maskPoints,
+                   som_side,
+                   minz,
+                   maxz,
+                   silent=False,
+                   render=False):
+        """Further training of a SOM built using bin means"""
+        bin = self.BM.bins[bid]
+        
+        # make a training set of just this node's contigs
+        block = np_zeros((bin.binSize,SOMDIM))
+        block[:,:-1] = self.PM.transformedCP[bin.rowIndices]
+        block[:,-1] = self.PM.kmerVals[bin.rowIndices]
+        
+        # global normalisation
+        block -= minz
+        block /= maxz
+        
+        # now we'd like to centre the weights and mask within an
+        # appropriately sized square
+        min_p = np_min(maskPoints.keys(), axis=0)
+        max_p = np_max(maskPoints.keys(), axis=0)
+        diffs = max_p - min_p
+        small_side = np_min(diffs)
+        sweights = np_copy(SS.weights.nodes[min_p[0]:min_p[0]+diffs[0]+1,min_p[1]:min_p[1]+diffs[1]+1])
+        #SS.weights.renderSurface("C_%d.png"%bid, nodes=sweights)
+
+        # shift and mask out all other bins
+        shifted_mask_points = {}
+        shifted_bin_mask = np_ones((diffs[0]+1,diffs[1]+1))
+        for (r,c) in maskPoints.keys():
+            shift = maskPoints[(r,c)] - min_p
+            shifted_bin_mask[shift[0],shift[1]] = 0
+            shifted_mask_points[(shift[0], shift[1])] = shift 
+        SS.maskBoundaries(weights=sweights, mask=shifted_bin_mask)
+    
+        # train on the set of dummy weights
+        sweights = SS.train(block,
+                            weights=sweights,
+                            iterations=50,
+                            mask=shifted_mask_points,
+                            radius=small_side/3,
+                            influenceRate=0.1)
+
+        #SS.weights.renderSurface("D_%d.png"%bid, nodes=sweights)
+        # update the torusMesh values appropriately
+        for (r,c) in maskPoints.keys():
+            shift = maskPoints[(r,c)] - min_p
+            SS.weights.nodes[r,c] = sweights[shift[0], shift[1]]
+        SS.weights.fixFlatNodes()
+        
+        if render:
+            SS.renderWeights("S_%d"%bid)
+        
 
     def shuffleRefineConitgs(self, timer, inclusivity=2):
         """refine bins by shuffling contigs around"""

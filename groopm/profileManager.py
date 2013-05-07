@@ -458,8 +458,7 @@ class ProfileManager:
             
         # reshuffle the contig order!
         # yay for bubble sort!
-        ordering = [0,2,1,4,3]
-        ordering = np_array(ordering)
+        ordering = np_arange(self.numStoits)
         working = np_arange(self.numStoits)
         for i in range(1, self.numStoits):
             # where is this guy in the list
