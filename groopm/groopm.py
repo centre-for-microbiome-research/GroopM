@@ -56,9 +56,12 @@ import os
 # GroopM imports
 import mstore
 import cluster
+import refine
 import bin
 import binManager
 import groopmUtils
+import groopmTimekeeper as gtime
+from mstore import GMDataManager
 
 ###############################################################################
 ###############################################################################
@@ -78,77 +81,90 @@ class GroopMOptionsParser():
     
     def parseOptions(self, options ):
 
+        timer = gtime.TimeKeeper()
         if(options.subparser_name == 'parse'):
             # parse raw input
-            print "****************************************************************"
+            print "*******************************************************************************"
             print " [[GroopM]] Running in data parsing mode..."
-            print "****************************************************************"
+            print "*******************************************************************************"
             GMdata = mstore.GMDataManager()
             success = GMdata.createDB(options.bamfiles,
                                       options.reference,
                                       options.dbname,
-                                      dumpAll=options.dump,
-                                      force=options.force
-                                      )
+                                      timer,
+                                      force=options.force)
             if not success:
                 print options.dbname,"not updated" 
                             
         elif(options.subparser_name == 'core'):
             # make bin cores
-            print "****************************************************************"
+            print "*******************************************************************************"
             print " [[GroopM]] Running in core creation mode..."
-            print "****************************************************************"
+            print "*******************************************************************************"
             CE = cluster.ClusterEngine(options.dbname,
                                        force=options.force,
-                                       plot=options.plot
-                                       )
-            CE.makeCores(coreCut=options.cutoff, minSize=options.size, minVol=options.bp)
+                                       finalPlot=options.plot,
+                                       plot=options.multiplot,
+                                       minSize=options.size,
+                                       minVol=options.bp,
+                                       squish=options.squish)
+            if options.graphfile is None:
+                gf = ""
+            else:
+                gf=options.graphfile
+            CE.makeCores(timer,
+                         coreCut=options.cutoff,
+                         gf=gf)
 
         elif(options.subparser_name == 'refine'):
             # refine bin cores
-            print "****************************************************************"
+            print "*******************************************************************************"
             print " [[GroopM]] Running in core refining mode..."
-            print "****************************************************************"
-            plotter = False
-            shuffle = False
-            links = False
+            print "*******************************************************************************"
+            bids = []
+            if options.bids is not None:
+                bids = options.bids            
+            auto = options.auto
             transform=True^options.no_transform
             
-            if(options.mode == 'shuffle'):
-                shuffle = True
-                transform = True
-            elif(options.mode == 'plot'):
-                plotter = True
+            RE = refine.RefineEngine(timer,
+                                     dbFileName=options.dbname,
+                                     transform=transform,
+                                     bids=bids,
+                                     loadContigNames=True,
+                                     squish=options.squish)
+            if options.plot:
+                pfx="REFINED"
             else:
-                print "**Error: unknown mode:",options.mode
-                return
-            BM = binManager.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True, silent=False, transform=transform)
-            BM.refineWrapper(saveBins=True,
-                               plotter=plotter,
-                               shuffle=shuffle,
-                               links=links,
-                               )
+                pfx=""
+            print "Refine bins"
+            
+            RE.refineBins(timer,
+                          auto=auto,
+                          saveBins=True,
+                          plotFinal=pfx)
 
         elif(options.subparser_name == 'recruit'):
             # make bin cores
-            print "****************************************************************"
+            print "*******************************************************************************"
             print " [[GroopM]] Running in bin expansion mode..."
-            print "****************************************************************"
-            BM = binManager.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True,
-                        loadContigNames=False,
-                        silent=False,
-                        getUnbinned=True,
-                        cutOff=options.cutoff
-                        )
-            BM.recruitWrapper(inclusivity=options.inclusivity, step=options.step, saveBins=True)
+            print "*******************************************************************************"
+            RE = refine.RefineEngine(timer,
+                                     dbFileName=options.dbname,
+                                     getUnbinned=True,
+                                     loadContigNames=False,
+                                     squish=options.squish)
+
+            RE.recruitWrapper(timer,
+                              inclusivity=options.inclusivity,
+                              step=options.step,
+                              saveBins=True)
         
         elif(options.subparser_name == 'extract'):
             # Extract data
-            print "****************************************************************"
-            print " [[GroopM]] Running in extraction mode(",options.mode,")..."
-            print "****************************************************************"
+            print "*******************************************************************************"
+            print " [[GroopM]] Running in '%s' extraction mode..." % options.mode 
+            print "*******************************************************************************"
             bids = []
             if options.bids is not None:
                 bids = options.bids
@@ -157,82 +173,144 @@ class GroopMOptionsParser():
                                           folder=options.outfolder
                                           )
             if(options.mode=='contigs'):
-                BX.extractContigs(fasta=options.data, cutoff=options.cutoff)
+                BX.extractContigs(timer, fasta=options.data, cutoff=options.cutoff)
             elif(options.mode=='reads'):
-                BX.extractReads(bams=options.data)
+                BX.extractReads(timer, bams=options.data)
             else:
                 raise ge.ExtractModeNotAppropriateException("mode: "+mode+" is unknown")
 
         elif(options.subparser_name == 'merge'):
             # make bin cores
-            print "****************************************************************"
+            print "*******************************************************************************"
             print " [[GroopM]] Running in bin merging mode..."
-            print "****************************************************************"
+            print "*******************************************************************************"
             BM = binManager.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True, silent=False)
+            BM.loadBins(timer, makeBins=True, silent=False)
             BM.merge(options.bids, options.force, saveBins=True)
 
         elif(options.subparser_name == 'split'):
             # make bin cores
-            print "****************************************************************"
+            print "*******************************************************************************"
             print " [[GroopM]] Running in bin splitting mode..."
-            print "****************************************************************"
+            print "*******************************************************************************"
             BM = binManager.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True, silent=False)
+            BM.loadBins(timer, makeBins=True, silent=False)
             BM.split(options.bid, options.parts, mode=options.mode, saveBins=True, auto=options.force)
 
         elif(options.subparser_name == 'delete'):
             # make bin cores
-            print "****************************************************************"
+            print "*******************************************************************************"
             print " [[GroopM]] Running in bin deleting mode..."
-            print "****************************************************************"
+            print "*******************************************************************************"
             BM = binManager.BinManager(dbFileName=options.dbname)
-            BM.loadBins(makeBins=True, silent=True, bids=options.bids)
-            BM.deleteBins(options.bids, force=options.force, saveBins=True, freeBinnedRowIndicies=True)
+            BM.loadBins(timer, makeBins=True, silent=True, bids=options.bids)
+            BM.deleteBins(options.bids, force=options.force, saveBins=True, freeBinnedRowIndices=True)
 
         elif(options.subparser_name == 'explore'):
             # make bin cores
-            print "****************************************************************"
-            print " [[GroopM]] Running in bin explorer mode (",options.mode,")..."
-            print "****************************************************************"
+            print "*******************************************************************************"
+            print " [[GroopM]] Running in bin '%s' explorer mode..." % options.mode
+            print "*******************************************************************************"
+            transform=True^options.no_transform
             bids = []
             if options.bids is not None:
                 bids = options.bids
-            BE = groopmUtils.BinExplorer(options.dbname, bids=bids)
-            if(options.mode == 'points'):
-                BE.plotPoints()
-            elif(options.mode == 'ids'):
-                BE.plotIds()
+            BE = groopmUtils.BinExplorer(options.dbname,
+                                         bids=bids,
+                                         transform=transform,
+                                         squish=options.squish)
+            if(options.mode == 'binpoints'):
+                BE.plotPoints(timer)
+            elif(options.mode == 'binids'):
+                BE.plotIds(timer)
+            elif(options.mode == 'allcontigs'):
+                BE.plotContigs(timer, coreCut=options.cutoff, all=True)
+            elif(options.mode == 'unbinnedcontigs'):
+                BE.plotUnbinned(timer, coreCut=options.cutoff)
+            elif(options.mode == 'binnedcontigs'):
+                BE.plotContigs(timer, coreCut=options.cutoff)
             elif(options.mode == 'flyover'):
-                BE.plotFlyOver()
-            elif(options.mode == 'profile'):
-                BE.plotBinProfiles()
+                BE.plotFlyOver(timer)
             elif(options.mode == 'compare'):
-                BE.plotSideBySide(coreCut=options.cutoff)
-            elif(options.mode == 'unbinned'):
-                BE.plotUnbinned(coreCut=options.cutoff)
+                BE.plotSideBySide(timer, coreCut=options.cutoff)
             else:
                 print "**Error: unknown mode:",options.mode
+
+        elif(options.subparser_name == 'highlight'):
+            # make bin cores
+            print "*******************************************************************************"
+            print " [[GroopM]] Running in highlighter mode..."
+            print "*******************************************************************************"
+            BE = groopmUtils.BinExplorer(options.dbname, bids=[])
+            BE.plotHighlights(timer,
+                              options.bids,
+                              options.elevation,
+                              options.azimuth,
+                              options.file,
+                              options.filetype,
+                              options.dpi,
+                              options.alpha,
+                              options.invert,
+                              options.show)
             
         elif(options.subparser_name == 'print'):
             BM = binManager.BinManager(dbFileName=options.dbname)
             bids = []
             if options.bids is not None:
                 bids = options.bids
-            BM.loadBins(getUnbinned=options.unbinned, makeBins=True, silent=True, bids=bids)
+            BM.loadBins(timer, getUnbinned=options.unbinned, makeBins=True, silent=True, bids=bids)
             BM.printBins(options.format, fileName=options.outfile)
 
         elif(options.subparser_name == 'plot'):
-            print "****************************************************************"
-            print " [[GroopM]] Plot bins..."
-            print "****************************************************************"
+            print "*******************************************************************************"
+            print " [[GroopM]] Running in bin plotting mode..."
+            print "*******************************************************************************"
             BM = binManager.BinManager(dbFileName=options.dbname)
-            bids = []
-            if options.bids is not None:
+            if options.bids is None:
+                bids = []
+            else:    
                 bids = options.bids
-            BM.loadBins(makeBins=True, silent=False, bids=bids)
-            BM.plotBins(FNPrefix=options.tag, sideBySide=options.sidebyside, folder=options.folder)
-            
+            BM.loadBins(timer, makeBins=True, silent=False, bids=bids, loadContigNames=False)
+
+            if options.bids is None:
+                bids = BM.getBids()
+
+            if options.together:
+                BM.plotSelectBins(bids,
+                                  plotMers=options.kmers,
+                                  plotEllipsoid=True)
+            else:
+                BM.plotBins(FNPrefix=options.tag,
+                            sideBySide=options.sidebyside,
+                            plotEllipsoid=True,
+                            folder=options.folder)
+
+        elif(options.subparser_name == 'dump'):
+            print "*******************************************************************************"
+            print " [[GroopM]] Running in data dumping mode..."
+            print "*******************************************************************************"
+        
+            # prep fields. Do this first cause users are mot likely to 
+            # mess this part up!
+            allowable_fields = ['names', 'mers', 'coverage', 'lengths', 'bins', 'all']
+            fields = options.fields.split(',')
+            for field in fields:
+                if field not in allowable_fields:
+                    print "ERROR: field '%s' not recognised. Allowable fields are:" % field
+                    print '\t',",".join(allowable_fields)
+                    return
+            if options.separator == '\\t':
+                separator = '\t'
+            else:
+                separator = options.separator
+                
+            DM = GMDataManager()
+            DM.dumpData(options.dbname,
+                        fields,
+                        options.outfile,
+                        separator,
+                        not options.no_headers)
+        
         return 0
     
 
