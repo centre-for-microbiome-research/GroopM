@@ -396,7 +396,7 @@ class RefineEngine:
     def autoRefineBins(self,
                        timer,
                        mergeSimilarBins=True,
-                       removeDuds=True,
+                       removeDuds=False,
                        nukeOutliers=True,
                        shuffleRefine=True,
                        verbose=False,
@@ -947,7 +947,6 @@ class RefineEngine:
             # retrain bin regions using contigs from the bin
             if not silent:
                 print "    Retraining SOM classifier"
-            SS.renderWeights("ff")
             for i in range(len(bids)):
                 bid = bids[i]
                 sys_stdout.write("\r    Retraining on bin: %d (%d of %d)" % (bid, i+1, len(bids)))
@@ -1049,6 +1048,7 @@ class RefineEngine:
         wrongs = {}
         news = {}
         rights = {}
+        nones = {}
         
         # we load all contigs into the block 
         block = np_zeros((len(self.PM.transformedCP),SOMDIM))
@@ -1059,8 +1059,23 @@ class RefineEngine:
         block /= maxz
 
         for i in range(len(self.PM.indices)):
+            assigned = False
+            old_bid = self.PM.binIds[i]
             putative_bid = SS.classifyContig(block[i])
-            if self.BM.bins[putative_bid].binSize > 1:
+            if putative_bid == old_bid:
+                # assigned to the old bin
+                # nothing much to do here...
+                assigned = True
+                try:
+                    new_assignments[old_bid].append(i)
+                except KeyError:
+                    new_assignments[old_bid] = [i]
+                try:
+                    rights[old_bid] += 1
+                except KeyError:
+                    rights[old_bid] = 1
+                                      
+            elif self.BM.bins[putative_bid].binSize > 1:
                 # stats f**k up on single contig bins, soz...
                 length_wrong = self.GT.isMaxOutlier(self.PM.contigLengths[i],
                                                     bin_c_lengths[putative_bid]
@@ -1074,7 +1089,9 @@ class RefineEngine:
                             new_assignments[putative_bid].append(i)
                         except KeyError:
                             new_assignments[putative_bid] = [i]
-                        old_bid = self.PM.binIds[i]
+                        assigned = True
+                        
+                        #----------------------
                         if old_bid != 0: 
                             if putative_bid != old_bid:
                                 try:
@@ -1086,32 +1103,52 @@ class RefineEngine:
                                     rights[putative_bid] += 1
                                 except KeyError:
                                     rights[putative_bid] = 1
-                                
                         else:
                             try:
                                 news[putative_bid] += 1
                             except KeyError:
                                 news[putative_bid] = 1
-                            
+                        #----------------------
+            if not assigned:
+                # could not put it anwhere
+                # assign to the old bin
+                try:
+                    new_assignments[old_bid].append(i)
+                except KeyError:
+                    new_assignments[old_bid] = [i]
+                try:
+                    nones[old_bid] += 1
+                except KeyError:
+                    nones[old_bid] = 1                        
+                 
+        print "    ---------------------------------------------"
+        print "     BID    CONS    CHGE    SAME    NEWS    NONE"
+        print "    ---------------------------------------------"
         for bid in bids:
-            print bid, self.BM.bins[bid].binSize,
+            print "   %4d    %5d   " % (bid, self.BM.bins[bid].binSize),
             if bid in wrongs:
-                print wrongs[bid],
+                print "%04d   " % wrongs[bid],
             else:
-                print "0",
+                print "0000   ",
             if bid in rights:
-                print rights[bid],
+                print "%04d   " % rights[bid],
             else:
-                print "0",
+                print "0000   ",
             if bid in news:
-                print news[bid]
+                print "%04d   " % news[bid],
             else:
-                print "0"
+                print "0000   ",
+            if bid in nones:
+                print "%04d   " % nones[bid]
+            else:
+                print "0000   "
+        print "\n    ---------------------------------------------"
         
         # now get ready for saving.
         # first, we nuke all the bins
         self.BM.deleteBins(bids, force=True, freeBinnedRowIndices=False, saveBins=False)
-
+        self.BM.bins = {}
+        
         # these are profile manager variables. We will overwrite
         # these here so that everything stays in sync..
         self.PM.binIds = np_zeros((len(self.PM.indices))) # list of bin IDs

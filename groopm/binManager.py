@@ -72,6 +72,7 @@ from numpy import (abs as np_abs,
                    argsort as np_argsort,
                    around as np_around,
                    array as np_array,
+                   bincount as np_bincount,
                    ceil as np_ceil,
                    concatenate as np_concatenate,
                    copy as np_copy,
@@ -1458,8 +1459,88 @@ class CenterFinder:
     reaches is the index in the center of the densest part of the array 
     """
     def __init__(self): pass
-    
-    def findArrayCenter(self, vals):
+
+    def findArrayCenter(self, vals, tag=None, decimals=2):
+        """Find the center of the numpy array vals, return the index of the center"""
+        # sort 
+        sorted_indices = np_argsort(vals)
+        vals_sorted = vals[sorted_indices]
+        
+        # make a blocky version of it
+        decimals = int(np_log10(len(vals)*2))
+        block_val_counts = np_bincount([int(i) for i in np_around(vals, decimals=decimals)*(10**decimals)])
+            
+        height_array = np_zeros((len(block_val_counts)))
+        fworking = np_zeros((len(block_val_counts)))
+        rworking = np_zeros((len(block_val_counts)))
+
+        # calculate forward and reverse heights
+        height = 0
+        index = 0
+        for b in block_val_counts:
+            height = np_max([0, height-1+b])
+            height_array[index] = height
+            fworking[index] = height
+            index += 1
+        
+        height = 0
+        index = len(height_array) - 1
+        for b in block_val_counts[::-1]:
+            height = np_max([0, height-1+b])
+            height_array[index] += height
+            rworking[index] = height
+            index -= 1
+
+        # take the highest point of the superposition
+        densest_index = np_argmax(height_array)
+        
+        # find the central value and corresponding in
+        centre_val = float(densest_index)/(10**decimals)
+        lo_cv = centre_val - 0.05 
+        hi_cv = centre_val + 0.05 
+        findex = 0.
+        for val in vals_sorted:
+            if val > lo_cv:
+                break
+            findex += 1.
+        rindex = len(vals) - 1
+        while rindex >= 0:
+            if vals_sorted[rindex] < hi_cv:
+                break
+            rindex -= 1
+        ret_index = int((findex+rindex)/2.)
+
+        if tag is not None:        
+            fig = plt.figure()
+            XX = np_arange(len(block_val_counts))
+            
+            ax = plt.subplot(411)
+            ax.plot(XX,fworking,"or-")
+
+            ax = plt.subplot(412)
+            ax.plot(XX,rworking,"ob-")
+            
+            ax = plt.subplot(413)
+            ax.plot(XX,height_array,"og-")
+            ax.plot(XX[densest_index],height_array[densest_index], "r*", markersize=15)
+            
+            ax = plt.subplot(414)
+            XX = np_arange(len(vals))
+            ax.plot(XX,vals_sorted,"oy-")
+            centre_val = vals_sorted[ret_index]
+            ax.plot(ret_index, centre_val, "r*", markersize=15)
+
+            plt.xlabel(tag)
+            
+            plt.show()
+            plt.close()
+            del fig
+        
+        # ret_index refers to the sorted values
+        # so we need to fix this...
+        return sorted_indices[ret_index]
+
+    def findArrayCentera(self, vals):
         """Find the center of the numpy array vals, return the index of the center"""
         # parameters
         current_val_max = -1
@@ -1476,7 +1557,7 @@ class CenterFinder:
         vals_sorted = [vals[i] for i in sorted_indices]
         vals_sorted -= vals_sorted[0]
         if(vals_sorted[-1] != 0):
-            vals_sorted /= vals_sorted[-1]        
+            vals_sorted /= vals_sorted[-1]
 
         #print vals_sorted
         
@@ -1493,7 +1574,7 @@ class CenterFinder:
             working = np_append(working, height)
             final_index += 1
 
-            # save the last val            
+            # save the last val
             last_val = val
 
         current_val_max = -1
@@ -1530,42 +1611,42 @@ class CenterFinder:
         if(perc > 1):
             #print height, delta, 1, " H: ", 0
             return 0
-        #print height, delta, (1-perc), " H: ", (height * (1-perc)) 
+        #print height, delta, (1-perc), " H: ", (height * (1-perc))
         return height * (1-perc)
-    
-    def expandSelection(self, startIndex, vals, stdevCutoff=0.05, maxSpread=0.1):
+
+    def expandSelection(self, startIndex, vals, stdevCutoff=0.05, maxSpread=0.1, tag=None):
         """Expand a selection left and right from a staring index in a list of values
-        
+
         Keep expanding unless the stdev of the values goes above the cutoff
         Return a list of indices into the original list
         """
-        ret_list = [startIndex]   # this is what we will give back
+        ret_list = [startIndex] # this is what we will give back
         start_val = vals[startIndex]
         value_store = [start_val]
-        
         sorted_indices = np_argsort(vals)
-        max_index = len(vals)
+        vals_sorted = vals[sorted_indices]
+        max_index = len(vals) - 1
+        sorted_index = np_where(sorted_indices==startIndex)[0][0]
         
         # set the upper and lower to point to the position
-        # where the start resides 
-        lower_index = 0
-        upper_index = 0
-        for i in range(max_index):
-            if(sorted_indices[i] == startIndex):
-                break
-            lower_index += 1
-            upper_index += 1
+        # where the start resides
+        lower_index = sorted_index 
+        upper_index = sorted_index
         do_lower = True
         do_upper = True
-        max_index -= 1
+        if tag is not None:
+            print "\n=======================================\n",vals
         
         while(do_lower or do_upper):
             if(do_lower):
                 do_lower = False
                 if(lower_index > 0):
                     try_val = vals[sorted_indices[lower_index - 1]]
-                    if(np_abs(try_val - start_val) < maxSpread):
+                    if True:#(np_abs(try_val - start_val) < maxSpread):
                         try_array = value_store + [try_val]
+                        if tag is not None:
+                            print sorted_index, lower_index-1, sorted_indices[lower_index-1], try_val, start_val, np_abs(try_val - start_val), maxSpread, 
+                            print np_std(try_array), stdevCutoff
                         if(np_std(try_array) < stdevCutoff):
                             value_store = try_array
                             lower_index -= 1
@@ -1575,17 +1656,39 @@ class CenterFinder:
                 do_upper = False
                 if(upper_index < max_index):
                     try_val = vals[sorted_indices[upper_index + 1]]
-                    if(np_abs(try_val - start_val) < maxSpread):
+                    if True:#(np_abs(try_val - start_val) < maxSpread):
                         try_array = value_store + [try_val]
+                        if tag is not None:
+                            print sorted_index, upper_index+1, sorted_indices[upper_index+1], try_val, start_val, np_abs(try_val - start_val), maxSpread, 
+                            print np_std(try_array), stdevCutoff
                         if(np_std(try_array) < stdevCutoff):
                             value_store = try_array
                             upper_index += 1
                             ret_list.append(sorted_indices[upper_index])
                             do_upper = True
+
+        if tag is not None:
+            fig = plt.figure()
+            XX = np_arange(len(vals))
+            selected = np_arange(lower_index, upper_index+1)
+            ax = plt.subplot(211)
+            ax.plot(selected, vals_sorted[selected], "o-")
+            ax.plot(XX,vals_sorted, 'b+')
+            ax.plot(XX[sorted_index], vals[startIndex], "r*", markersize=15)
+            plt.xlabel(tag)
+            
+            unsorted_selects = np_array([sorted_indices[i] for i in ret_list])
+            ax = plt.subplot(212)
+            ax.plot(XX,vals[sorted_indices], 'b+')
+            ax.plot(XX[unsorted_selects], vals[unsorted_selects], "r*", markersize=15)
+            
+            plt.show()
+            plt.close()
+            del fig
+
         return sorted(ret_list)
 
 ###############################################################################
 ###############################################################################
 ###############################################################################
 ###############################################################################
-        
