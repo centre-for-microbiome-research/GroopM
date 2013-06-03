@@ -89,7 +89,7 @@ from numpy import (abs as np_abs,
                    where as np_where,
                    zeros as np_zeros)
 from numpy.linalg import norm as np_norm 
-import scipy.ndimage as ndi
+#import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist, squareform
 from scipy.spatial import KDTree as kdt
 from scipy.stats import f_oneway, distributions

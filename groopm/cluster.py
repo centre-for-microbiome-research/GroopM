@@ -91,6 +91,7 @@ from numpy import (abs as np_abs,
                    unravel_index as np_unravel_index,
                    where as np_where,
                    zeros as np_zeros)
+from numpy.random import randn as np_randn
 import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist
 from scipy.cluster.vq import kmeans,vq
@@ -362,7 +363,6 @@ class ClusterEngine:
         max_x = densest_index[0] + x_lower
         max_y = densest_index[1] + y_lower
         max_z = densest_index[2]
-
                     
         # now get the basic color of this dense point
         putative_center_row_indices = []
@@ -397,7 +397,7 @@ class ClusterEngine:
             else:
                 return [self.smartPart(putative_center_row_indices), ret_values]
 
-    def smartPart(self, rowIndices):
+    def smartPartO(self, rowIndices):
         """Partition a collection of contigs into 'core' groups"""
 
         from scipy.spatial import KDTree as kdt
@@ -454,7 +454,7 @@ class ClusterEngine:
             except FloatingPointError:
                 pass
     
-            k_partitions = self.HP.houghPartition(data)
+            k_partitions = self.HP.houghPartition(data, imgTag="MER")
             
             if(len(k_partitions) == 0):
                 return None
@@ -471,7 +471,7 @@ class ClusterEngine:
                     except FloatingPointError:
                         pass
     
-                    c_partitions = self.HP.houghPartition(data)
+                    c_partitions = self.HP.houghPartition(data, imgTag="COV")
                     
                     for c_part in c_partitions:
                         partitions.append(np_array(k_part[c_part]))
@@ -499,7 +499,7 @@ class ClusterEngine:
             
         return np_array(ret_parts)
 
-    def smartPartO(self, rowIndices):
+    def smartPart(self, rowIndices):
         """Partition a collection of contigs into 'core' groups"""
         partitions = []
         total_BP = np_sum(self.PM.contigLengths[rowIndices])
@@ -518,7 +518,7 @@ class ClusterEngine:
             except FloatingPointError:
                 pass
 
-            k_partitions = self.HP.houghPartition(data, imgTag="MER")
+            k_partitions = self.HP.houghPartition(data, self.PM.contigLengths[rowIndices], imgTag="MER")
             print "\n==========KKKKK==========", len(k_partitions)
             
             if(len(k_partitions) == 0):
@@ -588,14 +588,14 @@ class ClusterEngine:
                         k_line_max = k_lines[pc-1]
                     
                     c_plot_data = self.PM.transformedCP[k_sep_indices][:,2]/10
-                    data = np_copy(self.PM.transformedCP[k_sep_indices][:,2]/10)
+                    data = np_copy(self.PM.transformedCP[k_sep_indices][:,2])
                     data -= np_min(data)
                     try:
                         data /= np_max(data)
                     except FloatingPointError:
                         pass
     
-                    c_partitions = self.HP.houghPartition(data, imgTag="COV(%0.2f-%0.2f)" % (k_line_min,k_line_max))
+                    c_partitions = self.HP.houghPartition(data, self.PM.contigLengths[rowIndices], imgTag="COV(%0.2f-%0.2f)" % (k_line_min,k_line_max))
                     
                     c_plot_data = c_plot_data[np_argsort(c_plot_data)]
                     start = 0
@@ -1032,8 +1032,230 @@ class ClusterEngine:
 class HoughPartitioner:
     def __init__(self): 
         self.hc = 0
+
+    def houghPartition(self, dAta, lengths, level=0, side="C", imgTag=None):
+        d_len_raw = int(len(dAta))
+        if d_len_raw < 2:
+            return np_array([[0]])
+        
+        if d_len_raw < 3:
+            return np_array([[0,1]])
+        
+        # fudge the data to make longer contigs have more say in the
+        # diff line we'll be making. This way we may be able to avoid lumping 
+        # super long contigs in with the short riff raff by accident.
+        wobble = 0.05
+        
+        log_cov_counts = np_bincount(np_array([int(i) for i in np_log10(lengths)]))
+        mode_count_index = np_argmax(log_cov_counts)
+        scales = [int(oo) for oo in np_ones((len(log_cov_counts)))]
+        mult = 10
+        for i in range(mode_count_index + 1, len(log_cov_counts)):
+            scales[i] *= mult
+            mult *= 10
+            
+        fake_data = []
+        fake2real = {}
+        real2fake = {}
+        mult_counts = {}
+        
+        j = 0
+        for i in range(len(dAta)):
+            fake_data.append(dAta[i])
+            fake2real[j] = i
+            try:
+                real2fake[i].append(j)
+            except KeyError:
+                real2fake[i] = [j]
+            rep = scales[int(np_log10(lengths[i]))]
+            mult_counts[i] = rep
+            j += 1 
+            for k in range(1, rep):
+                fake_data.append(wobble * np_randn() + dAta[i])
+                fake2real[j] = i
+                try:
+                    real2fake[i].append(j)
+                except KeyError:
+                    real2fake[i] = [j]
+                j += 1 
+            
+        # Force the data to fill the space
+        fake_data = np_array(fake_data)
+        d_len = len(fake_data)
+        sorted_indices_raw = np_argsort(dAta)
+        sorted_indices_fake = np_argsort(fake_data)
+        data = fake_data[sorted_indices_fake]
+        data -= np_min(data)
+
+        real_fake_cutz = {}
+        seen_indices = {}
+        
+        fake_sorted_reals = np_array([fake2real[ii] for ii in sorted_indices_fake])
+        outer = 0
+        seens = {}
+        
+        for ri in fake_sorted_reals:
+            if mult_counts[ri] == 1:
+                real_fake_cutz[ri] = outer
+            else:
+                try:
+                    seens[ri] += 1
+                except KeyError:
+                    seens[ri] = 1
+                if seens[ri] <= int(mult_counts[ri]/2):
+                    real_fake_cutz[ri] = outer
+            outer += 1
+
+        o_cutz = {}
+        for ri in fake_sorted_reals:
+            o_cutz[real_fake_cutz[ri]] = ri
+            
+        # work out weightings
+        # we want to know how much each value differs from it's neighbours
+        back_diffs = [float(data[i] - data[i-1]) for i in range(1,d_len)]
+        diffs = [back_diffs[0]]
+        for i in range(len(back_diffs)-1):
+            diffs.append((back_diffs[i] + back_diffs[i+1])/2)
+        diffs.append(back_diffs[-1])
+        diffs = np_array(diffs)**2
+        
+        # replace the data array by the sum of it's diffs
+        for i in range(1, d_len):
+            diffs[i] += diffs[i-1]
+            
+        diffs -= np_min(diffs)
+        try:
+            diffs /= np_max(diffs)
+        except FloatingPointError:
+            pass
+        diffs *= len(diffs)
+        
+        if level == 0:
+            final_diffs = np_copy(diffs)
+        
+        t_data = np_array(zip(diffs, np_arange(d_len)))
+        im_shape = (int(np_max(t_data, axis=0)[0]+1), d_len)
+        
+        (m, c, accumulator) = self.hough(t_data.astype(float), im_shape)
+        # find the most prominent line
+        
+        # create the line we found and see which of the original points lie on
+        # the line
+        found_line = self.points2Line(np_array([[c,0],[m*im_shape[1]+c,im_shape[1]]]), im_shape[1], im_shape[0], 3)
+
+        # we need to protect against the data line crossing
+        # in and out of the "found line" 
+        in_block = False
+        block_starts = []
+        block_lens = []
+        ii = -1
+        for p in t_data.astype('int'):
+            ii += 1
+            if tuple(p) in found_line:
+                if not in_block:
+                    in_block = True
+                    block_starts.append(ii)
+            else:
+                if in_block:
+                    in_block = False
+                    block_lens.append(ii - block_starts[-1] + 1)
+
+        if in_block:
+            # finishing block
+            block_lens.append(ii - block_starts[-1] + 1)
+
+        if imgTag is not None:
+            print "%d_%s_%s_%d DL: %d BL: %d" % (self.hc, imgTag, side, level, len(data), len(block_lens))
+            # make a pretty picture
+            fff = np_ones(im_shape) * 255
+            for p in found_line.keys():
+                fff[p[0],p[1]] = 220
+            for p in t_data:
+                fff[p[0],p[1]] = 0
+            # scale so colors look sharper
+            accumulator -= np_min(accumulator)
+            accumulator /= np_max(accumulator)        
+            accumulator *= 255
+                
+            imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
+            
+        if len(block_lens) == 0:
+            return np_array([np_arange(len(dAta))])
+        
+        
+        # work out what we'll keep and what we'll refine more
+        longest_block = np_argmax(block_lens)
+        fake_start = block_starts[longest_block]
+        fake_end =  block_lens[longest_block] + fake_start
+
+        left = []
+        selected = []
+        right = []
+        
+        for ii in range(fake_start):
+            try:
+                left.append(o_cutz[ii])
+            except KeyError:
+                pass
+        for ii in range(fake_start, fake_end):
+            try:
+                selected.append(o_cutz[ii])
+            except KeyError:
+                pass
+        for ii in range(fake_end, d_len):
+            try:
+                right.append(o_cutz[ii])
+            except KeyError:
+                pass
+        left = np_array(left)
+        selected = np_array(selected)
+        right = np_array(right)
+        #left = sorted_indices_raw[:sel_start]
+        #selected = sorted_indices_raw[sel_start:sel_end]
+        #right = sorted_indices_raw[sel_end:]
+
+        if level == 0:
+            print "SPLIT"
+            for kk in range(fake_start):
+                print fake2real[kk],
+            print 
+            for kk in range(fake_start, fake_end):
+                print fake2real[kk],
+            print 
+            for kk in range(fake_end, d_len):
+                print fake2real[kk],
+            print '\nEND_SPLIT'
+            
+            
+        rets = []
+        if len(left) > 0:
+            left_p = self.houghPartition(dAta[left], lengths[left], side="%sL" %side, level=level+1, imgTag=imgTag)
+            for A in left_p:
+                rets.append(np_array([left[i] for i in A]))
+
+        if len(selected) > 0:
+            rets.append(selected)
+        
+        if len(right) > 0:
+            right_p = self.houghPartition(dAta[right], lengths[right], side="%sR" %side, level=level+1, imgTag=imgTag)
+            for A in right_p:
+                rets.append(np_array([right[i] for i in A]))
+
+        if level == 0:
+            print "AALLL", 
+            for ret in rets:
+                spread_ret = []
+                # these are real indices
+                for index in ret:
+                    # now get fake indices
+                    for fake_index in real2fake[index]:
+                        spread_ret.append(fake_index)
+                print final_diffs[spread_ret], 
+            print "DOONNNE"
+
+        return np_array(rets)
     
-    def houghPartition(self, dAta, level=0, side="C", imgTag=None):
+    def houghPartitionO(self, dAta, lengths, level=0, side="C", imgTag=None):
         d_len = int(len(dAta))
         if d_len < 2:
             return np_array([[0]])
@@ -1066,7 +1288,6 @@ class HoughPartitioner:
             pass
         diffs *= len(diffs)
         
-        #t_data = np_array(zip(np_around(data), np_arange(d_len)))
         t_data = np_array(zip(diffs, np_arange(d_len)))
         im_shape = (int(np_max(t_data, axis=0)[0]+1), d_len)
         
@@ -1099,7 +1320,7 @@ class HoughPartitioner:
             block_lens.append(ii - block_starts[-1] + 1)
 
         if imgTag is not None:
-            print "%d_%s_%s_%d DL: %d BL: %d" % (self.hc, imgTag, side, level, len(diffs), len(block_lens))
+            print "%d_%s_%s_%d DL: %d BL: %d" % (self.hc, imgTag, side, level, len(dAta), len(block_lens))
             
         if len(block_lens) == 0:
             return np_array([np_arange(len(dAta))])
@@ -1125,7 +1346,7 @@ class HoughPartitioner:
         rets = []
         left = sorted_indices[:sel_start]
         if len(left) > 0:
-            left_p = self.houghPartition(dAta[left], side="%sL" %side, level=level+1, imgTag=imgTag)
+            left_p = self.houghPartition(dAta[left], lengths[left], side="%sL" %side, level=level+1, imgTag=imgTag)
             for A in left_p:
                 rets.append(np_array([left[i] for i in A]))
 
@@ -1135,7 +1356,7 @@ class HoughPartitioner:
         
         right = sorted_indices[sel_end:]
         if len(right) > 0:
-            right_p = self.houghPartition(dAta[right], side="%sR" %side, level=level+1, imgTag=imgTag)
+            right_p = self.houghPartition(dAta[right], lengths[right], side="%sR" %side, level=level+1, imgTag=imgTag)
             for A in right_p:
                 rets.append(np_array([right[i] for i in A]))
 

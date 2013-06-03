@@ -101,7 +101,7 @@ from numpy import (abs as np_abs,
                    zeros as np_zeros)
 from numpy.linalg import norm as np_norm 
 from numpy.random import shuffle as shuffle
-import scipy.ndimage as ndi
+#import scipy.ndimage as ndi
 from scipy.spatial import KDTree as kdt
 from scipy.stats import f_oneway, distributions
 from scipy.cluster.vq import kmeans,vq,whiten,kmeans2

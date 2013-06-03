@@ -60,7 +60,7 @@ from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
 
 import numpy as np
-import scipy.ndimage as ndi
+#import scipy.ndimage as ndi
 import scipy.spatial.distance as ssdist
 from scipy.stats import kstest
 
