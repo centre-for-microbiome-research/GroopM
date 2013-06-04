@@ -20,6 +20,7 @@ from multi-sample metagenomic datasets.
 
 GroopM is largely parameter-free. Use: groopm -h for more info.
 
+See also: http://minillinim.github.io/GroopM/
 
 Installation
 =========
