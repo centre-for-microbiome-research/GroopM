@@ -706,144 +706,134 @@ class ClusterEngine:
           return None
 
       # perform hough transform clustering
-      if True:
-        self.HP.hc += 1
-        data = k_dat[:,0]
-        data -= np_min(data)
-        try:
-            data /= np_max(data)
-        except FloatingPointError:
-            pass
+      self.HP.hc += 1
+      k_partitions = self.HP.houghPartition(k_dat[:,0], l_dat)
+      #k_partitions = self.HP.houghPartition(data, l_dat, imgTag="MER")
 
-        #k_partitions = self.HP.houghPartition(data)
-        k_partitions = self.HP.houghPartition(data, l_dat, imgTag="MER")
+      if(len(k_partitions) == 0):
+        return None
 
-        if(len(k_partitions) == 0):
-          return None
+      partitions = []
 
-        partitions = []
+      #-----------------------
+      # GRID
+      fig = plt.figure()
 
-        #-----------------------
-        # GRID
-        fig = plt.figure()
+      orig_k_dat = self.PM.kmerVals[rowIndices]
+      orig_k2_dat = self.PM.kmerVals2[rowIndices]
+      orig_c_dat = self.PM.transformedCP[rowIndices][:,2]/10
+      orig_l_dat = np_sqrt(self.PM.contigLengths[rowIndices])
+      orig_col_dat = self.PM.contigColors[rowIndices]
 
-        orig_k_dat = self.PM.kmerVals[rowIndices]
-        orig_k2_dat = self.PM.kmerVals2[rowIndices]
-        orig_c_dat = self.PM.transformedCP[rowIndices][:,2]/10
-        orig_l_dat = np_sqrt(self.PM.contigLengths[rowIndices])
-        orig_col_dat = self.PM.contigColors[rowIndices]
+      ax = plt.subplot(221)
+      plt.xlabel("PCA1")
+      plt.ylabel("PCA2")
 
-        ax = plt.subplot(221)
-        plt.xlabel("PCA1")
-        plt.ylabel("PCA2")
+      ax.scatter(orig_k_dat, orig_k2_dat, edgecolors=orig_col_dat, c=orig_col_dat, s=orig_l_dat)
 
-        ax.scatter(orig_k_dat, orig_k2_dat, edgecolors=orig_col_dat, c=orig_col_dat, s=orig_l_dat)
+      ax = plt.subplot(223)
+      plt.title("%s contigs" % len(rowIndices))
+      plt.xlabel("MER PARTS")
+      plt.ylabel("COV PARTS")
 
-        ax = plt.subplot(223)
-        plt.title("%s contigs" % len(rowIndices))
-        plt.xlabel("MER PARTS")
-        plt.ylabel("COV PARTS")
+      ax.scatter(orig_k_dat, orig_c_dat, edgecolors=orig_col_dat, c=orig_col_dat, s=orig_l_dat)
 
-        ax.scatter(orig_k_dat, orig_c_dat, edgecolors=orig_col_dat, c=orig_col_dat, s=orig_l_dat)
+      cols=self.PM.contigColors[row_indices]
+      lens = np_sqrt(self.PM.contigLengths[row_indices])
 
-        cols=self.PM.contigColors[row_indices]
-        lens = np_sqrt(self.PM.contigLengths[row_indices])
+      ax = plt.subplot(222)
+      plt.xlabel("PCA1")
+      plt.ylabel("PCA2")
+      ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors=cols, c=disp_cols, s=lens)
 
-        ax = plt.subplot(222)
-        plt.xlabel("PCA1")
-        plt.ylabel("PCA2")
-        ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors=cols, c=disp_cols, s=lens)
+      ax = plt.subplot(224)
+      plt.title("%s contigs" % len(row_indices))
+      plt.xlabel("MER PARTS")
+      plt.ylabel("COV PARTS")
+      ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors=cols, c=disp_cols, s=lens)
 
-        ax = plt.subplot(224)
-        plt.title("%s contigs" % len(row_indices))
-        plt.xlabel("MER PARTS")
-        plt.ylabel("COV PARTS")
-        ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors=cols, c=disp_cols, s=lens)
+      c_max = np_max(c_dat[:,2]/10) * 1.1
+      k_max = np_max(k_dat[:,0]) * 1.1
+      c_min = np_min(c_dat[:,2]/10) * 0.9
+      k_min = np_min(k_dat[:,0]) * 0.9
+      k_eps = (k_max - k_min) / len(row_indices)
+      c_eps = (c_max - c_min) / len(row_indices)
 
-        c_max = np_max(c_dat[:,2]/10) * 1.1
-        k_max = np_max(k_dat[:,0]) * 1.1
-        c_min = np_min(c_dat[:,2]/10) * 0.9
-        k_min = np_min(k_dat[:,0]) * 0.9
-        k_eps = (k_max - k_min) / len(row_indices)
-        c_eps = (c_max - c_min) / len(row_indices)
+      start = 0
+      k_lines = []
+      k_sizes = [len(p) for p in k_partitions]
 
-        start = 0
-        k_lines = []
-        k_sizes = [len(p) for p in k_partitions]
+      k_index_sort = np_argsort(k_dat[:,0])
 
-        k_index_sort = np_argsort(k_dat[:,0])
+      for k in range(len(k_sizes)-1):
+          k_lines.append(k_dat[k_index_sort,0][k_sizes[k]+start]+k_eps)
+          start += k_sizes[k]
 
-        for k in range(len(k_sizes)-1):
-            k_lines.append(k_dat[k_index_sort,0][k_sizes[k]+start]+k_eps)
-            start += k_sizes[k]
+      for k in k_lines:
+          plt.plot([k,k], [c_min, c_max], 'b-')
 
-        for k in k_lines:
-            plt.plot([k,k], [c_min, c_max], 'b-')
+      pc = 0
+      for k_part in k_partitions:
+          pc += 1
+          k_sep_indices = row_indices[k_part]
+          part_bp = np_sum(l_dat[k_part])
+          if self.BM.isGoodBin(part_bp, len(k_part), ms=5):
 
-        pc = 0
-        for k_part in k_partitions:
-            pc += 1
-            k_sep_indices = row_indices[k_part]
-            part_bp = np_sum(l_dat[k_part])
-            if self.BM.isGoodBin(part_bp, len(k_part), ms=5):
+              data = np_copy(c_dat[k_part,2]/10)
+              l_data = np_copy(l_dat[k_part])
+              data -= np_min(data)
+              try:
+                  data /= np_max(data)
+              except FloatingPointError:
+                  pass
 
-                data = np_copy(c_dat[k_part,2]/10)
-                l_data = np_copy(l_dat[k_part])
-                data -= np_min(data)
-                try:
-                    data /= np_max(data)
-                except FloatingPointError:
-                    pass
+              c_partitions = self.HP.houghPartition(data, l_data)
+              #c_partitions = self.HP.houghPartition(data, l_data, imgTag="COV")
 
-                c_partitions = self.HP.houghPartition(data, l_data, imgTag="COV")
+              #-----
+              # GRID
+              c_sorted_data = self.PM.transformedCP[k_sep_indices][:,2]/10
+              c_sorted_data = c_sorted_data[np_argsort(c_sorted_data)]
 
-                #-----
-                # GRID
-                c_sorted_data = self.PM.transformedCP[k_sep_indices][:,2]/10
-                c_sorted_data = c_sorted_data[np_argsort(c_sorted_data)]
+              start = 0
+              c_lines = []
+              c_sizes = [len(p) for p in c_partitions]
+              for c in range(len(c_sizes)-1):
+                  c_lines.append(c_sorted_data[c_sizes[c]+start]+c_eps)
+                  start += c_sizes[c]
 
-                start = 0
-                c_lines = []
-                c_sizes = [len(p) for p in c_partitions]
-                for c in range(len(c_sizes)-1):
-                    c_lines.append(c_sorted_data[c_sizes[c]+start]+c_eps)
-                    start += c_sizes[c]
+              if pc == 1:
+                  k_line_min = k_min
+              else:
+                  k_line_min = k_lines[pc-2]
 
-                if pc == 1:
-                    k_line_min = k_min
-                else:
-                    k_line_min = k_lines[pc-2]
-
-                if pc == len(k_partitions):
-                    k_line_max = k_max
-                else:
-                    k_line_max = k_lines[pc-1]
+              if pc == len(k_partitions):
+                  k_line_max = k_max
+              else:
+                  k_line_max = k_lines[pc-1]
 
 
-                for c in c_lines:
-                    plt.plot([k_line_min,k_line_max], [c, c], 'g-')
+              for c in c_lines:
+                  plt.plot([k_line_min,k_line_max], [c, c], 'g-')
 
-                for c_part in c_partitions:
-                    partitions.append(np_array(k_part[c_part]))
+              for c_part in c_partitions:
+                  partitions.append(np_array(k_part[c_part]))
 
-        ax.set_xlim(k_min, k_max)
-        ax.set_ylim(c_min, c_max)
-        fig.set_size_inches(12,12)
-        plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
-        plt.close()
-        del fig
+      ax.set_xlim(k_min, k_max)
+      ax.set_ylim(c_min, c_max)
+      fig.set_size_inches(12,12)
+      plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
+      plt.close()
+      del fig
 
-        if len(partitions) == 0:
-          return None
+      if len(partitions) == 0:
+        return None
 
-        ret_parts = []
-        for p in partitions:
-            ret_parts.append(np_array(row_indices[p]))
+      ret_parts = []
+      for p in partitions:
+          ret_parts.append(np_array(row_indices[p]))
 
-        return np_array(ret_parts)
-
-      else:
-        return [np_array(row_indices)]
+      return np_array(ret_parts)
 
     def smartPart(self, rowIndices):
         """Partition a collection of contigs into 'core' groups"""
