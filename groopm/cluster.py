@@ -1419,64 +1419,57 @@ class HoughPartitioner:
         for i in range(len(dAta)):
             scales_per[i] = int((lengths[i] - 1)/10000) + 1
             
-        fake_data = []       
-        fake2real = {}
-        #real2fake = {}
+        spread_data = []       
+        spread2real = {}
+        #real2spread = {}
         
         j = 0
         for i in range(len(dAta)):
-            fake_data.append(dAta[i])
-            fake2real[j] = i
+            spread_data.append(dAta[i])
+            spread2real[j] = i
 #            try:
-#                real2fake[i].append(j)
+#                real2spread[i].append(j)
 #            except KeyError:
-#                real2fake[i] = [j]
+#                real2spread[i] = [j]
 #            rep = scales[int(np_log10(lengths[i]))]
             rep = scales_per[i] 
             j += 1 
             for k in range(1, rep):
-                fake_data.append(wobble * np_randn() + dAta[i])
-                fake2real[j] = i
+                spread_data.append(wobble * np_randn() + dAta[i])
+                spread2real[j] = i
 #                try:
-#                    real2fake[i].append(j)
+#                    real2spread[i].append(j)
 #                except KeyError:
-#                    real2fake[i] = [j]
+#                    real2spread[i] = [j]
                 j += 1 
             
         # Force the data to fill the space
-        fake_data = np_array(fake_data)
-        d_len = len(fake_data)
+        spread_data = np_array(spread_data)
+        d_len = len(spread_data)
         sorted_indices_raw = np_argsort(dAta)
-        sorted_indices_fake = np_argsort(fake_data)
-        data = fake_data[sorted_indices_fake]
-        data -= np_min(data)
+        sorted_indices_spread = np_argsort(spread_data)
+        data = spread_data[sorted_indices_spread]
+        data -= np_min(data)    # shift to 0 but DO NOT scale to 1
 
-        real_fake_cutz = {}
-        seen_indices = {}
-        
-        outer = 0
-        seens = {}
-        # make an array of "real" indices sorted by their fake data values.
+        # make an array of "real" indices sorted by their spread data values.
         # NOTE: this array may / will contain multiple copies of each real index
-        fake_sorted_reals = np_array([fake2real[ii] for ii in sorted_indices_fake])
-        
+        spread_sorted_reals = np_array([spread2real[ii] for ii in sorted_indices_spread])
+        seens = {}  # keep track of how many times we've seen this guy
         # now we'd like to find out where the center of this guy lies.
-        for ri in fake_sorted_reals:
-            rep = scales_per[ri]
-            if rep == 1:
-                real_fake_cutz[ri] = outer
-            else:
-                try:
-                    seens[ri] += 1
-                except KeyError:
-                    seens[ri] = 1
-                if seens[ri] <= int(scales_per[ri]/2):
-                    real_fake_cutz[ri] = outer
-            outer += 1
+        # Just take the mean
+        real_center_in_spread = {}  # the center of the blob of "real" vales in the spread data
+        for ii in range(len(spread_sorted_reals)):
+            ri = spread_sorted_reals[ii]
+            try:
+                seens[ri].append(ii)
+            except KeyError:
+                seens[ri] = [ii]
+        for ri in spread_sorted_reals:
+            real_center_in_spread[ri] = np_mean(seens[ri])
 
         o_cutz = {}
-        for ri in fake_sorted_reals:
-            o_cutz[real_fake_cutz[ri]] = ri
+        for ri in spread_sorted_reals:
+            o_cutz[real_center_in_spread[ri]] = ri
 
         # work out weightings
         # we want to know how much each value differs from it's neighbours
@@ -1491,6 +1484,8 @@ class HoughPartitioner:
         for i in range(1, d_len):
             diffs[i] += diffs[i-1]
 
+        # scale to fit between 0 and len(diffs)
+        # HT works better on a square
         diffs -= np_min(diffs)
         try:
             diffs /= np_max(diffs)
@@ -1549,24 +1544,24 @@ class HoughPartitioner:
 
         # work out what we'll keep and what we'll refine more
         longest_block = np_argmax(block_lens)
-        fake_start = block_starts[longest_block]
-        fake_end =  block_lens[longest_block] + fake_start
+        spread_start = block_starts[longest_block]
+        spread_end =  block_lens[longest_block] + spread_start
 
         left = []
         selected = []
         right = []
 
-        for ii in range(fake_start):
+        for ii in range(spread_start):
             try:
                 left.append(o_cutz[ii])
             except KeyError:
                 pass
-        for ii in range(fake_start, fake_end):
+        for ii in range(spread_start, spread_end):
             try:
                 selected.append(o_cutz[ii])
             except KeyError:
                 pass
-        for ii in range(fake_end, d_len):
+        for ii in range(spread_end, d_len):
             try:
                 right.append(o_cutz[ii])
             except KeyError:
@@ -1627,9 +1622,9 @@ class HoughPartitioner:
                 spread_ret = []
                 # these are real indices
                 for index in ret:
-                    # now get fake indices
-                    for fake_index in real2fake[index]:
-                        spread_ret.append(fake_index)
+                    # now get spread indices
+                    for spread_index in real2spread[index]:
+                        spread_ret.append(spread_index)
                 # examine diffs[spread_ret],
 
         return np_array(rets)
