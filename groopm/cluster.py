@@ -781,11 +781,6 @@ class ClusterEngine:
 
               data = np_copy(c_dat[k_part,2]/10)
               l_data = np_copy(l_dat[k_part])
-              data -= np_min(data)
-              try:
-                  data /= np_max(data)
-              except FloatingPointError:
-                  pass
 
               c_partitions = self.HP.houghPartition(data, l_data)
               #c_partitions = self.HP.houghPartition(data, l_data, imgTag="COV")
