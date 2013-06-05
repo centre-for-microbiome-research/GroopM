@@ -246,7 +246,6 @@ class ClusterEngine:
             # and check for possible bin centroids
             bids_made = []
             putative_clusters = self.findNewClusterCenters()
-            print putative_clusters
             if(putative_clusters is None):
                 break
             else:
@@ -278,8 +277,6 @@ class ClusterEngine:
                         num_bins += 1
                         self.updatePostBin(bin)
                         num_below_cutoff = 0
-                        new_line_counter += 1
-                        print "% 4d" % bin.binSize,
 
                         if(self.debugPlots):
                             bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerVals, self.PM.contigLengths, fileName="FRESH_"+str(self.imageCounter))
@@ -290,12 +287,6 @@ class ClusterEngine:
                         # this partition was too small, restrict these guys we don't run across them again
                         self.restrictRowIndices(center_row_indices)
                         num_below_cutoff += 1
-
-                    # make the printing prettier
-                    if(new_line_counter > 9):
-                        new_line_counter = 0
-                        sub_counter += 10
-                        print "\n%4d" % sub_counter,
 
                 # did we do anything?
                 num_bids_made = len(bids_made)
@@ -310,7 +301,8 @@ class ClusterEngine:
                     RE.mergeSimilarBins(None,
                                         None,
                                         bids=bids_made,
-                                        loose=2.)
+                                        loose=2.,
+                                        silent=True)
             
                 # do some post processing
                 for bid in bids_made:
@@ -327,6 +319,16 @@ class ClusterEngine:
                                     self.PM.restrictedRowIndices
                                     )                    
                         self.updatePostBin(bin)
+
+                        new_line_counter += 1
+                        print "% 4d" % bin.binSize,
+
+                        # make the printing prettier
+                        if(new_line_counter > 9):
+                            new_line_counter = 0
+                            sub_counter += 10
+                            print "\n%4d" % sub_counter,
+
     
                         bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerVals, self.PM.contigLengths, fileName="P_BIN_%d"%(bin.id)) #***slow plot!
                     
@@ -720,8 +722,21 @@ class ClusterEngine:
         #-----------------------
         # GRID
         fig = plt.figure()
-        ax = plt.subplot(111)
 
+        ax = plt.subplot(121)
+        plt.title("%s contigs" % len(data))
+        plt.xlabel("MER PARTS")
+        plt.ylabel("COV PARTS")
+        orig_k_dat = self.PM.kmerVals[row_indices]
+        orig_c_dat = self.PM.transformedCP[row_indices][:,2]/10
+        orig_l_dat = np_sqrt(self.PM.contigLengths[row_indices])
+        orig_col_dat = self.PM.contigColors[row_indices]
+        ax.scatter(orig_k_dat, orig_c_dat, edgecolors=orig_col_dat, c=orig_col_dat, s=orig_l_dat)
+        
+        ax = plt.subplot(122)
+        plt.title("%s contigs" % len(data))
+        plt.xlabel("MER PARTS")
+        plt.ylabel("COV PARTS")
         c_plot_data = np_copy(c_dat[:,2])/10
         k_plot_data = np_copy(k_dat[:,0])
         k_sorted_indices = np_argsort(k_plot_data)
@@ -811,7 +826,7 @@ class ClusterEngine:
 
         ax.set_xlim(k_min, k_max)
         ax.set_ylim(c_min, c_max)
-        fig.set_size_inches(6,6)
+        fig.set_size_inches(12,6)
         plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
         plt.close()
         del fig
@@ -1374,38 +1389,34 @@ class HoughPartitioner:
         # super long contigs in with the short riff raff by accident.
         wobble = 0.05
         
-        log_cov_counts = np_bincount(np_array([int(i) for i in np_log10(lengths)]))
-        mode_count_index = np_argmax(log_cov_counts)
+        # we give you at least one point, but we give you 
+        # more points if you're longer. Let's say 1 point per 10,000bp
         scales_per = {}
-        scales = np_ones((len(log_cov_counts)))
-        mult = 10
-        for i in range(mode_count_index + 1, len(log_cov_counts)):
-            scales[i] = int(scales[i] * mult)
-            mult *= 10
-        
+        for i in range(len(dAta)):
+            scales_per[i] = int((lengths[i] - 1)/10000) + 1
+            
         fake_data = []       
         fake2real = {}
-        real2fake = {}
-        mult_counts = {}
+        #real2fake = {}
         
         j = 0
         for i in range(len(dAta)):
             fake_data.append(dAta[i])
             fake2real[j] = i
-            try:
-                real2fake[i].append(j)
-            except KeyError:
-                real2fake[i] = [j]
-            rep = scales[int(np_log10(lengths[i]))]
-            mult_counts[i] = rep
+#            try:
+#                real2fake[i].append(j)
+#            except KeyError:
+#                real2fake[i] = [j]
+#            rep = scales[int(np_log10(lengths[i]))]
+            rep = scales_per[i] 
             j += 1 
             for k in range(1, rep):
                 fake_data.append(wobble * np_randn() + dAta[i])
                 fake2real[j] = i
-                try:
-                    real2fake[i].append(j)
-                except KeyError:
-                    real2fake[i] = [j]
+#                try:
+#                    real2fake[i].append(j)
+#                except KeyError:
+#                    real2fake[i] = [j]
                 j += 1 
             
         # Force the data to fill the space
@@ -1419,19 +1430,24 @@ class HoughPartitioner:
         real_fake_cutz = {}
         seen_indices = {}
         
-        fake_sorted_reals = np_array([fake2real[ii] for ii in sorted_indices_fake])
         outer = 0
         seens = {}
+        # make an array of "real" indices sorted by their fake data values.
+        # NOTE: this array may / will contain multiple copies of each real index
+        fake_sorted_reals = np_array([fake2real[ii] for ii in sorted_indices_fake])
+        
+        # now we'd like to find out where the center of this guy lies.
         
         for ri in fake_sorted_reals:
-            if mult_counts[ri] == 1:
+            rep = scales_per[ri]
+            if rep == 1:
                 real_fake_cutz[ri] = outer
             else:
                 try:
                     seens[ri] += 1
                 except KeyError:
                     seens[ri] = 1
-                if seens[ri] <= int(mult_counts[ri]/2):
+                if seens[ri] <= int(scales_per[ri]/2):
                     real_fake_cutz[ri] = outer
             outer += 1
 
@@ -1491,7 +1507,7 @@ class HoughPartitioner:
             block_lens.append(ii - block_starts[-1] + 1)
 
         if imgTag is not None:
-            print "%d_%s_%s_%d DL: %d BL: %d" % (self.hc, imgTag, side, level, len(data), len(block_lens))
+            #print "%d_%s_%s_%d DL: %d BL: %d" % (self.hc, imgTag, side, level, len(data), len(block_lens))
             # make a pretty picture
             fff = np_ones(im_shape) * 255
             for p in found_line.keys():
