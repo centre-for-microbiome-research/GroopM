@@ -736,65 +736,46 @@ class ClusterEngine:
         ax = plt.subplot(221)
         plt.xlabel("PCA1")
         plt.ylabel("PCA2")
-        
+
         ax.scatter(orig_k_dat, orig_k2_dat, edgecolors=orig_col_dat, c=orig_col_dat, s=orig_l_dat)
-        
+
         ax = plt.subplot(223)
         plt.title("%s contigs" % len(rowIndices))
         plt.xlabel("MER PARTS")
         plt.ylabel("COV PARTS")
-        
+
         ax.scatter(orig_k_dat, orig_c_dat, edgecolors=orig_col_dat, c=orig_col_dat, s=orig_l_dat)
 
-        
-        c_plot_data = np_copy(c_dat[:,2])/10
-        k_plot_data = np_copy(k_dat[:,0])
-        k2_plot_data = np_copy(k_dat[:,1])
-        k_sorted_indices = np_argsort(k_plot_data)
-        c_sorted_indices = np_argsort(c_plot_data)
-        k_plot_data = k_plot_data[k_sorted_indices]
-        c_plot_data = c_plot_data[c_sorted_indices]
-        c_max = np_max(c_plot_data) * 1.1
-        k_max = np_max(k_plot_data) * 1.1
-        c_min = np_min(c_plot_data) * 0.9
-        k_min = np_min(k_plot_data) * 0.9
-        k_eps = (k_max - k_min) / len(row_indices)
-        c_eps = (c_max - c_min) / len(row_indices)
         cols=self.PM.contigColors[row_indices]
         lens = np_sqrt(self.PM.contigLengths[row_indices])
-
-        start = 0
-        k_lines = []
-        k_sizes = [len(p) for p in k_partitions]
-        for k in range(len(k_sizes)-1):
-            k_lines.append(k_plot_data[k_sizes[k]+start]+k_eps)
-            start += k_sizes[k]
-
-        k_temp = {}
-        c_temp = {}
-        for ii in range(len(row_indices)):
-            k_temp[row_indices[k_sorted_indices[ii]]] = ii
-            c_temp[row_indices[c_sorted_indices[ii]]] = ii
-        schooched_c = []
-        schooched_k = []
-        for ri in row_indices:
-            schooched_k.append(k_temp[ri])
-            schooched_c.append(c_temp[ri])
-        schooched_k = np_array(schooched_k)
-        schooched_c = np_array(schooched_c)
 
         ax = plt.subplot(222)
         plt.xlabel("PCA1")
         plt.ylabel("PCA2")
-
-        ax.scatter(k_plot_data[schooched_k], k2_plot_data[schooched_k], edgecolors=cols, c=disp_cols, s=lens)
+        ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors=cols, c=disp_cols, s=lens)
 
         ax = plt.subplot(224)
         plt.title("%s contigs" % len(row_indices))
         plt.xlabel("MER PARTS")
         plt.ylabel("COV PARTS")
+        ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors=cols, c=disp_cols, s=lens)
 
-        ax.scatter(k_plot_data[schooched_k], c_plot_data[schooched_c], edgecolors=cols, c=disp_cols, s=lens)
+        c_max = np_max(c_dat[:,2]/10) * 1.1
+        k_max = np_max(k_dat[:,0]) * 1.1
+        c_min = np_min(c_dat[:,2]/10) * 0.9
+        k_min = np_min(k_dat[:,0]) * 0.9
+        k_eps = (k_max - k_min) / len(row_indices)
+        c_eps = (c_max - c_min) / len(row_indices)
+
+        start = 0
+        k_lines = []
+        k_sizes = [len(p) for p in k_partitions]
+
+        k_index_sort = np_argsort(k_dat[:,0])
+
+        for k in range(len(k_sizes)-1):
+            k_lines.append(k_dat[k_index_sort,0][k_sizes[k]+start]+k_eps)
+            start += k_sizes[k]
 
         for k in k_lines:
             plt.plot([k,k], [c_min, c_max], 'b-')
@@ -818,14 +799,14 @@ class ClusterEngine:
 
                 #-----
                 # GRID
-                c_plot_data = self.PM.transformedCP[k_sep_indices][:,2]/10
-                c_plot_data = c_plot_data[np_argsort(c_plot_data)]
+                c_sorted_data = self.PM.transformedCP[k_sep_indices][:,2]/10
+                c_sorted_data = c_sorted_data[np_argsort(c_sorted_data)]
 
                 start = 0
                 c_lines = []
                 c_sizes = [len(p) for p in c_partitions]
                 for c in range(len(c_sizes)-1):
-                    c_lines.append(c_plot_data[c_sizes[c]+start]+c_eps)
+                    c_lines.append(c_sorted_data[c_sizes[c]+start]+c_eps)
                     start += c_sizes[c]
 
                 if pc == 1:
@@ -1412,8 +1393,8 @@ class HoughPartitioner:
         # diff line we'll be making. This way we may be able to avoid lumping
         # super long contigs in with the short riff raff by accident.
         wobble = 0.05
-        
-        # we give you at least one point, but we give you 
+
+        # we give you at least one point, but we give you
         # more points if you're longer. Let's say 1 point per 10,000bp
         scales_per = {}
         for i in range(len(dAta)):
@@ -1432,8 +1413,8 @@ class HoughPartitioner:
 #            except KeyError:
 #                real2spread[i] = [j]
 #            rep = scales[int(np_log10(lengths[i]))]
-            rep = scales_per[i] 
-            j += 1 
+            rep = scales_per[i]
+            j += 1
             for k in range(1, rep):
                 spread_data.append(wobble * np_randn() + dAta[i])
                 spread2real[j] = i
