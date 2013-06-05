@@ -1402,26 +1402,26 @@ class HoughPartitioner:
             
         spread_data = []       
         spread2real = {}
-        #real2spread = {}
+#AA        real2spread = {}
         
         j = 0
         for i in range(len(dAta)):
             spread_data.append(dAta[i])
             spread2real[j] = i
-#            try:
-#                real2spread[i].append(j)
-#            except KeyError:
-#                real2spread[i] = [j]
-#            rep = scales[int(np_log10(lengths[i]))]
+#AA            try:
+#AA                real2spread[i].append(j)
+#AA            except KeyError:
+#AA                real2spread[i] = [j]
+#AA            rep = scales[int(np_log10(lengths[i]))]
             rep = scales_per[i]
             j += 1
             for k in range(1, rep):
                 spread_data.append(wobble * np_randn() + dAta[i])
                 spread2real[j] = i
-#                try:
-#                    real2spread[i].append(j)
-#                except KeyError:
-#                    real2spread[i] = [j]
+#AA                try:
+#AA                    real2spread[i].append(j)
+#AA                except KeyError:
+#AA                    real2spread[i] = [j]
                 j += 1 
             
         # Force the data to fill the space
@@ -1439,27 +1439,27 @@ class HoughPartitioner:
         # now we'd like to find out where the center of this guy lies.
         # Just take the mean
         real_center_in_spread = {}  # the center of the blob of "real" vales in the spread data
+        spread_centre_index_to_real = {}
         for ii in range(len(spread_sorted_reals)):
             ri = spread_sorted_reals[ii]
             try:
                 seens[ri].append(ii)
             except KeyError:
                 seens[ri] = [ii]
-        for ri in spread_sorted_reals:
-            real_center_in_spread[ri] = np_mean(seens[ri])
+        for ri in range(len(dAta)):
+            real_center_in_spread[ri] = np_around(np_mean(seens[ri]))
+            try:
+                spread_centre_index_to_real[real_center_in_spread[ri]].append(ri)
+            except KeyError:
+                spread_centre_index_to_real[real_center_in_spread[ri]] = [ri]
 
-        o_cutz = {}
-        for ri in spread_sorted_reals:
-            o_cutz[real_center_in_spread[ri]] = ri
-
-        # work out weightings
         # we want to know how much each value differs from it's neighbours
         back_diffs = [float(data[i] - data[i-1]) for i in range(1,d_len)]
         diffs = [back_diffs[0]]
         for i in range(len(back_diffs)-1):
             diffs.append((back_diffs[i] + back_diffs[i+1])/2)
         diffs.append(back_diffs[-1])
-        diffs = np_array(diffs)**2
+        diffs = np_array(diffs)**2  # square it! Makes things more betterrer
 
         # replace the data array by the sum of it's diffs
         for i in range(1, d_len):
@@ -1474,16 +1474,19 @@ class HoughPartitioner:
             pass
         diffs *= len(diffs)
 
+        # make it 2D
         t_data = np_array(zip(diffs, np_arange(d_len)))
         im_shape = (int(np_max(t_data, axis=0)[0]+1), d_len)
 
+        # Apply hough transformation
+        # and find the most prominent line
         (m, c, accumulator) = self.hough(t_data.astype(float), im_shape)
-        # find the most prominent line
 
-        # create the line we found and see which of the original points lie on
-        # the line
+        # draw a nice thick line over the top of the data
+        # found_line is a set of points
         found_line = self.points2Line(np_array([[c,0],[m*im_shape[1]+c,im_shape[1]]]), im_shape[1], im_shape[0], 3)
 
+        # see which points lie on the line
         # we need to protect against the data line crossing
         # in and out of the "found line"
         in_block = False
@@ -1506,7 +1509,7 @@ class HoughPartitioner:
             block_lens.append(ii - block_starts[-1] + 1)
 
         if imgTag is not None:
-            #print "%d_%s_%s_%d DL: %d BL: %d" % (self.hc, imgTag, side, level, len(data), len(block_lens))
+            print "%d_%s_%s_%d DL: %d BL: %d" % (self.hc, imgTag, side, level, len(data), len(block_lens))
             # make a pretty picture
             fff = np_ones(im_shape) * 255
             for p in found_line.keys():
@@ -1518,54 +1521,62 @@ class HoughPartitioner:
             accumulator /= np_max(accumulator)
             accumulator *= 255
 
-            #imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
+            imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
 
+        # check to see the line hit something
         if len(block_lens) == 0:
             return np_array([np_arange(len(dAta))])
 
-        # work out what we'll keep and what we'll refine more
+        # get the start and end indices in the longest block found
         longest_block = np_argmax(block_lens)
         spread_start = block_starts[longest_block]
         spread_end =  block_lens[longest_block] + spread_start
 
-        left = []
-        selected = []
-        right = []
-
+        # select all the guys with their centres to the left of the start
+        tmp = {}
         for ii in range(spread_start):
             try:
-                left.append(o_cutz[ii])
-            except KeyError:
-                pass
+                for ri in spread_centre_index_to_real[ii]:
+                    tmp[ri] = None
+            except KeyError: pass
+        left = np_array(tmp.keys())
+        
+        # select all the guys with their centres between the start and end
+        tmp = {}
         for ii in range(spread_start, spread_end):
             try:
-                selected.append(o_cutz[ii])
-            except KeyError:
-                pass
+                for ri in spread_centre_index_to_real[ii]:
+                    tmp[ri] = None
+            except KeyError: pass
+        selected = np_array(tmp.keys())
+            
+        # select all the guys with their centres right of the end
+        tmp = {}
         for ii in range(spread_end, d_len):
             try:
-                right.append(o_cutz[ii])
-            except KeyError:
-                pass
-
-        left = np_array(left)
-        selected = np_array(selected)
-        right = np_array(right)
+                for ri in spread_centre_index_to_real[ii]:
+                    tmp[ri] = None
+            except KeyError: pass
+        right = np_array(tmp.keys())
 
         rets = []
+        # recursive call for leftmost indices 
         if len(left) > 0:
             left_p = self.houghPartition(dAta[left], lengths[left], side="%sL" %side, level=level+1, imgTag=imgTag)
             for A in left_p:
                 rets.append(np_array([left[i] for i in A]))
 
+        # add the centre (selected) in
         if len(selected) > 0:
             rets.append(selected)
 
+        # recursive call for rightmost indices 
         if len(right) > 0:
             right_p = self.houghPartition(dAta[right], lengths[right], side="%sR" %side, level=level+1, imgTag=imgTag)
             for A in right_p:
                 rets.append(np_array([right[i] for i in A]))
 
+#AA
         if False:
             # this was kinds hard to write and
             # is still an idea worth pursuing.
@@ -1607,6 +1618,7 @@ class HoughPartitioner:
                     for spread_index in real2spread[index]:
                         spread_ret.append(spread_index)
                 # examine diffs[spread_ret],
+#AA
 
         return np_array(rets)
 
