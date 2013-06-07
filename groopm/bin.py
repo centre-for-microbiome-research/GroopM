@@ -353,7 +353,7 @@ class Bin:
 #------------------------------------------------------------------------------
 # Grow the bin 
     
-    def recruit(self, transformedCP, averageCoverages, kmerVals, contigLengths, im2RowIndices, binnedRowIndices, restrictedRowIndices, verbose=False):
+    def recruit0(self, transformedCP, averageCoverages, kmerVals, contigLengths, im2RowIndices, binnedRowIndices, restrictedRowIndices, verbose=False):
         """Iteratively grow the bin"""
         # save these
         pt = self.covTolerance
@@ -390,7 +390,7 @@ class Bin:
                 for y in range(int(self.covLowerLimits[1]), int(self.covUpperLimits[1])):
                     for z in range(int(self.covLowerLimits[2]), int(self.covUpperLimits[2])):
                         # make sure it's a legit point
-                        if((x,y,z) in im2RowIndices):
+                        try:
                             for row_index in im2RowIndices[(x,y,z)]:
                                 if (row_index not in binnedRowIndices) and (row_index not in self.rowIndices) and (row_index not in restrictedRowIndices):
                                     if(self.withinLimits(kmerVals, averageCoverages, row_index)):
@@ -399,6 +399,7 @@ class Bin:
                                     else:
                                         # we may check next time!
                                         ris_seen.append(row_index)
+                        except KeyError: pass
         else:
             for row_index in rowIndices:
                 if (row_index not in binnedRowIndices) and (row_index not in self.rowIndices) and (row_index not in restrictedRowIndices):
@@ -413,6 +414,48 @@ class Bin:
         self.makeBinDist(transformedCP, averageCoverages, kmerVals, contigLengths)
         self.binSize = self.rowIndices.shape[0]
         return (num_recruited, ris_seen)
+
+    def makeRanges(self, pos, span, limit):
+        """Make search ranges which won't go out of bounds"""
+        lower = pos-span
+        upper = pos+span+1
+        if(lower < 0):
+            lower = 0
+        if(upper > limit):
+            upper = limit
+        return np.arange(lower, upper)
+                
+    def recruit(self,
+                PM,
+                GT,
+                im2RowIndices,
+                inclusivity=2):
+        """Recruit more contigs into the bin, used during coring only"""
+        num_recruited = 0
+        inRange = lambda x,l,u : x >= l and x < u
+        
+        # make the distribution
+        self.makeBinDist(PM.transformedCP, PM.averageCoverages, PM.kmerVals, PM.contigLengths)
+        c_lens = PM.contigLengths[self.rowIndices]
+        
+        for x in self.makeRanges(self.covMeans[0], inclusivity*self.covStdevs[0], PM.scaleFactor):
+            for y in self.makeRanges(self.covMeans[1], inclusivity*self.covStdevs[1], PM.scaleFactor):
+                for z in self.makeRanges(self.covMeans[2], inclusivity*self.covStdevs[2], PM.scaleFactor):
+                    # make sure it's a legit point
+                    try:
+                        for row_index in im2RowIndices[(x,y,z)]:
+                            if (row_index not in PM.binnedRowIndices) and (row_index not in self.rowIndices) and (row_index not in PM.restrictedRowIndices):
+                                # check the length
+                                length_wrong = GT.isMaxOutlier(PM.contigLengths[row_index],
+                                                               c_lens)
+                                if not length_wrong:
+                                    # fits length cutoff
+                                    (covZ,merZ) = self.scoreProfile(PM.kmerVals[row_index], PM.transformedCP[row_index])
+                                    if covZ <= inclusivity and merZ <= inclusivity:
+                                        # we can recruit
+                                        self.rowIndices = np.append(self.rowIndices,row_index)
+                                        num_recruited += 1                                        
+                    except KeyError: pass
 
     def shuffleMembers(self, adds, removes):
         """add some guys, take some guys away"""

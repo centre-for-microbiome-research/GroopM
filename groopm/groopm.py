@@ -102,6 +102,7 @@ class GroopMOptionsParser():
             print " [[GroopM]] Running in core creation mode..."
             print "*******************************************************************************"
             CE = cluster.ClusterEngine(options.dbname,
+                                       timer,
                                        force=options.force,
                                        finalPlot=options.plot,
                                        plot=options.multiplot,
@@ -112,8 +113,7 @@ class GroopMOptionsParser():
                 gf = ""
             else:
                 gf=options.graphfile
-            CE.makeCores(timer,
-                         coreCut=options.cutoff,
+            CE.makeCores(coreCut=options.cutoff,
                          gf=gf)
 
         elif(options.subparser_name == 'refine'):

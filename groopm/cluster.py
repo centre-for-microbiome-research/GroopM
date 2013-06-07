@@ -107,6 +107,7 @@ from scipy.misc import imsave
 from profileManager import ProfileManager
 from binManager import BinManager, CenterFinder
 import groopmTimekeeper as gtime
+from refine import GrubbsTester, RefineEngine
 import refine
 from PCA import PCA, Center
 from groopmExceptions import *
@@ -122,6 +123,7 @@ class ClusterEngine:
     """Top level interface for clustering contigs"""
     def __init__(self,
                  dbFileName,
+                 timer,
                  plot=False,
                  finalPlot=False,
                  force=False,
@@ -145,8 +147,11 @@ class ClusterEngine:
         self.blurRadius = 2
         self.span = 45                  # amount we can travel about when determining "hot spots"
 
-
-        self.HP = HoughPartitioner()
+        # Misc tools we'll need
+        self.timer = timer
+        self.RE = RefineEngine(self.timer, BM=self.BM)   # Basic refinement techniques
+        self.HP = HoughPartitioner()                     # Finding cluster centers for unknown K
+        self.GT = GrubbsTester()                         # Test length conformity
 
         # misc
         self.forceWriting = force
@@ -185,30 +190,28 @@ class ClusterEngine:
 #------------------------------------------------------------------------------
 # CORE CONSTRUCTION AND MANAGEMENT
 
-    def makeCores(self, timer, coreCut, gf=""):
+    def makeCores(self, coreCut, gf=""):
         """Cluster the contigs to make bin cores"""
         # check that the user is OK with nuking stuff...
         if(not self.promptOnOverwrite()):
             return False
 
-        RE = refine.RefineEngine(timer, BM=self.BM)
-
         # get some data
-        self.PM.loadData(timer, loadRawKmers=True, condition="length >= "+str(coreCut))
-        print "    %s" % timer.getTimeStamp()
+        self.PM.loadData(self.timer, loadRawKmers=True, condition="length >= "+str(coreCut))
+        print "    %s" % self.timer.getTimeStamp()
 
         # transform the data
         print "Apply data transformations"
-        self.PM.transformCP(timer)
+        self.PM.transformCP(self.timer)
         # plot the transformed space (if we've been asked to...)
         if(self.debugPlots):
             self.PM.renderTransCPData()
-        print "    %s" % timer.getTimeStamp()
+        print "    %s" % self.timer.getTimeStamp()
 
         # cluster and bin!
         print "Create cores"
-        cum_contigs_used_good = self.initialiseCores(RE)
-        print "    %s" % timer.getTimeStamp()
+        cum_contigs_used_good = self.initialiseCores()
+        print "    %s" % self.timer.getTimeStamp()
 
         # condense cores
         print "Refine cores [begin: %d]" % len(self.BM.bins)
@@ -216,14 +219,14 @@ class ClusterEngine:
             prfx = "CORE"
         else:
             prfx = ""
-        RE.refineBins(timer, auto=True, saveBins=False, plotFinal=prfx, gf=gf)
+        self.RE.refineBins(self.timer, auto=True, saveBins=False, plotFinal=prfx, gf=gf)
 
         # Now save all the stuff to disk!
         print "Saving bins"
         self.BM.saveBins(nuke=True)
-        print "    %s" % timer.getTimeStamp()
+        print "    %s" % self.timer.getTimeStamp()
 
-    def initialiseCores(self, RE):
+    def initialiseCores(self):
         """Process contigs and form CORE bins"""
         num_below_cutoff = 0            # how many consecutive attempts have produced small bins
         breakout_point = 100            # how many will we allow before we stop this loop
@@ -250,6 +253,7 @@ class ClusterEngine:
             bids_made = []
             putative_clusters = self.findNewClusterCenters()
 
+
             if(putative_clusters is None):
                 break
             else:
@@ -257,17 +261,18 @@ class ClusterEngine:
                 [max_blur_value, max_x, max_y] = putative_clusters[1]
                 self.roundNumber += 1
                 sub_round_number = 1
+                test_bins = []
                 for center_row_indices in partitions:
-                    # some of these row indices may have been eaten in a call to
-                    # bin.recruit. We need to fix this now!
-                    cri = np_array([ri for ri in center_row_indices if (ri not in self.PM.binnedRowIndices and ri not in self.PM.restrictedRowIndices)])
-                    if len(cri) > 0:
-                        center_row_indices = cri
-                        total_BP = np_sum(self.PM.contigLengths[center_row_indices])
-                        bin_size = len(center_row_indices)
-                    else:
-                        total_BP = 0
-                        bin_size = 0
+                    test_bin = self.BM.makeNewBin(rowIndices=center_row_indices)
+                    test_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
+                    test_bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerVals, self.PM.contigLengths, fileName="TEST_"+str(self.imageCounter))
+                    test_bins.append(test_bin.id)
+                    self.imageCounter += 1       
+                self.BM.deleteBins(test_bins, force=True, freeBinnedRowIndices=False, saveBins=False)
+                    
+                for center_row_indices in partitions:
+                    total_BP = np_sum(self.PM.contigLengths[center_row_indices])
+                    bin_size = len(center_row_indices)
 
                     if self.BM.isGoodBin(total_BP, bin_size):   # Can we trust very small bins?.
                         # time to make a bin
@@ -302,7 +307,7 @@ class ClusterEngine:
 
                 # try to merge these guys here...
                 if num_bids_made > 1:
-                    RE.mergeSimilarBins(None,
+                    self.RE.mergeSimilarBins(None,
                                         None,
                                         bids=bids_made,
                                         loose=2.,
@@ -314,13 +319,9 @@ class ClusterEngine:
                         bin = self.BM.getBin(bid)
 
                         # recruit more contigs
-                        bin.recruit(self.PM.transformedCP,
-                                    self.PM.averageCoverages,
-                                    self.PM.kmerVals,
-                                    self.PM.contigLengths,
-                                    self.im2RowIndices,
-                                    self.PM.binnedRowIndices,
-                                    self.PM.restrictedRowIndices
+                        bin.recruit(self.PM,
+                                    self.GT,
+                                    self.im2RowIndices
                                     )
                         self.updatePostBin(bin)
 
@@ -420,114 +421,6 @@ class ClusterEngine:
                   return None
 
                 return [putative_clusters, ret_values]
-
-    def smartPartDevo(self, rowIndices):
-      """Partition a collection of contigs into 'core' groups"""
-      from scipy.spatial import KDTree as kdt
-      from scipy.cluster.vq import kmeans, whiten, vq
-
-      # sanity check that there is enough data here to try a determine 'core' groups
-      total_BP = np_sum(self.PM.contigLengths[rowIndices])
-      if not self.BM.isGoodBin(total_BP, len(rowIndices), ms=5): # Can we trust very small bins?.
-          # get out of here but keep trying
-          # the calling function should restrict these indices
-          return [np_array(rowIndices)]
-
-      # try clustering dat using simple k-means
-      k_max = 100
-
-      # whiten data so each dimension is given equal weight
-      c_whiten_dat = whiten(self.PM.transformedCP[rowIndices])
-
-      # identify contigs that are 'noise'
-      k_noise = 5
-      search_tree = kdt(c_whiten_dat)
-      dist_kth_contig = []
-      for index in xrange(len(c_whiten_dat)):
-          # get the K closest contigs
-          k = np_min([k_noise, len(c_whiten_dat)-1])
-          dist = search_tree.query(c_whiten_dat[index], k=k_noise)[0][k_noise-1]
-          dist_kth_contig.append(dist)
-
-      noise_threshold = np_mean(dist_kth_contig) + 2*np_std(dist_kth_contig)
-      core_contigs = []
-      core_contig_indices = []
-      num_noisy_contig = 0
-      for index in xrange(len(c_whiten_dat)):
-          # get the K closest contigs
-          k = np_min([k_noise, len(c_whiten_dat)-1])
-          dist_kth_contig = search_tree.query(c_whiten_dat[index], k=k_noise)[0][k_noise-1]
-          if dist_kth_contig < noise_threshold:
-            core_contigs.append(c_whiten_dat[index])
-            core_contig_indices.append(index)
-          else:
-            num_noisy_contig += 1
-
-      core_contigs = np_array(core_contigs)
-
-      # determine number of clusters in data
-      avg_silhouette_max = -1
-      k_best = 0
-      for k in xrange(2, k_max):
-        codebook, distortion = kmeans(core_contigs, k, iter=10, thresh=1e-05)
-        cluster_index, dist = vq(core_contigs, codebook)
-
-        # calculate CH index
-        within = 0
-        between = 0
-        for i in xrange(len(core_contigs)):
-          cluster_idI = cluster_index[i]
-          for j in xrange(i+1, len(core_contigs)):
-            cluster_idJ = cluster_index[j]
-            if cluster_idI == cluster_idJ:
-              within += np_sum((core_contigs[i] - core_contigs[j])**2)
-            else:
-              between += np_sum((core_contigs[i] - core_contigs[j])**2)
-
-        ch_index = (between / (k - 1)) / (within / (len(core_contigs)-k))
-
-        # calculate silhouette index
-        avg_silhouette = 0
-        for i in xrange(len(core_contigs)):
-          cluster_idI = cluster_index[i]
-
-          dist = [[] for x in xrange(k)]
-          for j in xrange(0, len(core_contigs)):
-            cluster_idJ = cluster_index[j]
-            dist[cluster_idJ].append(np_sum(np_abs(core_contigs[i] - core_contigs[j])))
-
-          a_i = np_mean(dist[cluster_idI])
-          b_i = 1e10
-          for j in xrange(0, k):
-            if j != cluster_idI:
-              mean_dist = np_mean(dist[j])
-              if mean_dist < b_i:
-                b_i = mean_dist
-
-          avg_silhouette += (b_i - a_i) / max(a_i, b_i)
-
-        avg_silhouette /= len(core_contigs)
-
-        if avg_silhouette > avg_silhouette_max:
-          avg_silhouette_max = avg_silhouette
-          k_best = k
-
-        # check if clustering results are becoming worse and we can bail on
-        # trying larger k values
-        if abs(k-k_best) > 3 and k > 10:
-          break
-
-      # determine final clustering with optimal K value
-      codebook, distortion = kmeans(core_contigs, k_best, iter=100, thresh=1e-05)
-      cluster_index, dist = vq(core_contigs, codebook)
-
-      # create paritioning of data into 'core' clusters
-      ret_parts = [[] for x in xrange(k_best)]
-      for i in xrange(len(core_contigs)):
-        ret_parts[cluster_index[i]].append(rowIndices[core_contig_indices[i]])
-      ret_parts = [np_array(x) for x in ret_parts]
-
-      return np_array(ret_parts)
 
     def smartTwoWayContraction(self, rowIndices):
       """Partition a collection of contigs into 'core' groups"""
@@ -779,8 +672,16 @@ class ClusterEngine:
           part_bp = np_sum(l_dat[k_part])
           if self.BM.isGoodBin(part_bp, len(k_part), ms=5):
 
-              data = np_copy(c_dat[k_part,2]/10)
+              data = np_copy(c_dat[k_part])
+              Center(data,verbose=0)
+              p = PCA(data)
+              components = p.pc()
+              data = np_array([float(i) for i in components[:,0]])
+              data -= np_min(data)
+              data /= np_max(data)
+
               l_data = np_copy(l_dat[k_part])
+              
 
               c_partitions = self.HP.houghPartition(data, l_data)
               #c_partitions = self.HP.houghPartition(data, l_data, imgTag="COV")
@@ -829,173 +730,6 @@ class ClusterEngine:
           ret_parts.append(np_array(row_indices[p]))
 
       return np_array(ret_parts)
-
-    def smartPart(self, rowIndices):
-        """Partition a collection of contigs into 'core' groups"""
-        partitions = []
-        total_BP = np_sum(self.PM.contigLengths[rowIndices])
-        if not self.BM.isGoodBin(total_BP, len(rowIndices), ms=5): # Can we trust very small bins?.
-            # get out of here but keep trying
-            # the calling function should restrict these indices
-            return [np_array(rowIndices)]
-        else:
-            # we've got a few good guys here, partition them up!
-            self.HP.hc += 1
-
-            data = np_copy(self.PM.kmerVals[rowIndices])
-            data -= np_min(data)
-            try:
-                data /= np_max(data)
-            except FloatingPointError:
-                pass
-
-            k_partitions = self.HP.houghPartition(data, self.PM.contigLengths[rowIndices], imgTag="MER")
-            print "\n==========KKKKK==========", len(k_partitions)
-
-            if(len(k_partitions) == 0):
-                return None
-
-            # for new plot!
-            self.plotIndices(rowIndices, fileName="%d_CUT" % self.HP.hc)
-
-            c_plot_data = self.PM.transformedCP[rowIndices][:,2]/10
-            k_plot_data = np_copy(self.PM.kmerVals[rowIndices])
-            k_sorted_indices = np_argsort(k_plot_data)
-            c_sorted_indices = np_argsort(c_plot_data)
-            k_plot_data = k_plot_data[k_sorted_indices]
-            c_plot_data = c_plot_data[c_sorted_indices]
-            c_max = np_max(c_plot_data) * 1.1
-            k_max = np_max(k_plot_data) * 1.1
-            c_min = np_min(c_plot_data) * 0.9
-            k_min = np_min(k_plot_data) * 0.9
-            k_eps = (k_max - k_min) / len(rowIndices)
-            c_eps = (c_max - c_min) / len(rowIndices)
-
-            start = 0
-            k_lines = []
-            k_sizes = [len(p) for p in k_partitions]
-            for k in range(len(k_sizes)-1):
-                k_lines.append(k_plot_data[k_sizes[k]+start]+k_eps)
-                start += k_sizes[k]
-
-            k_temp = {}
-            c_temp = {}
-            for ii in range(len(rowIndices)):
-                k_temp[rowIndices[k_sorted_indices[ii]]] = ii
-                c_temp[rowIndices[c_sorted_indices[ii]]] = ii
-            schooched_c = []
-            schooched_k = []
-            for ri in rowIndices:
-                schooched_k.append(k_temp[ri])
-                schooched_c.append(c_temp[ri])
-            schooched_k = np_array(schooched_k)
-            schooched_c = np_array(schooched_c)
-
-            cols=self.PM.contigColors[rowIndices]
-            lens = np_sqrt(self.PM.contigLengths[rowIndices])
-
-            fig = plt.figure()
-            ax = plt.subplot(111)
-
-            ax.scatter(k_plot_data[schooched_k], c_plot_data[schooched_c], edgecolors=cols, c=cols, s=lens)
-
-            for k in k_lines:
-                plt.plot([k,k], [c_min, c_max], 'b-')
-
-            pc = 0
-            for p in k_partitions:
-                pc += 1
-                k_sep_indices = rowIndices[p]
-                part_bp = np_sum(self.PM.contigLengths[rowIndices])
-                if self.BM.isGoodBin(part_bp, len(k_sep_indices), ms=5):
-                    if pc == 1:
-                        k_line_min = k_min
-                    else:
-                        k_line_min = k_lines[pc-2]
-
-                    if pc == len(k_partitions):
-                        k_line_max = k_max
-                    else:
-                        k_line_max = k_lines[pc-1]
-
-                    data = np_copy(self.PM.transformedCP[k_sep_indices][:,2])
-                    data -= np_min(data)
-                    try:
-                        data /= np_max(data)
-                    except FloatingPointError:
-                        pass
-
-                    c_partitions = self.HP.houghPartition(data, self.PM.contigLengths[rowIndices], imgTag="COV(%0.2f-%0.2f)" % (k_line_min,k_line_max))
-                    c_plot_data = self.PM.transformedCP[k_sep_indices][:,2]/10
-                    c_plot_data = c_plot_data[np_argsort(c_plot_data)]
-
-                    start = 0
-                    c_lines = []
-                    c_sizes = [len(p) for p in c_partitions]
-                    for c in range(len(c_sizes)-1):
-                        c_lines.append(c_plot_data[c_sizes[c]+start]+c_eps)
-                        start += c_sizes[c]
-
-                    for c in c_lines:
-                        plt.plot([k_line_min,k_line_max], [c, c], 'g-')
-
-                    print "\n==========CCCCCC==========", pc, len(c_partitions)
-                    for p in c_partitions:
-                        partitions.append(np_array(k_sep_indices[p]))
-
-
-            ax.set_xlim(k_min, k_max)
-            ax.set_ylim(c_min, c_max)
-            fig.set_size_inches(6,6)
-            plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
-            plt.close()
-            del fig
-
-            return partitions
-
-    def partitionVals(self, vals, tag=None, stdevCutoff=0.04, maxSpread=0.15):
-        """Work out where shifts in kmer/coverage vals happen"""
-        cf = CenterFinder()
-        partitions = []
-        working_list = np_copy(vals)
-        fix_dict = dict(zip(range(len(working_list)),range(len(working_list))))
-        while(len(working_list) > 2):
-            c_index = cf.findArrayCenter(working_list, tag=tag)
-            expanded_indices = cf.expandSelection(c_index, working_list, stdevCutoff=stdevCutoff, maxSpread=maxSpread, tag=tag)
-            # fix any munges from previous deletes
-            morphed_indices = [fix_dict[i] for i in expanded_indices]
-            partitions.append(morphed_indices)
-            # shunt the indices to remove down!
-            shunted_indices = []
-            for offset, index in enumerate(expanded_indices):
-                shunted_indices.append(index - offset)
-
-            # make an updated working list and fix the fix dict
-            nwl = []
-            nfd = {}
-            shifter = 0
-            for i in range(len(working_list) - len(shunted_indices)):
-                if(len(shunted_indices) > 0):
-                    if(i >= shunted_indices[0]):
-                        tmp = shunted_indices.pop(0)
-                        shifter += 1
-                        # consume any and all conseqs
-                        while(len(shunted_indices) > 0):
-                            if(shunted_indices[0] == tmp):
-                                shunted_indices.pop(0)
-                                shifter += 1
-                            else:
-                                break
-
-                nfd[i] = fix_dict[i + shifter]
-                nwl.append(working_list[i + shifter])
-
-            fix_dict = nfd
-            working_list = np_array(nwl)
-
-        if(len(working_list) > 0):
-            partitions.append(fix_dict.values())
-        return partitions
 
 #------------------------------------------------------------------------------
 # DATA MAP MANAGEMENT
