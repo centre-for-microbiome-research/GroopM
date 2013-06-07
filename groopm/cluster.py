@@ -229,7 +229,7 @@ class ClusterEngine:
     def initialiseCores(self):
         """Process contigs and form CORE bins"""
         num_below_cutoff = 0            # how many consecutive attempts have produced small bins
-        breakout_point = 100            # how many will we allow before we stop this loop
+        breakout_point = 30            # how many will we allow before we stop this loop
 
         # First we need to find the centers of each blob.
         # We can make a heat map and look for hot spots
@@ -264,8 +264,8 @@ class ClusterEngine:
                 test_bins = []
                 for center_row_indices in partitions:
                     test_bin = self.BM.makeNewBin(rowIndices=center_row_indices)
-                    test_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
-                    test_bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerVals, self.PM.contigLengths, fileName="TEST_"+str(self.imageCounter))
+                    test_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
+                    test_bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerNormPC1, self.PM.contigLengths, fileName="TEST_"+str(self.imageCounter))
                     test_bins.append(test_bin.id)
                     self.imageCounter += 1       
                 self.BM.deleteBins(test_bins, force=True, freeBinnedRowIndices=False, saveBins=False)
@@ -279,23 +279,21 @@ class ClusterEngine:
                         bin = self.BM.makeNewBin(rowIndices=center_row_indices)
 
                         # work out the distribution in points in this bin
-                        bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerVals, self.PM.contigLengths)
+                        bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
 
                         # append this bins list of mapped rowIndices to the main list
                         bids_made.append(bin.id)
                         num_bins += 1
                         self.updatePostBin(bin)
-                        num_below_cutoff = 0
 
                         if(self.debugPlots):
-                            bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerVals, self.PM.contigLengths, fileName="FRESH_"+str(self.imageCounter))
+                            bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerNormPC1, self.PM.contigLengths, fileName="FRESH_"+str(self.imageCounter))
                             self.imageCounter += 1
                             self.plotHeat("HM_%d.%d.png" % (self.roundNumber, sub_round_number), max=max_blur_value, x=max_x, y=max_y)
                             sub_round_number += 1
                     else:
                         # this partition was too small, restrict these guys we don't run across them again
                         self.restrictRowIndices(center_row_indices)
-                        num_below_cutoff += 1
 
                 # did we do anything?
                 num_bids_made = len(bids_made)
@@ -334,7 +332,7 @@ class ClusterEngine:
                             sub_counter += 10
                             print "\n%4d" % sub_counter,
 
-                        bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerVals, self.PM.contigLengths, fileName="P_BIN_%d"%(bin.id)) #***slow plot!
+                        bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerNormPC1, self.PM.contigLengths, fileName="P_BIN_%d"%(bin.id)) #***slow plot!
 
                     except BinNotFoundException: pass
 
@@ -426,10 +424,10 @@ class ClusterEngine:
       """Partition a collection of contigs into 'core' groups"""
       num_iterations = 10
 
-      k_eps = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
-
       k_move_perc = 0.3
       c_move_perc = 0.2
+
+      k_eps = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
 
       # sanity check that there is enough data here to try a determine 'core' groups
       total_BP = np_sum(self.PM.contigLengths[rowIndices])
@@ -439,7 +437,7 @@ class ClusterEngine:
           return [np_array(rowIndices)]
 
       # make a copy of the data we'll be munging
-      k_dat = np_copy(np_col_stack((self.PM.kmerVals[rowIndices], self.PM.kmerVals2[rowIndices])))
+      k_dat = np_copy(self.PM.kmerPCs[rowIndices])
       c_dat = np_copy(self.PM.transformedCP[rowIndices])
       l_dat = np_copy(self.PM.contigLengths[rowIndices])
       col_dat = np_copy(self.PM.contigColors[rowIndices])
@@ -456,15 +454,8 @@ class ClusterEngine:
       dist_matrix = squareform(pdist(c_whiten_dat))
       c_radius = np_median(np_sort(dist_matrix)[:,k_eps-1])
 
-      # calculate radius threshold in whitened kmer space
-      k_std = np_std(k_dat, axis=0)
-      try:
-        k_whiten_dat = k_dat / k_std
-      except:
-        # data has zero standard deviation ?
-        return [np_array(row_indices)]
-
-      dist_matrix = squareform(pdist(k_whiten_dat))
+      # calculate radius threshold in kmer space
+      dist_matrix = squareform(pdist(k_dat))
       k_radius = np_median(np_sort(dist_matrix)[:,k_eps-1])
 
       # perform two-way contraction magic
@@ -485,7 +476,9 @@ class ClusterEngine:
           S = 1       # SAT and VAL remain fixed at 1. Reduce to make
           V = 1       # Pastels if that's your preference...
           num_points = len(row_indices)
-          disp_cols = np_array([htr(val, S, V) for val in k_dat[:,0]]).reshape(((num_points, 3)))
+          k_dat1_norm = (k_dat[:,0] - np_min(k_dat[:,0], axis=0))
+          k_dat1_norm /= np_max(k_dat1_norm, axis=0)
+          disp_cols = np_array([htr(val, S, V) for val in k_dat1_norm]).reshape(((num_points, 3)))
 
           fig = plt.figure()
           ax = fig.add_subplot(111, projection='3d')
@@ -520,7 +513,7 @@ class ClusterEngine:
 
         # calculate distance matrices
         c_dist_matrix = squareform(pdist(c_whiten_dat))
-        k_dist_matrix = squareform(pdist(k_whiten_dat))
+        k_dist_matrix = squareform(pdist(k_dat))
 
         # find nearest neighbours to each point in normalized transformed coverage space,
         # and use this to converage a point's kmer profile
@@ -590,7 +583,6 @@ class ClusterEngine:
           c_dat = np_delete(c_dat, noise, axis = 0)
           k_dat = np_delete(k_dat, noise, axis = 0)
           c_whiten_dat = np_delete(c_whiten_dat, noise, axis = 0)
-          k_whiten_dat = np_delete(k_whiten_dat, noise, axis = 0)
           l_dat = np_delete(l_dat, noise, axis = 0)
           col_dat = np_delete(col_dat, noise, axis = 0)
           row_indices = np_delete(row_indices, noise, axis = 0)
@@ -612,8 +604,8 @@ class ClusterEngine:
       # GRID
       fig = plt.figure()
 
-      orig_k_dat = self.PM.kmerVals[rowIndices]
-      orig_k2_dat = self.PM.kmerVals2[rowIndices]
+      orig_k_dat = self.PM.kmerPCs[rowIndices,0]
+      orig_k2_dat = self.PM.kmerPCs[rowIndices,1]
       orig_c_dat = self.PM.transformedCP[rowIndices][:,2]/10
       orig_l_dat = np_sqrt(self.PM.contigLengths[rowIndices])
       orig_col_dat = self.PM.contigColors[rowIndices]
@@ -1118,11 +1110,11 @@ class HoughPartitioner:
         scales_per = {}
         for i in range(len(dAta)):
             scales_per[i] = int((lengths[i] - 1)/10000) + 1
-            
-        spread_data = []       
+
+        spread_data = []
         spread2real = {}
 #AA        real2spread = {}
-        
+
         j = 0
         for i in range(len(dAta)):
             spread_data.append(dAta[i])
@@ -1141,8 +1133,8 @@ class HoughPartitioner:
 #AA                    real2spread[i].append(j)
 #AA                except KeyError:
 #AA                    real2spread[i] = [j]
-                j += 1 
-            
+                j += 1
+
         # Force the data to fill the space
         spread_data = np_array(spread_data)
         d_len = len(spread_data)
@@ -1259,7 +1251,7 @@ class HoughPartitioner:
                     tmp[ri] = None
             except KeyError: pass
         left = np_array(tmp.keys())
-        
+
         # select all the guys with their centres between the start and end
         tmp = {}
         for ii in range(spread_start, spread_end):
@@ -1268,7 +1260,7 @@ class HoughPartitioner:
                     tmp[ri] = None
             except KeyError: pass
         selected = np_array(tmp.keys())
-            
+
         # select all the guys with their centres right of the end
         tmp = {}
         for ii in range(spread_end, d_len):
@@ -1279,7 +1271,7 @@ class HoughPartitioner:
         right = np_array(tmp.keys())
 
         rets = []
-        # recursive call for leftmost indices 
+        # recursive call for leftmost indices
         if len(left) > 0:
             left_p = self.houghPartition(dAta[left], lengths[left], side="%sL" %side, level=level+1, imgTag=imgTag)
             for A in left_p:
@@ -1289,7 +1281,7 @@ class HoughPartitioner:
         if len(selected) > 0:
             rets.append(selected)
 
-        # recursive call for rightmost indices 
+        # recursive call for rightmost indices
         if len(right) > 0:
             right_p = self.houghPartition(dAta[right], lengths[right], side="%sR" %side, level=level+1, imgTag=imgTag)
             for A in right_p:

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/srv/whitlam/bio/apps/12.04/sw/python/2.7.4/bin/python2.7
 ###############################################################################
 #                                                                             #
 #    groopm                                                                   #
@@ -61,9 +61,9 @@ from groopm import groopm
 
 def printHelp():
     print '''\
-    
+
                ...::: groopm :::...
-                   
+
        Automagical metagenomic binning FTW!
 
     Typical workflow:
@@ -73,23 +73,23 @@ def printHelp():
     groopm refine       -> Refine these cores a little
     groopm recruit      -> Add more contigs to the cores
     groopm extract      -> Extract binned contigs or reads
-    
+
     Extra features:
-    
+
         Utilities:
-      
+
     groopm merge        -> Merge two or more bins
     groopm split        -> Split a bin into N parts
     groopm delete       -> Delete a bin
-    
+
         Printing, plotting:
-        
+
     groopm explore      -> Methods for viewing bin layouts
     groopm highlight    -> Produce high def images
     groopm print        -> Print bin statistics
     groopm plot         -> Plot bins
     groopm dump         -> Write database to text file
-    
+
     USE: groopm OPTION -h to see detailed options
     '''
 
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     ##################################################
     # Typical workflow
     ##################################################
-    
+
     #-------------------------------------------------
     # parse raw data and save
     file_parser = subparsers.add_parser('parse',
@@ -114,7 +114,7 @@ if __name__ == '__main__':
     file_parser.add_argument('reference', help="fasta file containing bam reference sequences")
     file_parser.add_argument('bamfiles', nargs='+', help="bam files to parse")
     file_parser.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing DB file without prompting")
-        
+
     #-------------------------------------------------
     # load saved data and make bin cores
     core_builder = subparsers.add_parser('core',
@@ -183,27 +183,27 @@ if __name__ == '__main__':
     bin_merger.add_argument('dbname', help="name of the database to open")
     bin_merger.add_argument('bids', nargs='+', type=int, help="bin ids to merge.")
     bin_merger.add_argument('-f', '--force', action="store_true", default=False, help="merge without prompting")
-    
+
     #-------------------------------------------------
     # split a bin into two parts
     bin_splitter = subparsers.add_parser('split',
                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                        help='split a bin into n pieces') 
+                                        help='split a bin into n pieces')
     bin_splitter.add_argument('dbname', help="name of the database to open")
     bin_splitter.add_argument('bid', type=int, help="bin id to split")
     bin_splitter.add_argument('parts', type=int, help="number of parts to split the bin into")
     bin_splitter.add_argument('-m', '--mode', default="kmer", help="profile to split on [kmer, cov]")
     bin_splitter.add_argument('-f', '--force', action="store_true", default=False, help="split without prompting")
-    
+
     #-------------------------------------------------
     # delete bins
     bin_deleter = subparsers.add_parser('delete',
                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                        help='delete bins') 
+                                        help='delete bins')
     bin_deleter.add_argument('dbname', help="name of the database to open")
     bin_deleter.add_argument('bids', nargs='+', type=int, help="bin ids to delete")
     bin_deleter.add_argument('-f', '--force', action="store_true", default=False, help="delete without prompting")
-    
+
     ##################################################
     # Plotting
     ##################################################
@@ -239,7 +239,7 @@ if __name__ == '__main__':
     bin_highlighter.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
 
     #-------------------------------------------------
-    # print bin information       
+    # print bin information
     bin_printer = subparsers.add_parser('print',
                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                         help='print bin information')
@@ -269,11 +269,11 @@ if __name__ == '__main__':
     bin_plotter.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to plot (None for all)")
     bin_plotter.add_argument('-s', '--sidebyside', action="store_true", default=False, help="plot bins in 3d side by side instead of to file")
     bin_plotter.add_argument('-T', '--together', action="store_true", default=False, help="plot bins in 3d in one figure")
-    bin_plotter.add_argument('-k', '--kmers', action="store_true", default=False, help="include kmers in figure [only used for option 'T']")    
+    bin_plotter.add_argument('-k', '--kmers', action="store_true", default=False, help="include kmers in figure [only used for option 'T']")
     bin_plotter.add_argument('-t', '--tag', default="BIN", help="tag to add to output filename")
-    bin_plotter.add_argument('-f', '--folder', default="", help="save plots in folder")    
+    bin_plotter.add_argument('-f', '--folder', default="", help="save plots in folder")
     bin_plotter.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
-        
+
     #-------------------------------------------------
     # get and check options
     args = None
@@ -298,15 +298,15 @@ if __name__ == '__main__':
             #p.sort_stats('cumulative').print_stats(10)
             #p.sort_stats('time').print_stats(10)
             ##########################################
-            ##########################################            
-        else:        
+            ##########################################
+        else:
             GM_parser.parseOptions(args)
     except:
         print "Unexpected error:", sys.exc_info()[0]
         raise
-    
+
 ###############################################################################
 ###############################################################################
 ###############################################################################
 ###############################################################################
-        
+
