@@ -454,23 +454,48 @@ class GMDataManager:
         print ""
         print "                            please be patient..."
         print ""
-
         # the change in this version is that we'll be saving a variable number of kmerSig PCA's
         # and GC information for each contig
+        print "    Calculating and storing the kmerSig PCAs"
 
         # grab any data needed from database before opening if for modification
         bin_ids = self.getBins(dbFileName)
         orig_con_names = self.getContigNames(dbFileName)
-        print "    Reading kmer signatures from database."
         ksigs = self.getKmerSigs(dbFileName)
 
+        # compute the PCA of the ksigs
         conParser = ContigParser()
+        pc_ksigs = conParser.PCAKSigs(ksigs)
+        num_cons = len(pc_ksigs)
+
+        db_desc = []
+        for i in xrange(0, len(pc_ksigs[0])):
+          db_desc.append(('pc' + str(i+1), float))
 
         try:
             with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+                pg = h5file.getNode('/', name='profile')
+                try:
+                    try:
+                        h5file.removeNode(pg, 'tmp_kpca')
+                    except:
+                        pass
+
+                    h5file.createTable(pg,
+                                              'tmp_kpca',
+                                              np.array(pc_ksigs, dtype=db_desc),
+                                              title='Kmer signature PCAs',
+                                              expectedrows=num_cons
+                                              )
+
+                    h5file.renameNode(pg, 'kpca', 'tmp_kpca', overwrite=True)
+
+                except:
+                    print "Error creating KMERVALS table:", exc_info()[0]
+                    raise
+
                 # Add GC
-                print "    Calculating and storing GC for each contig."
-                contigFile = raw_input('    Please specify fasta file containing reference sequences: ')
+                contigFile = raw_input('\nPlease specify fasta file containing the bam reference sequences: ')
                 with open(contigFile, "r") as f:
                     try:
                         contigInfo = {}
@@ -490,9 +515,6 @@ class GMDataManager:
                 # remove any contigs not in the current DB (these were removed due to having zero coverage)
                 good_indices = [i for i in range(len(orig_con_names)) if orig_con_names[i] in con_names]
 
-                print 'len(orig_con_names): ' + str(len(orig_con_names))
-                print 'len(con_names): ' + str(len(con_names))
-
                 con_names = con_names[good_indices]
                 con_lengths = con_lengths[good_indices]
                 con_gcs = con_gcs[good_indices]
@@ -504,35 +526,6 @@ class GMDataManager:
                                          bin_ids,
                                          con_lengths, con_gcs)
                                )
-
-                # Add PCs
-                print "    Calculating and storing the kmerSig PCAs."
-                pc_ksigs = conParser.PCAKSigs(ksigs)
-                num_cons = len(pc_ksigs)
-
-                pg = h5file.getNode('/', name='profile')
-                try:
-                    try:
-                        h5file.removeNode(pg, 'tmp_kpca')
-                    except:
-                        pass
-
-                    db_desc = []
-                    for i in xrange(0, len(pc_ksigs[0])):
-                      db_desc.append(('pc' + str(i+1), float))
-
-                    h5file.createTable(pg,
-                                              'tmp_kpca',
-                                              np.array(pc_ksigs, dtype=db_desc),
-                                              title='Kmer signature PCAs',
-                                              expectedrows=num_cons
-                                              )
-
-                    h5file.renameNode(pg, 'kpca', 'tmp_kpca', overwrite=True)
-
-                except:
-                    print "Error creating KMERVALS table:", exc_info()[0]
-                    raise
         except:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise

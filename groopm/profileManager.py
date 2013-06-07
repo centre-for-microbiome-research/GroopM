@@ -222,15 +222,6 @@ class ProfileManager:
                 self.kmerNormPC1 -= np_min(self.kmerNormPC1)
                 self.kmerNormPC1 /= np_max(self.kmerNormPC1)
 
-                if(makeColors):
-                    if(verbose):
-                        print "    Creating color profiles"
-
-                    # use HSV to RGB to generate colors
-                    S = 1       # SAT and VAL remain fixed at 1. Reduce to make
-                    V = 1       # Pastels if that's your preference...
-                    self.contigColors = np_array([htr(val, S, V) for val in self.kmerNormPC1])
-
             if(loadContigNames):
                 if(verbose):
                     print "    Loading contig names"
@@ -241,10 +232,19 @@ class ProfileManager:
                 if(verbose):
                     print "    Loading contig lengths (Total: %d BP)" % ( sum(self.contigLengths) )
 
-            if(loadContigLengths):
+            if(loadContigGCs):
                 self.contigGCs = self.dataManager.getContigGCs(self.dbFileName, indices=self.indices)
                 if(verbose):
                     print "    Loading contig GC ratios (Average GC: %0.3f)" % ( np_mean(self.contigGCs) )
+                if(makeColors):
+                    if(verbose):
+                        print "    Creating color profiles"
+
+                    # use HSV to RGB to generate colors
+                    S = 1       # SAT and VAL remain fixed at 1. Reduce to make
+                    V = 1       # Pastels if that's your preference...
+                    #self.contigColors = np_array([htr(val, S, V) for val in self.contigGCs])
+                    self.contigColors = np_array([htr((1. + np_sin(np_pi * val - np_pi/2))/2., S, V) for val in self.contigGCs])
 
             if(loadBins):
                 if(verbose):
