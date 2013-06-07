@@ -482,13 +482,8 @@ class ClusterEngine:
 
             self.cluster_num += 1
 
-          # use HSV to RGB to generate colors
-          S = 1       # SAT and VAL remain fixed at 1. Reduce to make
-          V = 1       # Pastels if that's your preference...
-          num_points = len(row_indices)
-          k_dat1_norm = (k_dat[:,0] - k_dat1_min) / k_dat1_max
-          disp_cols = np_array([htr(val, S, V) for val in k_dat1_norm]).reshape(((num_points, 3)))
-
+          disp_cols = self.PM.contigColors[row_indices]
+ 
           fig = plt.figure()
           ax = fig.add_subplot(111, projection='3d')
 
@@ -635,14 +630,21 @@ class ClusterEngine:
       plt.xlabel("PCA1")
       plt.ylabel("PCA2")
 
-      ax.scatter(orig_k_dat, orig_k2_dat, edgecolors=orig_col_dat, c=orig_col_dat, s=orig_l_dat)
+      from matplotlib.patches import Rectangle
+      alpha = 0.35
+      ax.scatter(orig_k_dat, orig_k2_dat, edgecolors=orig_col_dat, c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
+      XX = ax.get_xlim()
+      YY = ax.get_ylim()
+      ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
 
       ax = plt.subplot(223)
       plt.title("%s contigs" % len(rowIndices))
       plt.xlabel("MER PARTS")
       plt.ylabel("COV PARTS")
-
-      ax.scatter(orig_k_dat, orig_c_dat, edgecolors=orig_col_dat, c=orig_col_dat, s=orig_l_dat)
+      ax.scatter(orig_k_dat, orig_c_dat, edgecolors=orig_col_dat, c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
+      XX = ax.get_xlim()
+      YY = ax.get_ylim()
+      ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
 
       cols=self.PM.contigColors[row_indices]
       lens = np_sqrt(self.PM.contigLengths[row_indices])
@@ -650,13 +652,16 @@ class ClusterEngine:
       ax = plt.subplot(222)
       plt.xlabel("PCA1")
       plt.ylabel("PCA2")
-      ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors=cols, c=disp_cols, s=lens)
+      ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors=cols, c=disp_cols, s=lens, zorder=10, alpha=alpha)
+      XX = ax.get_xlim()
+      YY = ax.get_ylim()
+      ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
 
       ax = plt.subplot(224)
       plt.title("%s contigs" % len(row_indices))
       plt.xlabel("MER PARTS")
       plt.ylabel("COV PARTS")
-      ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors=cols, c=disp_cols, s=lens)
+      ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors=cols, c=disp_cols, s=lens, zorder=10, alpha=alpha)
 
       c_max = np_max(c_dat[:,2]/10) * 1.1
       k_max = np_max(k_dat[:,0]) * 1.1
@@ -676,7 +681,7 @@ class ClusterEngine:
           start += k_sizes[k]
 
       for k in k_lines:
-          plt.plot([k,k], [c_min, c_max], 'b-')
+          plt.plot([k,k], [c_min, c_max], 'r-')
 
       pc = 0
       for k_part in k_partitions:
@@ -723,13 +728,17 @@ class ClusterEngine:
 
 
               for c in c_lines:
-                  plt.plot([k_line_min,k_line_max], [c, c], 'g-')
+                  plt.plot([k_line_min,k_line_max], [c, c], 'r-')
 
               for c_part in c_partitions:
                   partitions.append(np_array(k_part[c_part]))
 
       ax.set_xlim(k_min, k_max)
       ax.set_ylim(c_min, c_max)
+      XX = ax.get_xlim()
+      YY = ax.get_ylim()
+      ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+      
       fig.set_size_inches(12,12)
       plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
       plt.close()
