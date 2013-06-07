@@ -62,7 +62,7 @@ See also:
 """
 
 class PCA:
-    def __init__( self, A, fraction=0.90 ):
+    def __init__( self, A, fraction=0.80 ):
         assert 0 <= fraction <= 1
             # A = U . diag(d) . Vt, O( m n^2 ), lapack_lite --
         self.U, self.d, self.Vt = np.linalg.svd( A, full_matrices=False )
@@ -74,7 +74,7 @@ class PCA:
         except:
             print len(A), len(self.sumvariance), len(self.eigen)
             raise
-         
+
         self.npc = np.searchsorted( self.sumvariance, fraction ) + 1
         while(self.npc == 1):   # prevents less than 2 pcs being found
             fraction *= 1.1

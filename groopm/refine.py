@@ -197,7 +197,7 @@ class RefineEngine:
                 for bid in bids:
                     self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                                self.PM.averageCoverages,
-                                               self.PM.kmerVals,
+                                               self.PM.kmerNormPC1,
                                                self.PM.contigLengths)
                 self.BM.plotBins(FNPrefix=plotFinal, ET=self.ET)
 
@@ -340,7 +340,7 @@ class RefineEngine:
                 # this bin
                 self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                               self.PM.averageCoverages,
-                                              self.PM.kmerVals,
+                                              self.PM.kmerNormPC1,
                                               self.PM.contigLengths)
                 # now go point shopping
                 disp_vals = np_array([])
@@ -444,7 +444,7 @@ class RefineEngine:
             for bid in bids:
                 self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                               self.PM.averageCoverages,
-                                              self.PM.kmerVals,
+                                              self.PM.kmerNormPC1,
                                               self.PM.contigLengths)
             self.BM.plotBins(FNPrefix="AFTER_OB", ET=self.ET)
             print "    %s" % timer.getTimeStamp()
@@ -489,7 +489,7 @@ class RefineEngine:
         for bid in bids:
             self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                        self.PM.averageCoverages,
-                                       self.PM.kmerVals,
+                                       self.PM.kmerNormPC1,
                                        self.PM.contigLengths)
             kval_stdev_distrb.append(self.BM.bins[bid].kValStdev)
 
@@ -519,7 +519,7 @@ class RefineEngine:
 
         if bids == []:
             bids = self.BM.getBids()
-        
+
         if not silent:
             print "    Merging similar bins (%d) with kCut %0.4f cCut %0.4f" % (len(bids),kCut,cCut)
 
@@ -559,7 +559,7 @@ class RefineEngine:
 # PREP DATA STRUCTURES
 
         # sort all contigs in ascending order of kSigPC
-        sorted_Ks = np_argsort(self.PM.kmerVals)
+        sorted_Ks = np_argsort(self.PM.kmerNormPC1)
         seen_bids = {}
         index = 0
         for RI in sorted_Ks:
@@ -574,7 +574,7 @@ class RefineEngine:
             bin = self.BM.bins[bid]
             bin.makeBinDist(self.PM.transformedCP,
                             self.PM.averageCoverages,
-                            self.PM.kmerVals,
+                            self.PM.kmerNormPC1,
                             self.PM.contigLengths,
                             merTol=2.5)  # make the merTol a little larger...
 
@@ -583,8 +583,8 @@ class RefineEngine:
 
             # work out the volume of the minimum bounding coverage ellipsoid and kmer ellipse
             (bin_c_ellipsoids[bid], bin_c_ellipsoid_volumes[bid]) = bin.getBoundingCEllipsoidVol(self.PM.transformedCP, ET=self.ET, retA=True)
-            BP = np_array(zip([self.PM.kmerVals[i] for i in bin.rowIndices],
-                              [self.PM.kmerVals2[i] for i in bin.rowIndices])
+            BP = np_array(zip([self.PM.kmerPCs[i,0]  for i in bin.rowIndices],
+                              [self.PM.kmerPCs[i,1] for i in bin.rowIndices])
                           )
             (bin_k_ellipses[bid], bin_k_ellipse_areas[bid]) = bin.getBoundingKEllipseArea(BP,
                                                                                           ET=self.ET,
@@ -676,14 +676,14 @@ class RefineEngine:
                     fig = plt.figure()
                     ax = fig.add_subplot(1, 1, 1)
                     base_bin.plotMersOnAx(ax,
-                                          self.PM.kmerVals,
-                                          self.PM.kmerVals2,
+                                          self.PM.kmerPCs[:,0],
+                                          self.PM.kmerPCs[:,1],
                                           self.PM.contigColors,
                                           self.PM.contigLengths,
                                           ET=self.ET)
                     query_bin.plotMersOnAx(ax,
-                                           self.PM.kmerVals,
-                                           self.PM.kmerVals2,
+                                           self.PM.kmerPCs[:,0],
+                                           self.PM.kmerPCs[:,1],
                                            self.PM.contigColors,
                                            self.PM.contigLengths,
                                            ET=self.ET)
@@ -892,7 +892,7 @@ class RefineEngine:
         i = 0
         for bid in bids:
             training_data[i,:-1] = np_mean([self.PM.transformedCP[row_index] for row_index in self.BM.bins[bid].rowIndices], axis=0)
-            training_data[i,-1] = np_mean([self.PM.kmerVals[row_index] for row_index in self.BM.bins[bid].rowIndices], axis=0)
+            training_data[i,-1] = np_mean([self.PM.kmerNormPC1[row_index] for row_index in self.BM.bins[bid].rowIndices], axis=0)
             i += 1
 
         # normalise the data so it fits between 0 and 1
@@ -900,11 +900,11 @@ class RefineEngine:
         # used to scale
         minz = np_zeros((SOMDIM))
         minz[:-1] = np_min(self.PM.transformedCP, axis=0)
-        minz[-1] = np_min(self.PM.kmerVals, axis=0)
+        minz[-1] = np_min(self.PM.kmerNormPC1, axis=0)
 
         maxz = np_zeros((SOMDIM))
         maxz[:-1] = np_max(self.PM.transformedCP, axis=0)
-        maxz[-1] = np_max(self.PM.kmerVals, axis=0)
+        maxz[-1] = np_max(self.PM.kmerNormPC1, axis=0)
 
         maxz -= minz
         training_data -= minz
@@ -992,7 +992,7 @@ class RefineEngine:
         # make a training set of just this node's contigs
         block = np_zeros((bin.binSize,SOMDIM))
         block[:,:-1] = self.PM.transformedCP[bin.rowIndices]
-        block[:,-1] = self.PM.kmerVals[bin.rowIndices]
+        block[:,-1] = self.PM.kmerNormPC1[bin.rowIndices]
 
         # global normalisation
         block -= minz
@@ -1063,7 +1063,7 @@ class RefineEngine:
         # we load all contigs into the block
         block = np_zeros((len(self.PM.transformedCP),SOMDIM))
         block[:,:-1] = self.PM.transformedCP
-        block[:,-1] = self.PM.kmerVals
+        block[:,-1] = self.PM.kmerNormPC1
         # apply sane normalisation
         block -= minz
         block /= maxz
@@ -1329,7 +1329,7 @@ class RefineEngine:
         mean_k_vals = []
         for bid in self.BM.getBids():
             bin = self.BM.bins[bid]
-            bin_k_vals = [[self.PM.kmerVals[row_index]] for row_index in bin.rowIndices]
+            bin_k_vals = [[self.PM.kmerNormPC1[row_index]] for row_index in bin.rowIndices]
             k_dist = squareform(cdist(bin_k_vals, bin_k_vals))
             if len(k_dist) > 0:
                 mean_k_vals.append(np_mean(k_dist))
@@ -1891,7 +1891,7 @@ class RefineEngine:
                 bin_c_lengths[bid] = [self.PM.contigLengths[row_index] for row_index in self.BM.bins[bid].rowIndices]
                 self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                            self.PM.averageCoverages,
-                                           self.PM.kmerVals,
+                                           self.PM.kmerNormPC1,
                                            self.PM.contigLengths)
             affected_bids = []
             this_step_binned = 0
@@ -1906,7 +1906,7 @@ class RefineEngine:
                     unbinned_lens.append(unbinned[row_index])
             block = np_zeros((len(unbinned_rows),SOMDIM))
             block[:,:-1] = self.PM.transformedCP[unbinned_rows]
-            block[:,-1] = self.PM.kmerVals[unbinned_rows]
+            block[:,-1] = self.PM.kmerNormPC1[unbinned_rows]
             # apply sane normalisation
             block -= minz
             block /= maxz

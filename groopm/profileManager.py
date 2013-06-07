@@ -88,7 +88,7 @@ from numpy import (abs as np_abs,
                    transpose as np_transpose,
                    where as np_where,
                    zeros as np_zeros)
-from numpy.linalg import norm as np_norm 
+from numpy.linalg import norm as np_norm
 #import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist, squareform
 from scipy.spatial import KDTree as kdt
@@ -100,7 +100,7 @@ from mstore import GMDataManager
 from bin import Bin
 import groopmExceptions as ge
 
-np_seterr(all='raise')     
+np_seterr(all='raise')
 
 ###############################################################################
 ###############################################################################
@@ -109,7 +109,7 @@ np_seterr(all='raise')
 
 class ProfileManager:
     """Interacts with the groopm DataManager and local data fields
-    
+
     Mostly a wrapper around a group of numpy arrays and a pytables quagmire
     """
     def __init__(self, dbFileName, force=False, scaleFactor=1000, squish=False):
@@ -118,7 +118,7 @@ class ProfileManager:
         self.dbFileName = dbFileName        # db containing all the data we'd like to use
         self.condition = ""                 # condition will be supplied at loading time
         # --> NOTE: ALL of the arrays in this section are in sync
-        # --> each one holds information for an individual contig 
+        # --> each one holds information for an individual contig
         self.indices = np_array([])        # indices into the data structure based on condition
         self.covProfiles = np_array([])     # coverage based coordinates
         self.transformedCP = np_array([])   # the munged data points
@@ -126,17 +126,18 @@ class ProfileManager:
         self.averageCoverages = np_array([]) # average coverage across all stoits
         self.normCoverages = np_array([])   # norm of the raw coverage vectors
         self.kmerSigs = np_array([])        # raw kmer signatures
-        self.kmerVals = np_array([])        # PCA'd kmer sigs PC1
-        self.kmerVals2 = np_array([])       # PCA'd kmer sigs PC2
+        self.kmerNormPC1 = np_array([])     # First PC of kmer sigs normalized to [0, 1]
+        self.kmerPCs = np_array([])         # PCs of kmer sigs capturing specified variance
         self.stoitColNames = np_array([])
         self.contigNames = np_array([])
         self.contigLengths = np_array([])
-        self.contigColors = np_array([])   # calculated from kmerVals
-        
+        self.contigGCs = np_array([])
+        self.contigColors = np_array([])   # calculated from kmerNormPC1
+
         self.binIds = np_array([])          # list of bin IDs
         # --> end section
 
-        # meta                
+        # meta
         self.validBinIds = {}               # valid bin ids -> numMembers
         self.binnedRowIndices = {}         # dictionary of those indices which belong to some bin
         self.restrictedRowIndices = {}     # dictionary of those indices which can not be binned yet
@@ -145,7 +146,7 @@ class ProfileManager:
 
         # contig links
         self.links = {}
-        
+
         # misc
         self.forceWriting = force           # overwrite existng values silently?
         self.scaleFactor = scaleFactor      # scale every thing in the transformed data to this dimension
@@ -163,6 +164,7 @@ class ProfileManager:
                  makeColors=True,
                  loadContigNames=True,
                  loadContigLengths=True,
+                 loadContigGCs=True,
                  loadBins=False,
                  loadLinks=False):
         """Load pre-parsed data"""
@@ -171,7 +173,7 @@ class ProfileManager:
             verbose=False
         if verbose:
             print "Loading data from:", self.dbFileName
-        
+
         # check to see if we need to override the condition
         if(len(bids) != 0):
             condition = "((bid == "+str(bids[0])+")"
@@ -187,11 +189,11 @@ class ProfileManager:
             if(verbose):
                 print "    Loaded indices with condition:", condition
             self.numContigs = len(self.indices)
-            
+
             if self.numContigs == 0:
                 print "    ERROR: No contigs loaded using condition:", condition
                 return
-            
+
             if(not silent):
                 print "    Working with: %d contigs" % self.numContigs
 
@@ -200,7 +202,7 @@ class ProfileManager:
                     print "    Loading coverage profiles"
                 self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indices=self.indices)
                 self.normCoverages = np_array([np_norm(self.covProfiles[i]) for i in range(len(self.indices))])
-                
+
                 # work out average coverages
                 self.averageCoverages = np_array([sum(i)/self.numStoits for i in self.covProfiles])
 
@@ -210,21 +212,23 @@ class ProfileManager:
                 self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indices=self.indices)
 
             if(loadKmerSigs):
+                PCs = self.dataManager.getKmerPCAs(self.dbFileName, indices=self.indices)
+                self.kmerPCs = PCs
+
                 if(verbose):
-                    print "    Loading PCA kmer sigs"
-                #self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indices=self.indices)
-                PCAs = self.dataManager.getKmerPCAs(self.dbFileName, indices=self.indices)
-                self.kmerVals = PCAs[:,0]
-                self.kmerVals2 = PCAs[:,1]
-                
+                    print "    Loading PCA kmer sigs (" + str(len(self.kmerPCs[0])) + " dimensional space)"
+
+                self.kmerNormPC1 = PCs[:,0]
+                self.kmerNormPC1 = (self.kmerNormPC1 - np_min(self.kmerNormPC1)) / np_max(self.kmerNormPC1)
+
                 if(makeColors):
                     if(verbose):
                         print "    Creating color profiles"
-                    
+
                     # use HSV to RGB to generate colors
                     S = 1       # SAT and VAL remain fixed at 1. Reduce to make
                     V = 1       # Pastels if that's your preference...
-                    self.contigColors = np_array([htr(val, S, V) for val in self.kmerVals])
+                    self.contigColors = np_array([htr(val, S, V) for val in self.kmerNormPC1])
 
             if(loadContigNames):
                 if(verbose):
@@ -232,12 +236,15 @@ class ProfileManager:
                 self.contigNames = self.dataManager.getContigNames(self.dbFileName, indices=self.indices)
 
             if(loadContigLengths):
-                if(verbose):
-                    print "    Loading contig lengths"
                 self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indices=self.indices)
                 if(verbose):
-                    print "    Contigs contain %d BP" % ( sum(self.contigLengths) )
-            
+                    print "    Loading contig lengths (Total: %d BP)" % ( sum(self.contigLengths) )
+
+            if(loadContigLengths):
+                self.contigGCs = self.dataManager.getContigGCs(self.dbFileName, indices=self.indices)
+                if(verbose):
+                    print "    Loading contig GC ratios (Average GC: %0.3f)" % ( np_mean(self.contigGCs) )
+
             if(loadBins):
                 if(verbose):
                     print "    Loading bin assignments"
@@ -253,26 +260,26 @@ class ProfileManager:
                 self.binnedRowIndices = {}
                 for i in range(len(self.indices)):
                     if(self.binIds[i] != 0):
-                        self.binnedRowIndices[i] = True 
+                        self.binnedRowIndices[i] = True
             else:
                 # we need zeros as bin indicies then...
                 self.binIds = np_zeros(len(self.indices))
-                
+
             if(loadLinks):
                 self.loadLinks()
-                
+
             self.stoitColNames = self.getStoitColNames()
-            
+
         except:
             print "Error loading DB:", self.dbFileName, exc_info()[0]
             raise
 
     def reduceIndices(self, deadRowIndices):
         """purge indices from the data structures
-        
+
         Be sure that deadRowIndices are sorted ascending
         """
-        # strip out the other values        
+        # strip out the other values
         self.indices = np_delete(self.indices, deadRowIndices, axis=0)
         self.covProfiles = np_delete(self.covProfiles, deadRowIndices, axis=0)
         self.transformedCP = np_delete(self.transformedCP, deadRowIndices, axis=0)
@@ -280,20 +287,20 @@ class ProfileManager:
         self.contigLengths = np_delete(self.contigLengths, deadRowIndices, axis=0)
         self.contigColors = np_delete(self.contigColors, deadRowIndices, axis=0)
         #self.kmerSigs = np_delete(self.kmerSigs, deadRowIndices, axis=0)
-        self.kmerVals = np_delete(self.kmerVals, deadRowIndices, axis=0)
+        self.kmerPCs = np_delete(self.kmerPCs, deadRowIndices, axis=0)
         self.binIds = np_delete(self.binIds, deadRowIndices, axis=0)
-        
+
 #------------------------------------------------------------------------------
-# GET / SET 
+# GET / SET
 
     def getNumStoits(self):
         """return the value of numStoits in the metadata tables"""
         return self.dataManager.getNumStoits(self.dbFileName)
-            
+
     def getMerColNames(self):
         """return the value of merColNames in the metadata tables"""
         return self.dataManager.getMerColNames(self.dbFileName)
-            
+
     def getMerSize(self):
         """return the value of merSize in the metadata tables"""
         return self.dataManager.getMerSize(self.dbFileName)
@@ -310,27 +317,27 @@ class ProfileManager:
     def getNumBins(self):
         """return the value of numBins in the metadata tables"""
         return self.dataManager.getNumBins(self.dbFileName)
-        
+
     def setNumBins(self, numBins):
         """set the number of bins"""
         self.dataManager.setNumBins(self.dbFileName, numBins)
-        
+
     def getStoitColNames(self):
         """return the value of stoitColNames in the metadata tables"""
         return np_array(self.dataManager.getStoitColNames(self.dbFileName).split(","))
-    
+
     def isClustered(self):
         """Has the data been clustered already"""
         return self.dataManager.isClustered(self.dbFileName)
-    
+
     def setClustered(self):
         """Save that the db has been clustered"""
         self.dataManager.setClustered(self.dbFileName, True)
-    
+
     def isComplete(self):
         """Has the data been *completely* clustered already"""
         return self.dataManager.isComplete(self.dbFileName)
-    
+
     def setComplete(self):
         """Save that the db has been completely clustered"""
         self.dataManager.setComplete(self.dbFileName, True)
@@ -338,10 +345,10 @@ class ProfileManager:
     def getBinStats(self):
         """Go through all the "bins" array and make a list of unique bin ids vs number of contigs"""
         return self.dataManager.getBinStats(self.dbFileName)
-    
+
     def setBinStats(self, binStats):
         """Store the valid bin Ids and number of members
-                
+
         binStats is a list of tuples which looks like:
         [ (bid, numMembers) ]
         Note that this call effectively nukes the existing table
@@ -358,13 +365,13 @@ class ProfileManager:
     def loadLinks(self):
         """Extra wrapper 'cause I am dumb"""
         self.links = self.getLinks()
-        
+
     def getLinks(self):
         """Get contig links"""
         # first we get the absolute links
         absolute_links = self.dataManager.restoreLinks(self.dbFileName, self.indices)
         # now convert this into plain old row_indices
-        reverse_index_lookup = {} 
+        reverse_index_lookup = {}
         for i in range(len(self.indices)):
             reverse_index_lookup[self.indices[i]] = i
 
@@ -380,9 +387,9 @@ class ProfileManager:
                 pass
 
         return relative_links
-                 
+
 #------------------------------------------------------------------------------
-# DATA TRANSFORMATIONS 
+# DATA TRANSFORMATIONS
 
     def getAverageCoverage(self, rowIndex):
         """Return the average coverage for this contig across all stoits"""
@@ -392,17 +399,17 @@ class ProfileManager:
         """Make the data transformation deterministic by reordering the bams"""
         # first we should make a subset of the total data
         # we'd like to take it down to about 1500 or so RI's
-        # but we'd like to do this in a repeatable way 
+        # but we'd like to do this in a repeatable way
         ideal_contig_num = 1500
         sub_cons = range(len(self.indices))
         while len(sub_cons) > ideal_contig_num:
             # select every second contig when sorted by norm cov
             cov_sorted = np_argsort(self.normCoverages[sub_cons])
             sub_cons = np_array([sub_cons[cov_sorted[i*2]] for i in range(int(len(sub_cons)/2))])
-            
+
             if len(sub_cons) > ideal_contig_num:
                 # select every second contig when sorted by mer PC1
-                mer_sorted = np_argsort(self.kmerVals[sub_cons])
+                mer_sorted = np_argsort(self.kmerPCs[sub_cons])
                 sub_cons = np_array([sub_cons[mer_sorted[i*2]] for i in range(int(len(sub_cons)/2))])
 
         # now that we have a subset, calculate the distance between each of the untransformed vectors
@@ -411,12 +418,12 @@ class ProfileManager:
         sub_covs = np_transpose([self.covProfiles[i]*(np_log10(self.normCoverages[i])/self.normCoverages[i]) for i in sub_cons])
         sq_dists = cdist(sub_covs,sub_covs,'cityblock')
         dists = squareform(sq_dists)
-        
+
         # initialise a list of left, right neighbours
         lr_dict = {}
         for i in range(self.numStoits):
             lr_dict[i] = []
-            
+
         too_big = 10000
         while True:
             closest = np_argmin(dists)
@@ -425,24 +432,24 @@ class ProfileManager:
             (i,j) = self.small2indices(closest, self.numStoits-1)
             lr_dict[j].append(i)
             lr_dict[i].append(j)
-            
+
             # mark these guys as neighbours
             if len(lr_dict[i]) == 2:
                 # no more than 2 neighbours
                 sq_dists[i,:] = too_big
                 sq_dists[:,i] = too_big
-                sq_dists[i,i] = 0.0            
+                sq_dists[i,i] = 0.0
             if len(lr_dict[j]) == 2:
                 # no more than 2 neighbours
                 sq_dists[j,:] = too_big
                 sq_dists[:,j] = too_big
-                sq_dists[j,j] = 0.0            
+                sq_dists[j,j] = 0.0
 
             # fix the dist matrix
             sq_dists[j,i] = too_big
             sq_dists[i,j] = too_big
-            dists = squareform(sq_dists)        
-            
+            dists = squareform(sq_dists)
+
         # now make the ordering
         ordering = [0, lr_dict[0][0]]
         done = 2
@@ -455,7 +462,7 @@ class ProfileManager:
                 ordering.append(lr_dict[last][0])
                 last = lr_dict[last][0]
             done+=1
-            
+
         # reshuffle the contig order!
         # yay for bubble sort!
         ordering = np_arange(self.numStoits)
@@ -475,7 +482,7 @@ class ProfileManager:
         """
         step = 0
         while index >= (side-step):
-            index = index - side + step 
+            index = index - side + step
             step += 1
         return (step, step + index + 1)
 
@@ -494,20 +501,20 @@ class ProfileManager:
                 print "    Dimensionality reduction with extra squish"
             else:
                 print "    Dimensionality reduction"
-                
+
         unit_vectors = [(np_cos(i*2*np_pi/self.numStoits),np_sin(i*2*np_pi/self.numStoits)) for i in range(self.numStoits)]
 
         # make sure the bams are ordered consistently
         if self.numStoits > 3:
             self.shuffleBAMs()
-              
+
         for i in range(len(self.indices)):
             shifted_vector = np_array([0.0,0.0])
             try:
                 flat_vector = (self.covProfiles[i] / sum(self.covProfiles[i]))
             except FloatingPointError:
                 flat_vector = self.covProfiles[i]
-            
+
             for j in range(self.numStoits):
                 shifted_vector[0] += unit_vectors[j][0] * flat_vector[j]
                 shifted_vector[1] += unit_vectors[j][1] * flat_vector[j]
@@ -525,7 +532,7 @@ class ProfileManager:
             self.transformedCP[i,2] = shrinkFn(self.normCoverages[i])
 
         # finally scale the matrix to make it equal in all dimensions
-        if(min is None):                
+        if(min is None):
             min = np_amin(self.transformedCP, axis=0)
             self.transformedCP -= min
             max = np_amax(self.transformedCP, axis=0)
@@ -546,7 +553,7 @@ class ProfileManager:
         # shift the corners to match the space
         self.corners -= min
         self.corners /= max
-        
+
         # scale the corners to fit the plot
         cmin = np_amin(self.corners, axis=0)
         self.corners -= cmin
@@ -569,20 +576,20 @@ class ProfileManager:
                 mult = np_array([shift, shift, 1.])
                 self.transformedCP[i] *= mult
             self.transformedCP += centre_stick
-         
+
         return(min,max)
-    
+
 #------------------------------------------------------------------------------
-# IO and IMAGE RENDERING 
-    
+# IO and IMAGE RENDERING
+
     def plotStoitNames(self, ax):
         """Plot stoit names on an existing axes"""
         outer_index = 0
         for corner in self.corners:
-            ax.text(corner[0], 
-                    corner[1], 
-                    corner[2], 
-                    self.stoitColNames[outer_index], 
+            ax.text(corner[0],
+                    corner[1],
+                    corner[2],
+                    self.stoitColNames[outer_index],
                     color='#000000'
                     )
             outer_index += 1
@@ -590,7 +597,7 @@ class ProfileManager:
     def plotUnbinned(self, timer, coreCut, transform=True):
         """Plot all contigs over a certain length which are unbinned"""
         self.loadData(timer, condition="((length >= "+str(coreCut)+") & (bid == 0))")
-        
+
         if transform:
             self.transformCP(timer)
         else:
@@ -598,13 +605,13 @@ class ProfileManager:
                 self.transformedCP = self.covProfiles
             else:
                 print "Number of stoits != 3. You need to transform"
-                self.transformCP(timer)            
-            
+                self.transformCP(timer)
+
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
         ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
         self.plotStoitNames(ax1)
-        
+
         try:
             plt.show()
             plt.close(fig)
@@ -623,13 +630,13 @@ class ProfileManager:
                 self.transformedCP = self.covProfiles
             else:
                 print "Number of stoits != 3. You need to transform"
-                self.transformCP(timer)            
+                self.transformCP(timer)
 
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
         ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
         self.plotStoitNames(ax1)
-        
+
         try:
             plt.show()
             plt.close(fig)
@@ -696,7 +703,7 @@ class ProfileManager:
             ax.w_xaxis._AXINFO = myAXINFO
             ax.w_yaxis._AXINFO = myAXINFO
             ax.w_zaxis._AXINFO = myAXINFO
-            
+
             ax = fig.add_subplot(132, projection='3d')
             ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
             ax.azim = 90
@@ -716,7 +723,7 @@ class ProfileManager:
             ax.w_xaxis._AXINFO = myAXINFO
             ax.w_yaxis._AXINFO = myAXINFO
             ax.w_zaxis._AXINFO = myAXINFO
-            
+
             ax = fig.add_subplot(133, projection='3d')
             ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
             ax.azim = 0
@@ -757,7 +764,7 @@ class ProfileManager:
                                s=2,
                                marker='.',
                                alpha=alpha)
-                    
+
                     # now replot the highlighted guys
                     disp_vals = np_array([])
                     disp_cols = np_array([])
@@ -767,7 +774,7 @@ class ProfileManager:
                             num_points += 1
                             disp_vals = np_append(disp_vals, self.transformedCP[row_index])
                             disp_cols = np_append(disp_cols, self.contigColors[row_index])
-            
+
                     # reshape
                     disp_vals = np_reshape(disp_vals, (num_points, 3))
                     disp_cols = np_reshape(disp_cols, (num_points, 3))
@@ -809,7 +816,7 @@ class ProfileManager:
                 if(all):
                     fig.set_size_inches(3*primaryWidth+2*primarySpace,primaryWidth)
                 else:
-                    fig.set_size_inches(primaryWidth,primaryWidth)            
+                    fig.set_size_inches(primaryWidth,primaryWidth)
                 plt.savefig(fileName,dpi=dpi,format=format)
             except:
                 print "Error saving image",fileName, exc_info()[0]
