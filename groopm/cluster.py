@@ -99,7 +99,7 @@ from numpy import (abs as np_abs,
                    zeros as np_zeros)
 from numpy.random import randn as np_randn
 import scipy.ndimage as ndi
-from scipy.spatial.distance import cdist, pdist, squareform
+from scipy.spatial.distance import cdist, pdist, squareform, euclidean
 from scipy.cluster.vq import kmeans,vq
 from scipy.misc import imsave
 
@@ -267,9 +267,9 @@ class ClusterEngine:
                     test_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
                     test_bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerNormPC1, self.PM.contigLengths, fileName="TEST_"+str(self.imageCounter))
                     test_bins.append(test_bin.id)
-                    self.imageCounter += 1       
+                    self.imageCounter += 1
                 self.BM.deleteBins(test_bins, force=True, freeBinnedRowIndices=False, saveBins=False)
-                    
+
                 for center_row_indices in partitions:
                     total_BP = np_sum(self.PM.contigLengths[center_row_indices])
                     bin_size = len(center_row_indices)
@@ -424,7 +424,7 @@ class ClusterEngine:
       """Partition a collection of contigs into 'core' groups"""
       num_iterations = 10
 
-      k_move_perc = 0.3
+      k_move_perc = 0.2
       c_move_perc = 0.2
 
       k_eps = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
@@ -444,19 +444,34 @@ class ClusterEngine:
       row_indices = np_copy(rowIndices)
 
       # calculate radius threshold in whitened transformed coverage space
-      c_std = np_std(c_dat, axis=0)
       try:
-        c_whiten_dat = (c_dat-np_mean(c_dat, axis=0)) / c_std
+        # calculate mean and std in coverage space for whitening data
+        c_mean = np_mean(c_dat, axis=0)
+        c_std = np_std(c_dat, axis=0)
+        c_whiten_dat = (c_dat-c_mean) / c_std
       except:
         # data has zero standard deviation ?
         return [np_array(row_indices)]
 
-      dist_matrix = squareform(pdist(c_whiten_dat))
-      c_radius = np_median(np_sort(dist_matrix)[:,k_eps-1])
+      c_dist_matrix = squareform(pdist(c_whiten_dat))
+      c_radius = np_median(np_sort(c_dist_matrix)[:,k_eps-1])
 
       # calculate radius threshold in kmer space
-      dist_matrix = squareform(pdist(k_dat))
-      k_radius = np_median(np_sort(dist_matrix)[:,k_eps-1])
+      k_dist_matrix = squareform(pdist(k_dat))
+      k_radius = np_median(np_sort(k_dist_matrix)[:,k_eps-1])
+
+      # calculate min and max in kmer space for performing colour transformation
+      k_dat1_min = np_min(k_dat[:,0])
+      k_dat1_max = np_max(k_dat[:,0] - k_dat1_min)
+
+      # calculate convergence criteria
+      k_converged = 1e-6 * np_mean(k_dist_matrix)
+      c_coverged = 1e-6 * np_mean(pdist(c_dat))
+
+      print 'k_converged: ' + str(k_converged)
+      print 'c_coverged: ' + str(c_coverged)
+      print 'k_radius: ' + str(k_radius)
+      print 'k_converged: ' + str(k_converged)
 
       # perform two-way contraction magic
       iter = 0
@@ -476,8 +491,7 @@ class ClusterEngine:
           S = 1       # SAT and VAL remain fixed at 1. Reduce to make
           V = 1       # Pastels if that's your preference...
           num_points = len(row_indices)
-          k_dat1_norm = (k_dat[:,0] - np_min(k_dat[:,0], axis=0))
-          k_dat1_norm /= np_max(k_dat1_norm, axis=0)
+          k_dat1_norm = (k_dat[:,0] - k_dat1_min) / k_dat1_max
           disp_cols = np_array([htr(val, S, V) for val in k_dat1_norm]).reshape(((num_points, 3)))
 
           fig = plt.figure()
@@ -519,6 +533,7 @@ class ClusterEngine:
         # and use this to converage a point's kmer profile
         new_k_dat = np_zeros(k_dat.shape)
         k_putative_noise = set()
+        k_deltas = []
         for index, row in enumerate(c_dist_matrix):
           neigbhours = np_where(row <= c_radius)[0]
           if len(neigbhours) > np_max([1, 0.1*k_eps]):
@@ -541,12 +556,15 @@ class ClusterEngine:
           neighbour_weights = inv_dist / sum_inv_dist
           new_k_dat[index] = (1-k_move_perc) * k_dat[index] + k_move_perc * np_sum( (k_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
 
+          k_deltas.append(euclidean(k_dat[index], new_k_dat[index]))
+
         k_dat = new_k_dat
 
         # find nearest neighbours to each point in normalized kmer space,
         # and use this to converage a point's coverage profile
         new_c_dat = np_zeros(c_dat.shape)
         c_putative_noise = set()
+        c_deltas = []
         for index, row in enumerate(k_dist_matrix):
           neigbhours = np_where(row <= k_radius)[0]
           if len(neigbhours) > np_max([1, 0.1*k_eps]):
@@ -569,6 +587,8 @@ class ClusterEngine:
           neighbour_weights = inv_dist / sum_inv_dist
           new_c_dat[index] = (1-c_move_perc) * c_dat[index] + c_move_perc * np_sum( (c_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
 
+          c_deltas.append(euclidean(c_dat[index], new_c_dat[index]))
+
         c_dat = new_c_dat
 
         # remove points that have no neighbours, unless they are long enough to be interesting
@@ -582,13 +602,21 @@ class ClusterEngine:
         if len(noise) > 0:
           c_dat = np_delete(c_dat, noise, axis = 0)
           k_dat = np_delete(k_dat, noise, axis = 0)
-          c_whiten_dat = np_delete(c_whiten_dat, noise, axis = 0)
           l_dat = np_delete(l_dat, noise, axis = 0)
           col_dat = np_delete(col_dat, noise, axis = 0)
           row_indices = np_delete(row_indices, noise, axis = 0)
 
+        # get whitened version of modified coverage data (using original transformation)
+        c_whiten_dat = (c_dat-c_mean) / c_std
+
         if len(row_indices) == 0:
           return None
+
+        # check for convergence
+        if np_mean(k_deltas) < k_converged and np_mean(c_deltas) < c_converged:
+          break
+
+      print 'iterations: ' + str(iter)
 
       # perform hough transform clustering
       self.HP.hc += 1
@@ -673,7 +701,7 @@ class ClusterEngine:
               data /= np_max(data)
 
               l_data = np_copy(l_dat[k_part])
-              
+
 
               c_partitions = self.HP.houghPartition(data, l_data)
               #c_partitions = self.HP.houghPartition(data, l_data, imgTag="COV")
