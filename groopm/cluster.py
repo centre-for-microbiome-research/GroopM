@@ -422,12 +422,6 @@ class ClusterEngine:
 
     def smartTwoWayContraction(self, rowIndices):
       """Partition a collection of contigs into 'core' groups"""
-      num_iterations = 10
-
-      k_move_perc = 0.2
-      c_move_perc = 0.2
-
-      k_eps = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
 
       # sanity check that there is enough data here to try a determine 'core' groups
       total_BP = np_sum(self.PM.contigLengths[rowIndices])
@@ -442,6 +436,16 @@ class ClusterEngine:
       l_dat = np_copy(self.PM.contigLengths[rowIndices])
       col_dat = np_copy(self.PM.contigColors[rowIndices])
       row_indices = np_copy(rowIndices)
+
+      # calculate convergence criteria
+      k_converged = 1e-2 * np_mean(pdist(k_dat))
+      c_converged = 1e-2 * np_mean(pdist(c_dat))
+      max_iterations = 100
+
+      k_move_perc = 0.1
+      c_move_perc = 0.1
+
+      k_eps = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
 
       # calculate radius threshold in whitened transformed coverage space
       try:
@@ -464,18 +468,9 @@ class ClusterEngine:
       k_dat1_min = np_min(k_dat[:,0])
       k_dat1_max = np_max(k_dat[:,0] - k_dat1_min)
 
-      # calculate convergence criteria
-      k_converged = 1e-6 * np_mean(k_dist_matrix)
-      c_coverged = 1e-6 * np_mean(pdist(c_dat))
-
-      print 'k_converged: ' + str(k_converged)
-      print 'c_coverged: ' + str(c_coverged)
-      print 'k_radius: ' + str(k_radius)
-      print 'k_converged: ' + str(k_converged)
-
       # perform two-way contraction magic
       iter = 0
-      while iter < num_iterations:
+      while iter < max_iterations:
         iter += 1
 
         if True:
@@ -615,8 +610,6 @@ class ClusterEngine:
         # check for convergence
         if np_mean(k_deltas) < k_converged and np_mean(c_deltas) < c_converged:
           break
-
-      print 'iterations: ' + str(iter)
 
       # perform hough transform clustering
       self.HP.hc += 1
