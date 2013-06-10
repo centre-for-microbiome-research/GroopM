@@ -274,7 +274,7 @@ class ClusterEngine:
                     total_BP = np_sum(self.PM.contigLengths[center_row_indices])
                     bin_size = len(center_row_indices)
 
-                    if self.BM.isGoodBin(total_BP, bin_size):   # Can we trust very small bins?.
+                    if self.BM.isGoodBin(total_BP, bin_size, ms=3, mv=10000):   # Can we trust very small bins?.
                         # time to make a bin
                         bin = self.BM.makeNewBin(rowIndices=center_row_indices)
 
@@ -608,8 +608,8 @@ class ClusterEngine:
 
       # perform hough transform clustering
       self.HP.hc += 1
-      k_partitions = self.HP.houghPartition(k_dat[:,0], l_dat)
-      #k_partitions = self.HP.houghPartition(data, l_dat, imgTag="MER")
+      #k_partitions = self.HP.houghPartition(k_dat[:,0], l_dat)
+      k_partitions = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
 
       if(len(k_partitions) == 0):
         return None
@@ -632,7 +632,7 @@ class ClusterEngine:
 
       from matplotlib.patches import Rectangle
       alpha = 0.35
-      ax.scatter(orig_k_dat, orig_k2_dat, edgecolors=orig_col_dat, c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
+      ax.scatter(orig_k_dat, orig_k2_dat, edgecolors='none', c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
       XX = ax.get_xlim()
       YY = ax.get_ylim()
       ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
@@ -641,18 +641,17 @@ class ClusterEngine:
       plt.title("%s contigs" % len(rowIndices))
       plt.xlabel("MER PARTS")
       plt.ylabel("COV PARTS")
-      ax.scatter(orig_k_dat, orig_c_dat, edgecolors=orig_col_dat, c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
+      ax.scatter(orig_k_dat, orig_c_dat, edgecolors='none', c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
       XX = ax.get_xlim()
       YY = ax.get_ylim()
       ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
 
-      cols=self.PM.contigColors[row_indices]
       lens = np_sqrt(self.PM.contigLengths[row_indices])
 
       ax = plt.subplot(222)
       plt.xlabel("PCA1")
       plt.ylabel("PCA2")
-      ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors=cols, c=disp_cols, s=lens, zorder=10, alpha=alpha)
+      ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors='none', c=disp_cols, s=lens, zorder=10, alpha=alpha)
       XX = ax.get_xlim()
       YY = ax.get_ylim()
       ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
@@ -661,7 +660,7 @@ class ClusterEngine:
       plt.title("%s contigs" % len(row_indices))
       plt.xlabel("MER PARTS")
       plt.ylabel("COV PARTS")
-      ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors=cols, c=disp_cols, s=lens, zorder=10, alpha=alpha)
+      ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors='none', c=disp_cols, s=lens, zorder=10, alpha=alpha)
 
       c_max = np_max(c_dat[:,2]/10) * 1.1
       k_max = np_max(k_dat[:,0]) * 1.1
@@ -701,8 +700,8 @@ class ClusterEngine:
               l_data = np_copy(l_dat[k_part])
 
 
-              c_partitions = self.HP.houghPartition(data, l_data)
-              #c_partitions = self.HP.houghPartition(data, l_data, imgTag="COV")
+              #c_partitions = self.HP.houghPartition(data, l_data)
+              c_partitions = self.HP.houghPartition(data, l_data, imgTag="COV")
 
               #-----
               # GRID
@@ -1130,69 +1129,51 @@ class HoughPartitioner:
         if d_len_raw < 3:
             return np_array([[0,1]])
 
+        sorted_indices_raw = np_argsort(dAta)
+        nUm_points = len(dAta)
+        
         # fudge the data to make longer contigs have more say in the
         # diff line we'll be making. This way we may be able to avoid lumping
         # super long contigs in with the short riff raff by accident.
-        wobble = 0.05
-
-        # we give you at least one point, but we give you
-        # more points if you're longer. Let's say 1 point per 10,000bp
         scales_per = {}
-        for i in range(len(dAta)):
-            scales_per[i] = int((lengths[i] - 1)/10000) + 1
-
         spread_data = []
         spread2real = {}
-#AA        real2spread = {}
-
         j = 0
+
+        # all points get at least one point, but long ones get more
+        # let's say 1 point per 10,000bp
         for i in range(len(dAta)):
-            spread_data.append(dAta[i])
-            spread2real[j] = i
-#AA            try:
-#AA                real2spread[i].append(j)
-#AA            except KeyError:
-#AA                real2spread[i] = [j]
-#AA            rep = scales[int(np_log10(lengths[i]))]
-            rep = scales_per[i]
-            j += 1
-            for k in range(1, rep):
-                spread_data.append(wobble * np_randn() + dAta[i])
-                spread2real[j] = i
-#AA                try:
-#AA                    real2spread[i].append(j)
-#AA                except KeyError:
-#AA                    real2spread[i] = [j]
+            real_index = sorted_indices_raw[i]
+            rep = int((lengths[real_index] - 1.)/10000.) + 1
+            scales_per[real_index] = rep
+            if rep == 1:
+                spread_data.append(dAta[real_index])
+                spread2real[j] = real_index
                 j += 1
+            else:
+                # rep >= 2
+                if i == 0:
+                    left_stop = dAta[real_index]
+                else:
+                    left_stop = (dAta[real_index] + dAta[sorted_indices_raw[i-1]])/2.
+                    
+                if i == nUm_points-1:
+                    right_stop = dAta[real_index]
+                else:
+                    right_stop = (dAta[real_index] + dAta[sorted_indices_raw[i+1]])/2.
+
+                spread_jump = (right_stop - left_stop) / (rep + 1.)
+
+                
+                for ii in range(rep):
+                    spread_data.append(left_stop + ((ii + 1) * spread_jump))
+                    spread2real[j] = real_index
+                    j += 1
 
         # Force the data to fill the space
-        spread_data = np_array(spread_data)
-        d_len = len(spread_data)
-        sorted_indices_raw = np_argsort(dAta)
-        sorted_indices_spread = np_argsort(spread_data)
-        data = spread_data[sorted_indices_spread]
+        data = np_array(spread_data)
         data -= np_min(data)    # shift to 0 but DO NOT scale to 1
-
-        # make an array of "real" indices sorted by their spread data values.
-        # NOTE: this array may / will contain multiple copies of each real index
-        spread_sorted_reals = np_array([spread2real[ii] for ii in sorted_indices_spread])
-        seens = {}  # keep track of how many times we've seen this guy
-        # now we'd like to find out where the center of this guy lies.
-        # Just take the mean
-        real_center_in_spread = {}  # the center of the blob of "real" vales in the spread data
-        spread_centre_index_to_real = {}
-        for ii in range(len(spread_sorted_reals)):
-            ri = spread_sorted_reals[ii]
-            try:
-                seens[ri].append(ii)
-            except KeyError:
-                seens[ri] = [ii]
-        for ri in range(len(dAta)):
-            real_center_in_spread[ri] = np_around(np_mean(seens[ri]))
-            try:
-                spread_centre_index_to_real[real_center_in_spread[ri]].append(ri)
-            except KeyError:
-                spread_centre_index_to_real[real_center_in_spread[ri]] = [ri]
+        d_len = len(data)
 
         # we want to know how much each value differs from it's neighbours
         back_diffs = [float(data[i] - data[i-1]) for i in range(1,d_len)]
@@ -1273,31 +1254,31 @@ class HoughPartitioner:
         spread_start = block_starts[longest_block]
         spread_end =  block_lens[longest_block] + spread_start
 
+        # select all the guys with their centres between the start and end
+        assigned = {}
+        tmp = {}
+        for ii in range(spread_start, spread_end):
+            real_index = spread2real[ii] 
+            tmp[real_index] = None
+            assigned[real_index] = None
+        centre = np_array(tmp.keys())
+        
         # select all the guys with their centres to the left of the start
         tmp = {}
         for ii in range(spread_start):
-            try:
-                for ri in spread_centre_index_to_real[ii]:
-                    tmp[ri] = None
-            except KeyError: pass
+            real_index = spread2real[ii] 
+            if real_index not in assigned:
+                tmp[real_index] = None
+                assigned[real_index] = None
         left = np_array(tmp.keys())
-
-        # select all the guys with their centres between the start and end
-        tmp = {}
-        for ii in range(spread_start, spread_end):
-            try:
-                for ri in spread_centre_index_to_real[ii]:
-                    tmp[ri] = None
-            except KeyError: pass
-        selected = np_array(tmp.keys())
 
         # select all the guys with their centres right of the end
         tmp = {}
         for ii in range(spread_end, d_len):
-            try:
-                for ri in spread_centre_index_to_real[ii]:
-                    tmp[ri] = None
-            except KeyError: pass
+            real_index = spread2real[ii] 
+            if real_index not in assigned:
+                tmp[real_index] = None
+                assigned[real_index] = None
         right = np_array(tmp.keys())
 
         rets = []
@@ -1307,9 +1288,9 @@ class HoughPartitioner:
             for A in left_p:
                 rets.append(np_array([left[i] for i in A]))
 
-        # add the centre (selected) in
-        if len(selected) > 0:
-            rets.append(selected)
+        # add the centre in
+        if len(centre) > 0:
+            rets.append(centre)
 
         # recursive call for rightmost indices
         if len(right) > 0:
@@ -1317,33 +1298,31 @@ class HoughPartitioner:
             for A in right_p:
                 rets.append(np_array([right[i] for i in A]))
 
-#AA
-        if False:
-            # this was kinds hard to write and
-            # is still an idea worth pursuing.
-            # can it for now...
+        # only do this for the top level
+        if level == 0:
+            # build a flat data set similar to the gradiated data set
+            real2spread = {}
+            j = 0
             flat_data = []
             for i in range(len(dAta)):
-                for k in range(scales[int(np_log10(lengths[i]))]):
-                    flat_data.append(dAta[i])
-
-            sorted_indices_flat = np_argsort(flat_data)
-            data = np_array(flat_data)[sorted_indices_flat]
-            data -= np_min(data)
-
-            # work out weightings
-            # we want to know how much each value differs from it's neighbours
+                real_index = sorted_indices_raw[i]
+                rep = scales_per[real_index] 
+                for k in range(rep):
+                    flat_data.append(dAta[real_index])
+                    try:
+                        real2spread[real_index].append(j)
+                    except KeyError:
+                        real2spread[real_index] = [j]
+                    j += 1
+            data -= np_min(flat_data)
             back_diffs = [float(data[i] - data[i-1]) for i in range(1,d_len)]
             diffs = [back_diffs[0]]
             for i in range(len(back_diffs)-1):
                 diffs.append((back_diffs[i] + back_diffs[i+1])/2)
             diffs.append(back_diffs[-1])
             diffs = np_array(diffs)**2
-
-            # replace the data array by the sum of it's diffs
             for i in range(1, d_len):
                 diffs[i] += diffs[i-1]
-
             diffs -= np_min(diffs)
             try:
                 diffs /= np_max(diffs)
@@ -1351,16 +1330,38 @@ class HoughPartitioner:
                 pass
             diffs *= len(diffs)
 
+            # diffs is now the same size as the gradiated data sent through
+            # to hough in level 0. We wish to find the gradients of the lines
+            # returned by recursive partitioning
+            gradients = []
             for ret in rets:
-                spread_ret = []
-                # these are real indices
-                for index in ret:
-                    # now get spread indices
-                    for spread_index in real2spread[index]:
-                        spread_ret.append(spread_index)
-                # examine diffs[spread_ret],
-#AA
-
+                sis = []
+                for ii in ret:
+                    for si in real2spread[ii]:
+                        sis.append(diffs[si])
+                l_sis = float(len(sis))
+                if l_sis == 1:
+                    gradients.append(1)
+                else:
+                    sis = sorted(sis)
+                    gradients.append((sis[-1] - sis[0])/l_sis)
+            gradients = np_array(gradients)
+            keeps = np_where(gradients >= 1, False, True)
+            
+            squished_rets = []
+            last_squshed = []
+            for i in range(len(rets)):
+                if keeps[i]:
+                    for ii in rets[i]:
+                        last_squshed.append(ii)
+                else:
+                    if len(last_squshed) > 0:
+                        squished_rets.append(np_array(last_squshed))
+                        last_squshed = []
+            if len(last_squshed) > 0:
+                squished_rets.append(np_array(last_squshed))
+            return np_array(squished_rets) 
+            
         return np_array(rets)
 
     def points2Line(self, points, xIndexLim, yIndexLim, thickness):
