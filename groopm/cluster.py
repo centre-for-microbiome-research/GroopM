@@ -414,13 +414,13 @@ class ClusterEngine:
                 # the calling function should restrict these indices
                 return [[np_array(putative_center_row_indices)], ret_values]
             else:
-                putative_clusters = self.smartTwoWayContraction(putative_center_row_indices)
+                putative_clusters = self.smartTwoWayContraction(putative_center_row_indices, [max_x, max_y])
                 if putative_clusters == None:
                   return None
 
                 return [putative_clusters, ret_values]
 
-    def smartTwoWayContraction(self, rowIndices):
+    def smartTwoWayContraction(self, rowIndices, positionInPlane):
       """Partition a collection of contigs into 'core' groups"""
 
       # sanity check that there is enough data here to try a determine 'core' groups
@@ -437,17 +437,15 @@ class ClusterEngine:
       col_dat = np_copy(self.PM.contigColors[rowIndices])
       row_indices = np_copy(rowIndices)
 
-      # calculate convergence criteria
-      k_converged = 1e-2 * np_mean(pdist(k_dat))
-      c_converged = 1e-2 * np_mean(pdist(c_dat))
-      max_iterations = 100
-
-      k_move_perc = 0.1
-      c_move_perc = 0.1
-
-      k_eps = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
+      # calculate shortest distance to a corner (this isn't currently used)
+      min_dist_to_corner = 1e9
+      for corner in self.PM.corners:
+        dist = euclidean(corner[:,[0,1]], positionInPlane)
+        min_dist_to_corner = min(dist, min_dist_to_corner)
 
       # calculate radius threshold in whitened transformed coverage space
+      eps_neighbours = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
+
       try:
         # calculate mean and std in coverage space for whitening data
         c_mean = np_mean(c_dat, axis=0)
@@ -457,18 +455,24 @@ class ClusterEngine:
         # data has zero standard deviation ?
         return [np_array(row_indices)]
 
-      c_dist_matrix = squareform(pdist(c_whiten_dat))
-      c_radius = np_median(np_sort(c_dist_matrix)[:,k_eps-1])
+      c_whiten_dist = pdist(c_whiten_dat)
+      c_dist_matrix = squareform(c_whiten_dist)
+      c_radius = np_median(np_sort(c_dist_matrix)[:,eps_neighbours-1])
 
       # calculate radius threshold in kmer space
-      k_dist_matrix = squareform(pdist(k_dat))
-      k_radius = np_median(np_sort(k_dist_matrix)[:,k_eps-1])
+      k_dist = pdist(k_dat)
+      k_dist_matrix = squareform(k_dist)
+      k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours-1])
 
-      # calculate min and max in kmer space for performing colour transformation
-      k_dat1_min = np_min(k_dat[:,0])
-      k_dat1_max = np_max(k_dat[:,0] - k_dat1_min)
+      # calculate convergence criteria
+      k_converged = 1e-1 * np_mean(k_dist)
+      c_converged = 1e-1 * np_mean(c_whiten_dist)
+      max_iterations = 50
 
-      # perform two-way contraction magic
+      k_move_perc = 0.15
+      c_move_perc = 0.15
+
+      # perform two-way contraction of kmer and coverage space
       iter = 0
       while iter < max_iterations:
         iter += 1
@@ -483,7 +487,7 @@ class ClusterEngine:
             self.cluster_num += 1
 
           disp_cols = self.PM.contigColors[row_indices]
- 
+
           fig = plt.figure()
           ax = fig.add_subplot(111, projection='3d')
 
@@ -508,7 +512,6 @@ class ClusterEngine:
 
           fig.set_size_inches(6,6)
 
-          #fileName = "../../images/gh_%d_%d" % (self.cluster_num, iter)
           fileName = "gh_%d_%d" % (self.cluster_num, iter)
           plt.savefig(fileName + '.png',dpi=96)
 
@@ -519,23 +522,23 @@ class ClusterEngine:
         c_dist_matrix = squareform(pdist(c_whiten_dat))
         k_dist_matrix = squareform(pdist(k_dat))
 
-        # find nearest neighbours to each point in normalized transformed coverage space,
+        # find nearest neighbours to each point in whitened coverage space,
         # and use this to converage a point's kmer profile
         new_k_dat = np_zeros(k_dat.shape)
         k_putative_noise = set()
         k_deltas = []
         for index, row in enumerate(c_dist_matrix):
           neigbhours = np_where(row <= c_radius)[0]
-          if len(neigbhours) > np_max([1, 0.1*k_eps]):
+          if len(neigbhours) > np_max([1, 0.1*eps_neighbours]):
             neigbhours = neigbhours[1:] # ignore self match
           else:
-            # no neighbours, so continue on
+            # extremely few neighbours so mark this as noise
             k_putative_noise.add(index)
             new_k_dat[index] = k_dat[index]
             continue
 
           # use distance between kmer profiles as weights for moving similar
-          # points towards each other; a minimum distance based of the kmer
+          # points towards each other; a minimum distance based on the kmer
           # radius is used to avoid zeros and ensure all neighbours provide
           # some weight
           neighbour_dist = k_dist_matrix[index][neigbhours] + 0.1 * k_radius
@@ -550,25 +553,24 @@ class ClusterEngine:
 
         k_dat = new_k_dat
 
-        # find nearest neighbours to each point in normalized kmer space,
+        # find nearest neighbours to each point in kmer space,
         # and use this to converage a point's coverage profile
         new_c_dat = np_zeros(c_dat.shape)
         c_putative_noise = set()
         c_deltas = []
         for index, row in enumerate(k_dist_matrix):
           neigbhours = np_where(row <= k_radius)[0]
-          if len(neigbhours) > np_max([1, 0.1*k_eps]):
+          if len(neigbhours) > np_max([1, 0.1*eps_neighbours]):
             neigbhours = neigbhours[1:] # ignore self match
           else:
-            # no neighbours, so continue on
+            # extremely few neighbours so mark this as nois
             c_putative_noise.add(index)
             new_c_dat[index] = c_dat[index]
             continue
 
-          # use distance between coverage profiles as weights for moving similar
-          # points towards each other; a minimum distance based of the kmer
-          # radius is used to avoid zeros and ensure all neighbours provide
-          # some weight
+          # use distance between whitened coverage profiles as weights for moving similar
+          # points towards each other; a minimum distance based of the coverage
+          # radius is used to avoid zeros and ensure all neighbours provide some weight
           neighbour_dist = c_dist_matrix[index][neigbhours] + 0.1 * c_radius
 
           # move point towards neighbours using inverse distance weighting
@@ -576,15 +578,16 @@ class ClusterEngine:
           sum_inv_dist = np_sum(inv_dist)
           neighbour_weights = inv_dist / sum_inv_dist
           new_c_dat[index] = (1-c_move_perc) * c_dat[index] + c_move_perc * np_sum( (c_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
+          new_c_whiten_dat = (1-c_move_perc) * c_whiten_dat[index] + c_move_perc * np_sum( (c_whiten_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
 
-          c_deltas.append(euclidean(c_dat[index], new_c_dat[index]))
+          c_deltas.append(euclidean(c_whiten_dat[index], new_c_whiten_dat))
 
         c_dat = new_c_dat
 
-        # remove points that have no neighbours, unless they are long enough to be interesting
+        # remove points that have no or few neighbours in both spaces,
+        # unless they are long enough to be of interest
         noise = []
         putative_noise = c_putative_noise.intersection(k_putative_noise)
-        #putative_noise = c_putative_noise.union(k_putative_noise)
         for index in putative_noise:
           if not self.BM.isGoodBin(l_dat[index], 1):
             noise.append(index)
@@ -601,6 +604,12 @@ class ClusterEngine:
 
         if len(row_indices) == 0:
           return None
+
+        print 'iter:' + str(iter)
+        print 'k_converged:' + str(k_converged)
+        print 'np_mean(k_deltas):' + str(np_mean(k_deltas))
+        print 'c_converged:' + str(c_converged)
+        print 'np_mean(c_deltas):' + str(np_mean(c_deltas))
 
         # check for convergence
         if np_mean(k_deltas) < k_converged and np_mean(c_deltas) < c_converged:
@@ -738,7 +747,7 @@ class ClusterEngine:
       XX = ax.get_xlim()
       YY = ax.get_ylim()
       ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
-      
+
       fig.set_size_inches(12,12)
       plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
       plt.close()
