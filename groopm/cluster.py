@@ -1349,6 +1349,7 @@ class HoughPartitioner:
             keeps = np_where(gradients >= 1, False, True)
             
             squished_rets = []
+            squished_keeps = []
             last_squshed = []
             for i in range(len(rets)):
                 if keeps[i]:
@@ -1358,6 +1359,8 @@ class HoughPartitioner:
                     if len(last_squshed) > 0:
                         squished_rets.append(np_array(last_squshed))
                         last_squshed = []
+                    squished_rets.append(rets[i])
+                    squished_keeps.append(False)
             if len(last_squshed) > 0:
                 squished_rets.append(np_array(last_squshed))
             return np_array(squished_rets) 
