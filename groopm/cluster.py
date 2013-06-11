@@ -271,7 +271,7 @@ class ClusterEngine:
                         bin = self.BM.makeNewBin(rowIndices=center_row_indices)
 
                         # work out the distribution in points in this bin
-                        bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
+                        bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
 
                         # append this bins list of mapped rowIndices to the main list
                         bids_made.append(bin.id)
@@ -415,6 +415,8 @@ class ClusterEngine:
     def smartTwoWayContraction(self, rowIndices, positionInPlane):
       """Partition a collection of contigs into 'core' groups"""
 
+      debugPlots = False
+
       # sanity check that there is enough data here to try a determine 'core' groups
       total_BP = np_sum(self.PM.contigLengths[rowIndices])
       if not self.BM.isGoodBin(total_BP, len(rowIndices), ms=5): # Can we trust very small bins?.
@@ -457,8 +459,8 @@ class ClusterEngine:
       k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours-1])
 
       # calculate convergence criteria
-      k_converged = 5e-1 * np_mean(k_dist)
-      c_converged = 5e-1 * np_mean(c_whiten_dist)
+      k_converged = 5e-2 * np_mean(k_dist)
+      c_converged = 5e-2 * np_mean(c_whiten_dist)
       max_iterations = 50
 
       k_move_perc = 0.15
@@ -469,7 +471,7 @@ class ClusterEngine:
       while iter < max_iterations:
         iter += 1
 
-        if True:
+        if debugPlots:
           if iter == 1:
             try:
               self.cluster_num
@@ -619,50 +621,6 @@ class ClusterEngine:
 
       #-----------------------
       # GRID
-      fig = plt.figure()
-
-      orig_k_dat = self.PM.kmerPCs[rowIndices,0]
-      orig_k2_dat = self.PM.kmerPCs[rowIndices,1]
-      orig_c_dat = self.PM.transformedCP[rowIndices][:,2]/10
-      orig_l_dat = np_sqrt(self.PM.contigLengths[rowIndices])
-      orig_col_dat = self.PM.contigColors[rowIndices]
-
-      ax = plt.subplot(221)
-      plt.xlabel("PCA1")
-      plt.ylabel("PCA2")
-
-      from matplotlib.patches import Rectangle
-      alpha = 0.35
-      ax.scatter(orig_k_dat, orig_k2_dat, edgecolors='none', c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
-      XX = ax.get_xlim()
-      YY = ax.get_ylim()
-      ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
-
-      ax = plt.subplot(223)
-      plt.title("%s contigs" % len(rowIndices))
-      plt.xlabel("MER PARTS")
-      plt.ylabel("COV PARTS")
-      ax.scatter(orig_k_dat, orig_c_dat, edgecolors='none', c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
-      XX = ax.get_xlim()
-      YY = ax.get_ylim()
-      ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
-
-      lens = np_sqrt(self.PM.contigLengths[row_indices])
-
-      ax = plt.subplot(222)
-      plt.xlabel("PCA1")
-      plt.ylabel("PCA2")
-      ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors='none', c=disp_cols, s=lens, zorder=10, alpha=alpha)
-      XX = ax.get_xlim()
-      YY = ax.get_ylim()
-      ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
-
-      ax = plt.subplot(224)
-      plt.title("%s contigs" % len(row_indices))
-      plt.xlabel("MER PARTS")
-      plt.ylabel("COV PARTS")
-      ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors='none', c=disp_cols, s=lens, zorder=10, alpha=alpha)
-
       c_max = np_max(c_dat[:,2]/10) * 1.1
       k_max = np_max(k_dat[:,0]) * 1.1
       c_min = np_min(c_dat[:,2]/10) * 0.9
@@ -670,41 +628,87 @@ class ClusterEngine:
       k_eps = (k_max - k_min) / len(row_indices)
       c_eps = (c_max - c_min) / len(row_indices)
 
-      ax.set_xlim(k_min, k_max)
-      ax.set_ylim(c_min, c_max)
-      XX = ax.get_xlim()
-      YY = ax.get_ylim()
-      ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+      k_sizes = [len(p) for p in k_partitions]
 
       k_index_sort = np_argsort(k_dat[:,0])
-      k_sizes = [len(p) for p in k_partitions]
       start = 0
       k_lines = []
       for k in range(len(k_sizes)-1):
           k_lines.append(k_dat[k_index_sort,0][k_sizes[k]+start]+k_eps)
           start += k_sizes[k]
 
-      k_line_cols = []
-      for k in range(len(k_sizes)):
-          if k == 0:
-              if k_keeps[k]:
-                  k_line_cols = ['r-']
-              else:
-                  k_line_cols = ['r--']
-          elif k == len(k_sizes) - 1:
-              if k_keeps[k]:
-                  k_line_cols[-1] = 'r-'
-              elif not k_keeps[k-1]:
-                  k_line_cols[-1] = 'r--'
-          else:
-              if k_keeps[k]:
-                  k_line_cols[k-1] = 'r-'
-                  k_line_cols.append('r-')
-              else:
-                  k_line_cols.append('r--')
-                  
-      for k in range(len(k_lines)):
-          plt.plot([k_lines[k],k_lines[k]], [c_min, c_max], k_line_cols[k])
+      if debugPlots:
+        fig = plt.figure()
+
+        orig_k_dat = self.PM.kmerPCs[rowIndices,0]
+        orig_k2_dat = self.PM.kmerPCs[rowIndices,1]
+        orig_c_dat = self.PM.transformedCP[rowIndices][:,2]/10
+        orig_l_dat = np_sqrt(self.PM.contigLengths[rowIndices])
+        orig_col_dat = self.PM.contigColors[rowIndices]
+
+        ax = plt.subplot(221)
+        plt.xlabel("PCA1")
+        plt.ylabel("PCA2")
+
+        from matplotlib.patches import Rectangle
+        alpha = 0.35
+        ax.scatter(orig_k_dat, orig_k2_dat, edgecolors='none', c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
+        XX = ax.get_xlim()
+        YY = ax.get_ylim()
+        ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+
+        ax = plt.subplot(223)
+        plt.title("%s contigs" % len(rowIndices))
+        plt.xlabel("MER PARTS")
+        plt.ylabel("COV PARTS")
+        ax.scatter(orig_k_dat, orig_c_dat, edgecolors='none', c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
+        XX = ax.get_xlim()
+        YY = ax.get_ylim()
+        ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+
+        lens = np_sqrt(self.PM.contigLengths[row_indices])
+
+        ax = plt.subplot(222)
+        plt.xlabel("PCA1")
+        plt.ylabel("PCA2")
+        ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors='none', c=disp_cols, s=lens, zorder=10, alpha=alpha)
+        XX = ax.get_xlim()
+        YY = ax.get_ylim()
+        ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+
+        ax = plt.subplot(224)
+        plt.title("%s contigs" % len(row_indices))
+        plt.xlabel("MER PARTS")
+        plt.ylabel("COV PARTS")
+        ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors='none', c=disp_cols, s=lens, zorder=10, alpha=alpha)
+
+        ax.set_xlim(k_min, k_max)
+        ax.set_ylim(c_min, c_max)
+        XX = ax.get_xlim()
+        YY = ax.get_ylim()
+        ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+
+        k_line_cols = []
+        for k in range(len(k_sizes)):
+            if k == 0:
+                if k_keeps[k]:
+                    k_line_cols = ['r-']
+                else:
+                    k_line_cols = ['r--']
+            elif k == len(k_sizes) - 1:
+                if k_keeps[k]:
+                    k_line_cols[-1] = 'r-'
+                elif not k_keeps[k-1]:
+                    k_line_cols[-1] = 'r--'
+            else:
+                if k_keeps[k]:
+                    k_line_cols[k-1] = 'r-'
+                    k_line_cols.append('r-')
+                else:
+                    k_line_cols.append('r--')
+
+        for k in range(len(k_lines)):
+            plt.plot([k_lines[k],k_lines[k]], [c_min, c_max], k_line_cols[k])
 
       pc = 0
       for k in range(len(k_sizes)):
@@ -714,7 +718,7 @@ class ClusterEngine:
               k_sep_indices = row_indices[k_part]
               part_bp = np_sum(l_dat[k_part])
               if self.BM.isGoodBin(part_bp, len(k_part), ms=5):
-    
+
                   data = np_copy(c_dat[k_part])
                   Center(data,verbose=0)
                   p = PCA(data)
@@ -722,18 +726,18 @@ class ClusterEngine:
                   data = np_array([float(i) for i in components[:,0]])
                   data -= np_min(data)
                   data /= np_max(data)
-    
+
                   l_data = np_copy(l_dat[k_part])
-    
-    
+
+
                   (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data)
                   #(c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV")
-    
+
                   #-----
                   # GRID
                   c_sorted_data = self.PM.transformedCP[k_sep_indices][:,2]/10
                   c_sorted_data = c_sorted_data[np_argsort(c_sorted_data)]
-    
+
                   start = 0
                   c_lines = []
                   c_sizes = [len(p) for p in c_partitions]
@@ -759,29 +763,31 @@ class ClusterEngine:
                               c_line_cols.append('r-')
                           else:
                               c_line_cols.append('r--')
-    
+
                   if pc == 1:
                       k_line_min = k_min
                   else:
                       k_line_min = k_lines[pc-2]
-    
+
                   if pc == len(k_partitions):
                       k_line_max = k_max
                   else:
                       k_line_max = k_lines[pc-1]
-    
-                  for c in range(len(c_lines)):
-                      plt.plot([k_line_min,k_line_max], [c_lines[c], c_lines[c]], c_line_cols[c])
-    
+
+                  if debugPlots:
+                    for c in range(len(c_lines)):
+                        plt.plot([k_line_min,k_line_max], [c_lines[c], c_lines[c]], c_line_cols[c])
+
                   for c in range(len(c_partitions)):
                       if c_keeps[c]:
                           c_part = c_partitions[c]
                           partitions.append(np_array(k_part[c_part]))
 
-      fig.set_size_inches(12,12)
-      plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
-      plt.close()
-      del fig
+      if debugPlots:
+        fig.set_size_inches(12,12)
+        plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
+        plt.close()
+        del fig
 
       if len(partitions) == 0:
         return None
@@ -1171,7 +1177,7 @@ class HoughPartitioner:
 
         sorted_indices_raw = np_argsort(dAta)
         nUm_points = len(dAta)
-        
+
         # fudge the data to make longer contigs have more say in the
         # diff line we'll be making. This way we may be able to avoid lumping
         # super long contigs in with the short riff raff by accident.
@@ -1196,7 +1202,7 @@ class HoughPartitioner:
                     left_stop = dAta[real_index]
                 else:
                     left_stop = (dAta[real_index] + dAta[sorted_indices_raw[i-1]])/2.
-                    
+
                 if i == nUm_points-1:
                     right_stop = dAta[real_index]
                 else:
@@ -1204,7 +1210,7 @@ class HoughPartitioner:
 
                 spread_jump = (right_stop - left_stop) / (rep + 1.)
 
-                
+
                 for ii in range(rep):
                     spread_data.append(left_stop + ((ii + 1) * spread_jump))
                     spread2real[j] = real_index
@@ -1298,15 +1304,15 @@ class HoughPartitioner:
         assigned = {}
         tmp = {}
         for ii in range(spread_start, spread_end):
-            real_index = spread2real[ii] 
+            real_index = spread2real[ii]
             tmp[real_index] = None
             assigned[real_index] = None
         centre = np_array(tmp.keys())
-        
+
         # select all the guys with their centres to the left of the start
         tmp = {}
         for ii in range(spread_start):
-            real_index = spread2real[ii] 
+            real_index = spread2real[ii]
             if real_index not in assigned:
                 tmp[real_index] = None
                 assigned[real_index] = None
@@ -1315,7 +1321,7 @@ class HoughPartitioner:
         # select all the guys with their centres right of the end
         tmp = {}
         for ii in range(spread_end, d_len):
-            real_index = spread2real[ii] 
+            real_index = spread2real[ii]
             if real_index not in assigned:
                 tmp[real_index] = None
                 assigned[real_index] = None
@@ -1346,7 +1352,7 @@ class HoughPartitioner:
             flat_data = []
             for i in range(len(dAta)):
                 real_index = sorted_indices_raw[i]
-                rep = scales_per[real_index] 
+                rep = scales_per[real_index]
                 for k in range(rep):
                     flat_data.append(dAta[real_index])
                     try:
@@ -1387,7 +1393,7 @@ class HoughPartitioner:
                     gradients.append((sis[-1] - sis[0])/l_sis)
             gradients = np_array(gradients)
             keeps = np_where(gradients >= 1, False, True)
-            
+
             squished_rets = []
             squished_keeps = []
             last_squshed = []
@@ -1400,15 +1406,15 @@ class HoughPartitioner:
                         squished_rets.append(np_array(last_squshed))
                         last_squshed = []
                         squished_keeps.append(True)
-                    
+
                     # add the dud
                     squished_rets.append(rets[i])
                     squished_keeps.append(False)
             if len(last_squshed) > 0:
                 squished_rets.append(np_array(last_squshed))
                 squished_keeps.append(True)
-            return (np_array(squished_rets), np_array(squished_keeps))  
-            
+            return (np_array(squished_rets), np_array(squished_keeps))
+
         return np_array(rets)
 
     def points2Line(self, points, xIndexLim, yIndexLim, thickness):

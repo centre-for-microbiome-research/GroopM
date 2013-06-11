@@ -250,7 +250,7 @@ class BinManager:
                     invalid_bids.append(bid)
                 else:
                     self.bins[bid] = Bin(np_array(binMembers[bid]), bid, self.PM.scaleFactor-1)
-                    self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
+                    self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
         if len(invalid_bids) != 0:
             print "MT bins!"
             print invalid_bids
@@ -633,7 +633,7 @@ class BinManager:
                 split_bin = self.makeNewBin(holding_array)
                 for row_index in holding_array:
                     bin_assignment_update[row_index] = split_bin.id
-                split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
+                split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
                 bids.append(split_bin.id)
                 holding_array = np_array([])
                 current_group = idx[i]
@@ -643,7 +643,7 @@ class BinManager:
             split_bin = self.makeNewBin(holding_array)
             for row_index in holding_array:
                 bin_assignment_update[row_index] = split_bin.id
-            split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
+            split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
             bids.append(split_bin.id)
 
         return (bin_assignment_update, bids)
@@ -731,7 +731,7 @@ class BinManager:
             dead_bin = self.getBin(bids[0])
             for row_index in dead_bin.rowIndices:
                 self.PM.binIds[row_index] = parent_bin.id
-            parent_bin.consume(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths, dead_bin, verbose=verbose)
+            parent_bin.consume(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths, dead_bin, verbose=verbose)
             self.deleteBins([bids[0]], force=True)
         else:
             # just use the first given as the parent
@@ -748,7 +748,7 @@ class BinManager:
                 continue_merge = True
             else:
                 tmp_bin = self.makeNewBin(np_concatenate([parent_bin.rowIndices,dead_bin.rowIndices]))
-                tmp_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
+                tmp_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
                 self.plotSideBySide([parent_bin.id,dead_bin.id,tmp_bin.id], use_elipses=use_elipses)
                 self.deleteBins([tmp_bin.id], force=True)
                 user_option = self.promptOnMerge(bids=[parent_bin.id,dead_bin.id])
@@ -770,6 +770,7 @@ class BinManager:
                 parent_bin.consume(self.PM.transformedCP,
                                    self.PM.averageCoverages,
                                    self.PM.kmerNormPC1,
+                                   self.PM.contigGCs,
                                    self.PM.contigLengths,
                                    dead_bin,
                                    verbose=verbose)
@@ -1161,9 +1162,15 @@ class BinManager:
         # handle the headers first
         separator = "\t"
         if(outFormat == 'summary'):
-            stream.write(separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"cMean\"","\"cStdev\"","\"kMean\"","\"kStdev\""])+"\n")
+            stream.write(separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"cMean\"","\"cStdev\"","\"GC Mean\"","\"GC Stdev\""])+"\n")
         elif(outFormat == 'minimal'):
-            stream.write(separator.join(["#\"bid\"","\"cid\"","\"length\""])+"\n")
+            stream.write(separator.join(["#\"bid\"","\"cid\"","\"length\"","\"GC\""])+"\n")
+        elif(outFormat == 'user'):
+          header = ["\"bin id\"","\"length (bp)\"","\"# seqs\"","\"GC mean\"","\"GC std\""]
+          for i in xrange(0, len(self.PM.covProfiles[0])):
+            header.append("\"Coverage " + str(i+1) + " mean\"")
+            header.append("\"Coverage " + str(i+1) + " std\"")
+          stream.write(separator.join(header) + "\n")
         elif(outFormat == 'full'):
             pass
         else:
@@ -1171,8 +1178,8 @@ class BinManager:
             return
 
         for bid in self.getBids():
-            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
-            self.bins[bid].printBin(self.PM.contigNames, self.PM.contigLengths, outFormat=outFormat, separator=separator, stream=stream)
+            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
+            self.bins[bid].printBin(self.PM.contigNames, self.PM.covProfiles, self.PM.contigGCs, self.PM.contigLengths, outFormat=outFormat, separator=separator, stream=stream)
 
     def plotProfileDistributions(self):
         """Plot the coverage and kmer distributions for each bin"""
@@ -1318,7 +1325,7 @@ class BinManager:
             makeSurePathExists(folder)
 
         for bid in self.getBids():
-            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
+            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
         if(sideBySide):
             print "Plotting side by side"
             self.plotSideBySide(self.bins.keys(), tag=FNPrefix)
@@ -1326,9 +1333,9 @@ class BinManager:
             print "Plotting bins"
             for bid in self.getBids():
                 if folder != '':
-                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerNormPC1, self.PM.contigLengths, fileName=osp_join(folder, FNPrefix+"_"+str(bid)), ET=ET)
+                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, fileName=osp_join(folder, FNPrefix+"_"+str(bid)), ET=ET)
                 else:
-                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerNormPC1, self.PM.contigLengths, FNPrefix+"_"+str(bid), ET=ET)
+                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, FNPrefix+"_"+str(bid), ET=ET)
 
     def plotSideBySide(self, bids, fileName="", tag="", use_elipses=True):
         """Plot two bins side by side in 3d"""

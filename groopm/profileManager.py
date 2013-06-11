@@ -53,6 +53,7 @@ from sys import exc_info, exit, stdout as sys_stdout
 from operator import itemgetter
 from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
 from numpy import (abs as np_abs,
@@ -132,7 +133,8 @@ class ProfileManager:
         self.contigNames = np_array([])
         self.contigLengths = np_array([])
         self.contigGCs = np_array([])
-        self.contigColors = np_array([])   # calculated from kmerNormPC1
+        self.contigColors = np_array([])   # calculated from GC
+        self.colorMapGC = None
 
         self.binIds = np_array([])          # list of bin IDs
         # --> end section
@@ -245,6 +247,7 @@ class ProfileManager:
                     V = 1       # Pastels if that's your preference...
                     #self.contigColors = np_array([htr(val, S, V) for val in self.contigGCs])
                     self.contigColors = np_array([htr((1. + np_sin(np_pi * val - np_pi/2))/2., S, V) for val in self.contigGCs])
+                    self.colorMapGC = LinearSegmentedColormap.from_list('GC', [htr((1.0 + np_sin(np_pi * (val/1000.0) - np_pi/2))/2., S, V) for val in xrange(0, 1000)], N=1000)
 
             if(loadBins):
                 if(verbose):

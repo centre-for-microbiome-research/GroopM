@@ -198,6 +198,7 @@ class RefineEngine:
                     self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                                self.PM.averageCoverages,
                                                self.PM.kmerNormPC1,
+                                               self.PM.contigGCs,
                                                self.PM.contigLengths)
                 self.BM.plotBins(FNPrefix=plotFinal, ET=self.ET)
 
@@ -341,6 +342,7 @@ class RefineEngine:
                 self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                               self.PM.averageCoverages,
                                               self.PM.kmerNormPC1,
+                                              self.PM.contigGCs,
                                               self.PM.contigLengths)
                 # now go point shopping
                 disp_vals = np_array([])
@@ -445,6 +447,7 @@ class RefineEngine:
                 self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                               self.PM.averageCoverages,
                                               self.PM.kmerNormPC1,
+                                              self.PM.contigGCs,
                                               self.PM.contigLengths)
             self.BM.plotBins(FNPrefix="AFTER_OB", ET=self.ET)
             print "    %s" % timer.getTimeStamp()
@@ -490,6 +493,7 @@ class RefineEngine:
             self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                        self.PM.averageCoverages,
                                        self.PM.kmerNormPC1,
+                                       self.PM.contigGCs,
                                        self.PM.contigLengths)
             kval_stdev_distrb.append(self.BM.bins[bid].kValStdev)
 
@@ -575,6 +579,7 @@ class RefineEngine:
             bin.makeBinDist(self.PM.transformedCP,
                             self.PM.averageCoverages,
                             self.PM.kmerNormPC1,
+                            self.PM.contigGCs,
                             self.PM.contigLengths,
                             merTol=2.5)  # make the merTol a little larger...
 
@@ -1892,6 +1897,7 @@ class RefineEngine:
                 self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                            self.PM.averageCoverages,
                                            self.PM.kmerNormPC1,
+                                           self.PM.contigGCs,
                                            self.PM.contigLengths)
             affected_bids = []
             this_step_binned = 0
