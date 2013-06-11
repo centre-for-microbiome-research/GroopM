@@ -261,14 +261,6 @@ class ClusterEngine:
                 [max_blur_value, max_x, max_y] = putative_clusters[1]
                 self.roundNumber += 1
                 sub_round_number = 1
-                test_bins = []
-                for center_row_indices in partitions:
-                    test_bin = self.BM.makeNewBin(rowIndices=center_row_indices)
-                    test_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
-                    test_bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerNormPC1, self.PM.contigLengths, fileName="TEST_"+str(self.imageCounter))
-                    test_bins.append(test_bin.id)
-                    self.imageCounter += 1
-                self.BM.deleteBins(test_bins, force=True, freeBinnedRowIndices=False, saveBins=False)
 
                 for center_row_indices in partitions:
                     total_BP = np_sum(self.PM.contigLengths[center_row_indices])
@@ -465,8 +457,8 @@ class ClusterEngine:
       k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours-1])
 
       # calculate convergence criteria
-      k_converged = 1e-1 * np_mean(k_dist)
-      c_converged = 1e-1 * np_mean(c_whiten_dist)
+      k_converged = 5e-1 * np_mean(k_dist)
+      c_converged = 5e-1 * np_mean(c_whiten_dist)
       max_iterations = 50
 
       k_move_perc = 0.15
@@ -617,8 +609,8 @@ class ClusterEngine:
 
       # perform hough transform clustering
       self.HP.hc += 1
-      #(k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat)
-      (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
+      (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat)
+      #(k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
 
       if(len(k_partitions) == 0):
         return None
@@ -734,8 +726,8 @@ class ClusterEngine:
                   l_data = np_copy(l_dat[k_part])
     
     
-                  #(c_partitions, c_keeps) = self.HP.houghPartition(data, l_data)
-                  (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV")
+                  (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data)
+                  #(c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV")
     
                   #-----
                   # GRID

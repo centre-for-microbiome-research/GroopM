@@ -396,7 +396,7 @@ class RefineEngine:
     def autoRefineBins(self,
                        timer,
                        mergeSimilarBins=True,
-                       removeDuds=True,
+                       removeDuds=False,
                        nukeOutliers=True,
                        shuffleRefine=True,
                        verbose=False,
