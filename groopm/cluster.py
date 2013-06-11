@@ -617,8 +617,8 @@ class ClusterEngine:
 
       # perform hough transform clustering
       self.HP.hc += 1
-      #k_partitions = self.HP.houghPartition(k_dat[:,0], l_dat)
-      k_partitions = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
+      #(k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat)
+      (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
 
       if(len(k_partitions) == 0):
         return None
@@ -678,74 +678,113 @@ class ClusterEngine:
       k_eps = (k_max - k_min) / len(row_indices)
       c_eps = (c_max - c_min) / len(row_indices)
 
-      start = 0
-      k_lines = []
-      k_sizes = [len(p) for p in k_partitions]
-
-      k_index_sort = np_argsort(k_dat[:,0])
-
-      for k in range(len(k_sizes)-1):
-          k_lines.append(k_dat[k_index_sort,0][k_sizes[k]+start]+k_eps)
-          start += k_sizes[k]
-
-      for k in k_lines:
-          plt.plot([k,k], [c_min, c_max], 'r-')
-
-      pc = 0
-      for k_part in k_partitions:
-          pc += 1
-          k_sep_indices = row_indices[k_part]
-          part_bp = np_sum(l_dat[k_part])
-          if self.BM.isGoodBin(part_bp, len(k_part), ms=5):
-
-              data = np_copy(c_dat[k_part])
-              Center(data,verbose=0)
-              p = PCA(data)
-              components = p.pc()
-              data = np_array([float(i) for i in components[:,0]])
-              data -= np_min(data)
-              data /= np_max(data)
-
-              l_data = np_copy(l_dat[k_part])
-
-
-              #c_partitions = self.HP.houghPartition(data, l_data)
-              c_partitions = self.HP.houghPartition(data, l_data, imgTag="COV")
-
-              #-----
-              # GRID
-              c_sorted_data = self.PM.transformedCP[k_sep_indices][:,2]/10
-              c_sorted_data = c_sorted_data[np_argsort(c_sorted_data)]
-
-              start = 0
-              c_lines = []
-              c_sizes = [len(p) for p in c_partitions]
-              for c in range(len(c_sizes)-1):
-                  c_lines.append(c_sorted_data[c_sizes[c]+start]+c_eps)
-                  start += c_sizes[c]
-
-              if pc == 1:
-                  k_line_min = k_min
-              else:
-                  k_line_min = k_lines[pc-2]
-
-              if pc == len(k_partitions):
-                  k_line_max = k_max
-              else:
-                  k_line_max = k_lines[pc-1]
-
-
-              for c in c_lines:
-                  plt.plot([k_line_min,k_line_max], [c, c], 'r-')
-
-              for c_part in c_partitions:
-                  partitions.append(np_array(k_part[c_part]))
-
       ax.set_xlim(k_min, k_max)
       ax.set_ylim(c_min, c_max)
       XX = ax.get_xlim()
       YY = ax.get_ylim()
       ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+
+      k_index_sort = np_argsort(k_dat[:,0])
+      k_sizes = [len(p) for p in k_partitions]
+      start = 0
+      k_lines = []
+      for k in range(len(k_sizes)-1):
+          k_lines.append(k_dat[k_index_sort,0][k_sizes[k]+start]+k_eps)
+          start += k_sizes[k]
+
+      k_line_cols = []
+      for k in range(len(k_sizes)):
+          if k == 0:
+              if k_keeps[k]:
+                  k_line_cols = ['r-']
+              else:
+                  k_line_cols = ['r--']
+          elif k == len(k_sizes) - 1:
+              if k_keeps[k]:
+                  k_line_cols[-1] = 'r-'
+              elif not k_keeps[k-1]:
+                  k_line_cols[-1] = 'r--'
+          else:
+              if k_keeps[k]:
+                  k_line_cols[k-1] = 'r-'
+                  k_line_cols.append('r-')
+              else:
+                  k_line_cols.append('r--')
+                  
+      for k in range(len(k_lines)):
+          plt.plot([k_lines[k],k_lines[k]], [c_min, c_max], k_line_cols[k])
+
+      pc = 0
+      for k in range(len(k_sizes)):
+          pc += 1
+          if k_keeps[k]:
+              k_part = k_partitions[k]
+              k_sep_indices = row_indices[k_part]
+              part_bp = np_sum(l_dat[k_part])
+              if self.BM.isGoodBin(part_bp, len(k_part), ms=5):
+    
+                  data = np_copy(c_dat[k_part])
+                  Center(data,verbose=0)
+                  p = PCA(data)
+                  components = p.pc()
+                  data = np_array([float(i) for i in components[:,0]])
+                  data -= np_min(data)
+                  data /= np_max(data)
+    
+                  l_data = np_copy(l_dat[k_part])
+    
+    
+                  #(c_partitions, c_keeps) = self.HP.houghPartition(data, l_data)
+                  (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV")
+    
+                  #-----
+                  # GRID
+                  c_sorted_data = self.PM.transformedCP[k_sep_indices][:,2]/10
+                  c_sorted_data = c_sorted_data[np_argsort(c_sorted_data)]
+    
+                  start = 0
+                  c_lines = []
+                  c_sizes = [len(p) for p in c_partitions]
+                  for c in range(len(c_sizes)-1):
+                      c_lines.append(c_sorted_data[c_sizes[c]+start]+c_eps)
+                      start += c_sizes[c]
+
+                  c_line_cols = []
+                  for c in range(len(c_sizes)):
+                      if c == 0:
+                          if c_keeps[c]:
+                              c_line_cols = ['r-']
+                          else:
+                              c_line_cols = ['r--']
+                      elif c == len(c_sizes) - 1:
+                          if c_keeps[c]:
+                              c_line_cols[-1] = 'r-'
+                          elif not c_keeps[c-1]:
+                              c_line_cols[-1] = 'r--'
+                      else:
+                          if c_keeps[c]:
+                              c_line_cols[c-1] = 'r-'
+                              c_line_cols.append('r-')
+                          else:
+                              c_line_cols.append('r--')
+    
+                  if pc == 1:
+                      k_line_min = k_min
+                  else:
+                      k_line_min = k_lines[pc-2]
+    
+                  if pc == len(k_partitions):
+                      k_line_max = k_max
+                  else:
+                      k_line_max = k_lines[pc-1]
+    
+                  for c in range(len(c_lines)):
+                      plt.plot([k_line_min,k_line_max], [c_lines[c], c_lines[c]], c_line_cols[c])
+    
+                  for c in range(len(c_partitions)):
+                      if c_keeps[c]:
+                          c_part = c_partitions[c]
+                          partitions.append(np_array(k_part[c_part]))
 
       fig.set_size_inches(12,12)
       plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
@@ -1368,11 +1407,15 @@ class HoughPartitioner:
                     if len(last_squshed) > 0:
                         squished_rets.append(np_array(last_squshed))
                         last_squshed = []
+                        squished_keeps.append(True)
+                    
+                    # add the dud
                     squished_rets.append(rets[i])
                     squished_keeps.append(False)
             if len(last_squshed) > 0:
                 squished_rets.append(np_array(last_squshed))
-            return np_array(squished_rets) 
+                squished_keeps.append(True)
+            return (np_array(squished_rets), np_array(squished_keeps))  
             
         return np_array(rets)
 
