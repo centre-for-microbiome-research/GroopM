@@ -537,11 +537,11 @@ class Bin:
         plt.close(fig)
         del fig
 
-    def plotOnFig(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigGCs, contigLengths, contigColors, colorMapGC, fileName="", ET=None):
+    def plotOnFig(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigGCs, contigLengths, contigColors, colorMapGC, fileName="", ET=None, plotColorbar=True, extents=None):
         ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
-        return self.plotOnAx(ax, transformedCP, contigGCs, contigLengths, contigColors, colorMapGC, fileName=fileName, ET=ET)
+        return self.plotOnAx(ax, transformedCP, contigGCs, contigLengths, contigColors, colorMapGC, fileName=fileName, ET=ET, plotColorbar=plotColorbar, extents=extents)
 
-    def plotOnAx(self, ax, transformedCP, contigGCs, contigLengths, contigColors, colorMapGC, fileName="", plotCentroid=True, ET=None, printID=False, plotColorbar=True):
+    def plotOnAx(self, ax, transformedCP, contigGCs, contigLengths, contigColors, colorMapGC, fileName="", plotCentroid=True, ET=None, printID=False, plotColorbar=True, extents=None):
         """Plot a bin in a given subplot
 
         If you pass through an EllipsoidTool then it will plot the minimum bounding ellipsoid as well!
@@ -594,6 +594,11 @@ class Bin:
                 ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color, label=self.id)
             else:
                 ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color)
+
+        if extents:
+          ax.set_xlim([extents[0], extents[1]])
+          ax.set_ylim([extents[2], extents[3]])
+          ax.set_zlim([extents[4], extents[5]])
 
         from locale import format, setlocale, LC_ALL # purdy commas
         setlocale(LC_ALL, "")

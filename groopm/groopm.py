@@ -91,7 +91,7 @@ class GroopMOptionsParser():
 
       mpl.rcParams['savefig.dpi'] = 300
 
-      mpl.rcParams['figure.figsize'] = [6, 6]
+      mpl.rcParams['figure.figsize'] = [6.5, 6.5]
       mpl.rcParams['figure.facecolor'] = '1.0'
 
     def parseOptions(self, options ):

@@ -250,17 +250,26 @@ class RefineEngine:
                                   printInstructions=False,
                                   use_elipses=use_elipses)
 
-            elif(user_option == 'K'):
+            elif(user_option == 'G'):
                 # display a subset only!
                 have_range = False
                 krange=0
                 while(not have_range):
                     try:
-                        krange = int(raw_input(" Enter kmer range (0-9): "))
+                        gc_range_str = raw_input(" Enter GC range to examine (e.g., 0.5-0.6): ")
+
+                        if '-' not in gc_range_str:
+                          raise ValueError('Incorrectly formatted GC range.')
+                        else:
+                          values = gc_range_str.split('-')
+                          start = float(values[0])
+                          end = float(values[1])
+                          gc_range=[start,end]
+
                         have_range = True
                     except ValueError:
-                        print "You need to enter an integer value!"
-                self.BM.plotBinIds(krange=krange, ignoreRanges=ignoreRanges)
+                        print "GC ranges must be entered as 'a-b' (e.g., 0.5-0.6)."
+                self.BM.plotBinIds(gc_range=gc_range, ignoreRanges=ignoreRanges)
 
             elif(user_option == 'B'):
                 # print subset of bins
@@ -269,7 +278,7 @@ class RefineEngine:
                 while(not have_bid):
                     have_bid = True
                     try:
-                        usr_bids = raw_input(" Enter bid(s) to plot: ")
+                        usr_bids = raw_input(" Enter 'space' seperated bin id(s) to plot: ")
                         bids = [int(i) for i in usr_bids.split(" ")]
                         if bids == [-1]:
                             bids = self.BM.getBids()
@@ -1999,7 +2008,7 @@ class RefineEngine:
     def promptOnPlotterRefine(self, minimal=False):
         """Find out what the user wishes to do next when refining bins"""
         input_not_ok = True
-        valid_responses = ['R','P','B','V','M','S','E', 'K','Q']
+        valid_responses = ['R','P','B','V','M','S','E', 'G','Q']
         vrs = ",".join([str.lower(str(x)) for x in valid_responses])
         while(input_not_ok):
             if(minimal):
@@ -2009,7 +2018,7 @@ class RefineEngine:
                                    "------------------------------------------------------------\n" \
                                    " r = replot entire space using bin ids\n" \
                                    " p = replot entire space with bins as points\n" \
-                                   " k = replot entire space for bins within kmer range\n" \
+                                   " g = replot entire space for bins within a specific GC range\n" \
                                    " b = plot one or more bins\n" \
                                    " v = plot all contigs in vincinity of bin\n" \
                                    " m = merge two or more bins\n" \

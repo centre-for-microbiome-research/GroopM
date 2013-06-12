@@ -324,7 +324,7 @@ class ClusterEngine:
                             sub_counter += 10
                             print "\n%4d" % sub_counter,
 
-                        bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerNormPC1, self.PM.contigLengths, fileName="P_BIN_%d"%(bin.id)) #***slow plot!
+                        bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, fileName="P_BIN_%d"%(bin.id)) #***slow plot!
 
                     except BinNotFoundException: pass
 

@@ -129,6 +129,7 @@ class ProfileManager:
         self.kmerSigs = np_array([])        # raw kmer signatures
         self.kmerNormPC1 = np_array([])     # First PC of kmer sigs normalized to [0, 1]
         self.kmerPCs = np_array([])         # PCs of kmer sigs capturing specified variance
+        self.kmerVarPC = np_array([])       # variance of each PC
         self.stoitColNames = np_array([])
         self.contigNames = np_array([])
         self.contigLengths = np_array([])
@@ -162,6 +163,7 @@ class ProfileManager:
                  silent=False,              # some to no output messages
                  loadCovProfiles=True,
                  loadKmerSigs=True,
+                 loadKmerVarPC=True,
                  loadRawKmers=False,
                  makeColors=True,
                  loadContigNames=True,
@@ -214,15 +216,20 @@ class ProfileManager:
                 self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indices=self.indices)
 
             if(loadKmerSigs):
-                PCs = self.dataManager.getKmerPCAs(self.dbFileName, indices=self.indices)
-                self.kmerPCs = PCs
+                self.kmerPCs = self.dataManager.getKmerPCAs(self.dbFileName, indices=self.indices)
 
                 if(verbose):
                     print "    Loading PCA kmer sigs (" + str(len(self.kmerPCs[0])) + " dimensional space)"
 
-                self.kmerNormPC1 = np_copy(PCs[:,0])
+                self.kmerNormPC1 = np_copy(self.kmerPCs[:,0])
                 self.kmerNormPC1 -= np_min(self.kmerNormPC1)
                 self.kmerNormPC1 /= np_max(self.kmerNormPC1)
+
+            if(loadKmerVarPC):
+                self.kmerVarPC = self.dataManager.getKmerVarPC(self.dbFileName, indices=self.indices)
+
+                if(verbose):
+                    print "    Loading PCA kmer variance (total variance: %.2f" % sum(self.kmerVarPC) + ")"
 
             if(loadContigNames):
                 if(verbose):
