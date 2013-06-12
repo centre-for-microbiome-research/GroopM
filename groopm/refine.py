@@ -346,7 +346,7 @@ class RefineEngine:
                                               self.PM.contigLengths)
                 # now go point shopping
                 disp_vals = np_array([])
-                disp_cols = np_array([])
+                disp_gc = np_array([])
                 disp_lens = np_array([])
                 num_points = 0
                 seen_bids = {}
@@ -356,7 +356,7 @@ class RefineEngine:
                         num_points += 1
                         disp_vals = np_append(disp_vals, self.PM.transformedCP[row_index])
                         disp_lens = np_append(disp_lens, np_sqrt(self.PM.contigLengths[row_index]))
-                        disp_cols = np_append(disp_cols, self.PM.contigColors[row_index])
+                        disp_gc = np_append(disp_gc, self.PM.contigGCs[row_index])
                         try:
                             seen_bids[self.PM.binIds[row_index]].append(1)
                         except KeyError:
@@ -364,7 +364,6 @@ class RefineEngine:
 
                 # reshape
                 disp_vals = np_reshape(disp_vals, (num_points, 3))
-                disp_cols = np_reshape(disp_cols, (num_points, 3))
 
                 print " Points are located in bins:"
                 for seen_bid in seen_bids:
@@ -372,17 +371,22 @@ class RefineEngine:
 
                 fig = plt.figure()
                 ax = fig.add_subplot(1,1,1, projection='3d')
-                ax.scatter(disp_vals[:,0],
+                sc = ax.scatter(disp_vals[:,0],
                            disp_vals[:,1],
                            disp_vals[:,2],
-                           edgecolors=disp_cols,
-                           c=disp_cols,
+                           edgecolors='k',
+                           c=disp_gc,
+                           cmap=self.PM.colorMapGC,
                            s=disp_lens,
                            marker='.')
+                sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+
                 self.BM.bins[bid].plotOnAx(ax,
                                            self.PM.transformedCP,
-                                           self.PM.contigColors,
+                                           self.PM.contigGCs,
                                            self.PM.contigLengths,
+                                           self.PM.contigColors,
+                                           self.PM.colorMapGC,
                                            ET=ET)
                 try:
                     plt.show()
@@ -683,14 +687,18 @@ class RefineEngine:
                     base_bin.plotMersOnAx(ax,
                                           self.PM.kmerPCs[:,0],
                                           self.PM.kmerPCs[:,1],
-                                          self.PM.contigColors,
+                                          self.PM.contigGCs,
                                           self.PM.contigLengths,
+                                          self.PM.contigColors,
+                                          self.PM.colorMapGC,
                                           ET=self.ET)
                     query_bin.plotMersOnAx(ax,
                                            self.PM.kmerPCs[:,0],
                                            self.PM.kmerPCs[:,1],
-                                           self.PM.contigColors,
+                                           self.PM.contigGCs,
                                            self.PM.contigLengths,
+                                           self.PM.contigColors,
+                                           self.PM.colorMapGC,
                                            ET=self.ET)
                     plt.title("MERGE: %d -> %d (%d)" % (base_bid, query_bid, INTT))
                     plt.show()
@@ -719,8 +727,8 @@ class RefineEngine:
                 if verbose:
                     fig = plt.figure()
                     ax = fig.add_subplot(1, 1, 1, projection='3d')
-                    base_bin.plotOnAx(ax, self.PM.transformedCP, self.PM.contigColors, self.PM.contigLengths, ET=self.ET)
-                    query_bin.plotOnAx(ax, self.PM.transformedCP, self.PM.contigColors, self.PM.contigLengths, ET=self.ET)
+                    base_bin.plotOnAx(ax, self.PM.transformedCP, self.PM.contigGCs, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, ET=self.ET)
+                    query_bin.plotOnAx(ax, self.PM.transformedCP, self.PM.contigGCs, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, ET=self.ET)
                     plt.title("MERGE: %d -> %d (%d)" % (base_bid, query_bid, INTT))
                     plt.show()
                     plt.close(fig)

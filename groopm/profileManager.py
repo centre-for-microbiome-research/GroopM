@@ -220,7 +220,7 @@ class ProfileManager:
                 if(verbose):
                     print "    Loading PCA kmer sigs (" + str(len(self.kmerPCs[0])) + " dimensional space)"
 
-                self.kmerNormPC1 = PCs[:,0]
+                self.kmerNormPC1 = np_copy(PCs[:,0])
                 self.kmerNormPC1 -= np_min(self.kmerNormPC1)
                 self.kmerNormPC1 /= np_max(self.kmerNormPC1)
 
@@ -771,22 +771,20 @@ class ProfileManager:
 
                     # now replot the highlighted guys
                     disp_vals = np_array([])
-                    disp_cols = np_array([])
                     num_points = 0
                     for bin in highlight:
                         for row_index in bin.rowIndices:
                             num_points += 1
                             disp_vals = np_append(disp_vals, self.transformedCP[row_index])
-                            disp_cols = np_append(disp_cols, self.contigColors[row_index])
 
                     # reshape
                     disp_vals = np_reshape(disp_vals, (num_points, 3))
-                    disp_cols = np_reshape(disp_cols, (num_points, 3))
                     ax.scatter(disp_vals[:,0],
                                disp_vals[:,1],
                                disp_vals[:,2],
                                edgecolors='none',
-                               c=disp_cols,
+                               c=self.contigGCs[bin.rowIndices],
+                               cmap=self.colorMapGc,
                                s=2,
                                marker='.')
             else:

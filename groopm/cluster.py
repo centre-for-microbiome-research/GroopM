@@ -480,16 +480,16 @@ class ClusterEngine:
 
             self.cluster_num += 1
 
-          disp_cols = self.PM.contigColors[row_indices]
-
           fig = plt.figure()
           ax = fig.add_subplot(111, projection='3d')
 
           ax.scatter(c_dat[:,0],
                      c_dat[:,1],
                      c_dat[:,2],
-                     edgecolors=disp_cols,
-                     c=disp_cols,
+                     edgecolors='k',
+                     c=self.PM.contigGCs[row_indices],
+                     cmap=self.PM.colorMapGC,
+                     vmin=0.0, vmax=1.0,
                      marker='.')
 
           title = "Points: " + str(len(c_dat[:,0]))
@@ -671,7 +671,7 @@ class ClusterEngine:
         ax = plt.subplot(222)
         plt.xlabel("PCA1")
         plt.ylabel("PCA2")
-        ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors='none', c=disp_cols, s=lens, zorder=10, alpha=alpha)
+        ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors='none', c=self.PM.contigGCs[row_indices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=lens, zorder=10, alpha=alpha)
         XX = ax.get_xlim()
         YY = ax.get_ylim()
         ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
@@ -680,7 +680,7 @@ class ClusterEngine:
         plt.title("%s contigs" % len(row_indices))
         plt.xlabel("MER PARTS")
         plt.ylabel("COV PARTS")
-        ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors='none', c=disp_cols, s=lens, zorder=10, alpha=alpha)
+        ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors='none', c=self.PM.contigGCs[row_indices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=lens, zorder=10, alpha=alpha)
 
         ax.set_xlim(k_min, k_max)
         ax.set_ylim(c_min, c_max)
@@ -1025,20 +1025,17 @@ class ClusterEngine:
         ax = fig.add_subplot(111, projection='3d')
 
         disp_vals = np_array([])
-        disp_cols = np_array([])
         disp_lens = np_array([])
         num_points = 0
         for row_index in rowIndices:
             num_points += 1
             disp_vals = np_append(disp_vals, self.PM.transformedCP[row_index])
-            disp_cols = np_append(disp_cols, self.PM.contigColors[row_index])
             disp_lens = np_append(disp_lens, np_sqrt(self.PM.contigLengths[row_index]))
 
         # reshape
         disp_vals = np_reshape(disp_vals, (num_points, 3))
-        disp_cols = np_reshape(disp_cols, (num_points, 3))
 
-        ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors=disp_cols, c=disp_cols, s=disp_lens, marker='.')
+        ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', c=self.PM.contigGCs[rowIndices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens, marker='.')
 
         if(fileName != ""):
             fig.set_size_inches(6,6)

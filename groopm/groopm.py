@@ -51,7 +51,9 @@ __status__ = "Alpha"
 
 import argparse
 import sys
-import os 
+import os
+
+import matplotlib as mpl
 
 # GroopM imports
 import mstore
@@ -77,8 +79,21 @@ from mstore import GMDataManager
 ###############################################################################
 
 class GroopMOptionsParser():
-    def __init__(self): pass
-    
+    def __init__(self):
+      # set default value for matplotlib
+      mpl.rcParams['lines.linewidth'] = 0.5
+
+      mpl.rcParams['xtick.labelsize'] = 8
+      mpl.rcParams['ytick.labelsize'] = 8
+      mpl.rcParams['legend.fontsize'] = 10
+      mpl.rcParams['axes.labelsize'] = 10
+      mpl.rcParams['axes.titlesize'] = 12
+
+      mpl.rcParams['savefig.dpi'] = 300
+
+      mpl.rcParams['figure.figsize'] = [6, 6]
+      mpl.rcParams['figure.facecolor'] = '1.0'
+
     def parseOptions(self, options ):
 
         timer = gtime.TimeKeeper()
@@ -94,8 +109,8 @@ class GroopMOptionsParser():
                                       timer,
                                       force=options.force)
             if not success:
-                print options.dbname,"not updated" 
-                            
+                print options.dbname,"not updated"
+
         elif(options.subparser_name == 'core'):
             # make bin cores
             print "*******************************************************************************"
@@ -123,10 +138,10 @@ class GroopMOptionsParser():
             print "*******************************************************************************"
             bids = []
             if options.bids is not None:
-                bids = options.bids            
+                bids = options.bids
             auto = options.auto
             transform=True^options.no_transform
-            
+
             RE = refine.RefineEngine(timer,
                                      dbFileName=options.dbname,
                                      transform=transform,
@@ -138,7 +153,7 @@ class GroopMOptionsParser():
             else:
                 pfx=""
             print "Refine bins"
-            
+
             RE.refineBins(timer,
                           auto=auto,
                           saveBins=True,
@@ -159,11 +174,11 @@ class GroopMOptionsParser():
                               inclusivity=options.inclusivity,
                               step=options.step,
                               saveBins=True)
-        
+
         elif(options.subparser_name == 'extract'):
             # Extract data
             print "*******************************************************************************"
-            print " [[GroopM]] Running in '%s' extraction mode..." % options.mode 
+            print " [[GroopM]] Running in '%s' extraction mode..." % options.mode
             print "*******************************************************************************"
             bids = []
             if options.bids is not None:
@@ -252,7 +267,7 @@ class GroopMOptionsParser():
                               options.alpha,
                               options.invert,
                               options.show)
-            
+
         elif(options.subparser_name == 'print'):
             BM = binManager.BinManager(dbFileName=options.dbname)
             bids = []
@@ -268,7 +283,7 @@ class GroopMOptionsParser():
             BM = binManager.BinManager(dbFileName=options.dbname)
             if options.bids is None:
                 bids = []
-            else:    
+            else:
                 bids = options.bids
             BM.loadBins(timer, makeBins=True, silent=False, bids=bids, loadContigNames=False)
 
@@ -289,8 +304,8 @@ class GroopMOptionsParser():
             print "*******************************************************************************"
             print " [[GroopM]] Running in data dumping mode..."
             print "*******************************************************************************"
-        
-            # prep fields. Do this first cause users are mot likely to 
+
+            # prep fields. Do this first cause users are mot likely to
             # mess this part up!
             allowable_fields = ['names', 'mers', 'coverage', 'lengths', 'bins', 'all']
             fields = options.fields.split(',')
@@ -303,16 +318,16 @@ class GroopMOptionsParser():
                 separator = '\t'
             else:
                 separator = options.separator
-                
+
             DM = GMDataManager()
             DM.dumpData(options.dbname,
                         fields,
                         options.outfile,
                         separator,
                         not options.no_headers)
-        
+
         return 0
-    
+
 
 ###############################################################################
 ###############################################################################

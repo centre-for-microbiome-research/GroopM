@@ -979,7 +979,9 @@ class BinManager:
         bin_centroid_points = np_array([])
         bin_centroid_colors = np_array([])
         bin_centroid_kvals = np_array([])
+        bin_centroid_gc = np_array([])
         bids = np_array([])
+
         k_low = 0.0
         k_high = 0.0
         if krange is not None:
@@ -996,13 +998,16 @@ class BinManager:
             if add_bin:
                 bin_centroid_points = np_append(bin_centroid_points,
                                                 self.bins[bid].covMeans)
+
                 bin_centroid_colors = np_append(bin_centroid_colors,
                                                 np_mean([
                                                          self.PM.contigColors[row_index] for row_index in
                                                          self.bins[bid].rowIndices
                                                          ],
-                                                         axis=0)
-                                                )
+                                                         axis=0))
+
+                bin_centroid_gc = np_append(bin_centroid_gc, np_mean(self.PM.contigGCs[self.bins[bid].rowIndices]))
+
                 if getKVals:
                     bin_centroid_kvals = np_append(bin_centroid_kvals,
                                                    np_mean([
@@ -1020,8 +1025,9 @@ class BinManager:
             bin_centroid_colors = np_reshape(bin_centroid_colors, (num_added, 3))
 
         if getKVals:
-            return (bin_centroid_points, bin_centroid_colors, bin_centroid_kvals, bids)
-        return (bin_centroid_points, bin_centroid_colors, bids)
+            return (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bin_centroid_kvals, bids)
+
+        return (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bids)
 
     def getAngleBetween(self, rowIndex1, rowIndex2, ):
         """Find the angle between two contig's coverage vectors"""
@@ -1133,17 +1139,6 @@ class BinManager:
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING
 
-    def makeCentroidPalette(self):
-        """Return a hash of bin ids to colors"""
-        (bin_centroid_points, bin_centroid_colors, bids) = self.findCoreCentres()
-        pal = {}
-        for i in range(len(bids)):
-            pal[bids[i]] = (int(bin_centroid_colors[i][0]*255),
-                            int(bin_centroid_colors[i][1]*255),
-                            int(bin_centroid_colors[i][2]*255)
-                           )
-        return pal
-
     def printBins(self, outFormat, fileName=""):
         """Wrapper for print handles piping to file or stdout"""
         if("" != fileName):
@@ -1191,40 +1186,45 @@ class BinManager:
         if plotEllipsoid and ET == None:
             ET = EllipsoidTool()
 
-        fig = plt.figure()
-
         # we need to do some fancy-schmancy stuff at times!
         if plotMers:
             num_cols = 2
         else:
             num_cols = 1
 
+        fig = plt.figure(figsize=(6*num_cols, 6))
         ax = fig.add_subplot(1,num_cols,1, projection='3d')
-        for bid in bids:
+        for i, bid in enumerate(bids):
             self.bins[bid].plotOnAx(ax,
                            self.PM.transformedCP,
-                           self.PM.contigColors,
+                           self.PM.contigGCs,
                            self.PM.contigLengths,
+                           self.PM.contigColors,
+                           self.PM.colorMapGC,
                            ET=ET,
-                           printID=True
+                           printID=True,
+                           plotColorbar=(num_cols==1 and i==0)
                            )
         if plotMers:
             ax.set_title('Coverage')
             ax = fig.add_subplot(1, 2, 2)
-            for bid in bids:
+            for i, bid in enumerate(bids):
                 self.bins[bid].plotMersOnAx(ax,
                                             self.PM.kmerPCs[:,0],
                                             self.PM.kmerPCs[:,1],
-                                            self.PM.contigColors,
+                                            self.PM.contigGCs,
                                             self.PM.contigLengths,
+                                            self.PM.contigColors,
+                                            self.PM.colorMapGC,
                                             ET=ET,
-                                            printID=True
+                                            printID=True,
+                                            plotColorbar=(i==0)
                                             )
-            ax.set_title('Kmer sig PCA')
+            ax.set_title('PCA of k-mer signature')
 
+        fig.set_size_inches(6*num_cols, 6)
         if(fileName != ""):
             try:
-                fig.set_size_inches(6,6)
                 plt.savefig(fileName,dpi=300)
             except:
                 print "Error saving image:", fileName, exc_info()[0]
@@ -1264,21 +1264,20 @@ class BinManager:
             for bids in bins:
                 ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
                 disp_vals = np_array([])
-                disp_cols = np_array([])
                 disp_lens = np_array([])
                 num_points = 0
                 for bid in bids:
                     for row_index in self.bins[bid].rowIndices:
                         num_points += 1
                         disp_vals = np_append(disp_vals, coords[row_index])
-                        disp_cols = np_append(disp_cols, self.PM.contigColors[row_index])
                         disp_lens = np_append(disp_lens, np_sqrt(self.PM.contigLengths[row_index]))
 
                 # reshape
                 disp_vals = np_reshape(disp_vals, (num_points, 3))
-                disp_cols = np_reshape(disp_cols, (num_points, 3))
 
-                ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors=disp_cols, c=disp_cols, s=disp_lens, marker='.')
+                sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', c=self.PM.contigGCs[self.bins[bid].rowIndices], cmap=self.PM.colorMapGC, s=disp_lens, marker='.')
+                sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+
                 plot_num += 1
         else:
             # plot all separately
@@ -1292,7 +1291,7 @@ class BinManager:
             ALL_BIDS = []
             for bids in bins:
                 for bid in bids:
-                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigColors, self.PM.contigLengths, ET=et, plotCentroid=pc)
+                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, ET=et, plotCentroid=pc)
 
             plot_num += 1
             if semi_untransformed:
@@ -1304,7 +1303,7 @@ class BinManager:
                 ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
                 plot_num += 1
                 for bid in bids:
-                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigColors, self.PM.contigLengths, ET=et, plotCentroid=pc)
+                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, ET=et, plotCentroid=pc)
 
         try:
             plt.show()
@@ -1375,9 +1374,13 @@ class BinManager:
 
     def plotBinIds(self, krange=None, ignoreRanges=False):
         """Render 3d image of core ids"""
-        (bin_centroid_points, bin_centroid_colors, bids) = self.findCoreCentres(krange=krange)
+        (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bids) = self.findCoreCentres(krange=krange)
         fig = plt.figure()
         ax = fig.gca(projection='3d')
+        ax.set_xlabel('x coverage')
+        ax.set_ylabel('y coverage')
+        ax.set_zlabel('z coverage')
+
         outer_index = 0
         for bid in bids:
             ax.text(bin_centroid_points[outer_index,0],
@@ -1387,6 +1390,7 @@ class BinManager:
                     color=bin_centroid_colors[outer_index]
                     )
             outer_index += 1
+
         if ignoreRanges:
             mm = np_max(bin_centroid_points, axis=0)
             ax.set_xlim3d(0, mm[0])
@@ -1406,12 +1410,26 @@ class BinManager:
             raise
         del fig
 
-    def plotBinPoints(self, ignoreRanges=False):
+    def plotBinPoints(self, ignoreRanges=False, plotColorbar=True):
         """Render the image for validating cores"""
-        (bin_centroid_points, bin_centroid_colors, bids) = self.findCoreCentres()
+        (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bids) = self.findCoreCentres()
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(bin_centroid_points[:,0], bin_centroid_points[:,1], bin_centroid_points[:,2], edgecolors=bin_centroid_colors, c=bin_centroid_colors)
+        print bin_centroid_gc
+        sc = ax.scatter(bin_centroid_points[:,0], bin_centroid_points[:,1], bin_centroid_points[:,2], edgecolors='k', c=bin_centroid_gc, cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0)
+        sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+
+        if plotColorbar:
+          cbar = plt.colorbar(sc, shrink=0.7)
+          cbar.ax.tick_params()
+          cbar.ax.set_title("% GC", size=10)
+          cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+          cbar.ax.set_ylim([0.15, 0.85])
+          cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+
+        ax.set_xlabel('x coverage')
+        ax.set_ylabel('y coverage')
+        ax.set_zlabel('z coverage')
 
         if not ignoreRanges:
             self.plotStoitNames(ax)

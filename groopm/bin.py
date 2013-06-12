@@ -541,7 +541,7 @@ class Bin:
         ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
         return self.plotOnAx(ax, transformedCP, contigGCs, contigLengths, contigColors, colorMapGC, fileName=fileName, ET=ET)
 
-    def plotOnAx(self, ax, transformedCP, contigGCs, contigLengths, contigColors, colorMapGC, fileName="", plotCentroid=True, ET=None, printID=False):
+    def plotOnAx(self, ax, transformedCP, contigGCs, contigLengths, contigColors, colorMapGC, fileName="", plotCentroid=True, ET=None, printID=False, plotColorbar=True):
         """Plot a bin in a given subplot
 
         If you pass through an EllipsoidTool then it will plot the minimum bounding ellipsoid as well!
@@ -572,13 +572,19 @@ class Bin:
         # reshape
         disp_vals = np.reshape(disp_vals, (num_points, 3))
 
-        sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', lw=0.5, c=contigGCs[self.rowIndices], cmap=colorMapGC, vmin=0.15, vmax=0.85, s=disp_lens, marker='.')
-        cbar = plt.colorbar(sc, shrink=0.7)
-        cbar.ax.tick_params(labelsize=8)
-        cbar.ax.set_title("% GC", size=10)
-        cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
-        cbar.set_clim([0.0, 1.0])
-        #ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors=disp_cols, c=disp_cols, s=disp_lens, marker='.')
+        sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', c=contigGCs[self.rowIndices], cmap=colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens, marker='.')
+        sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+
+        ax.set_xlabel('x coverage')
+        ax.set_ylabel('y coverage')
+        ax.set_zlabel('z coverage')
+        if plotColorbar:
+          cbar = plt.colorbar(sc, shrink=0.7)
+          cbar.ax.tick_params()
+          cbar.ax.set_title("% GC", size=10)
+          cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+          cbar.ax.set_ylim([0.15, 0.85])
+          cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
 
         if ET != None:
             (center, radii, rotation) = self.getBoundingEllipsoid(transformedCP, ET=ET)
@@ -593,26 +599,33 @@ class Bin:
         setlocale(LC_ALL, "")
         title = str.join(" ", ["Bin: %d : %d contigs : %s BP\n" %(self.id,self.binSize,format('%d', self.totalBP, True)),
                                cc_string,
-                               #"Kmers: mean: %.4f stdev: %.4f\n" % (self.kValMean, self.kValStdev),
                                "GC: mean: %.4f stdev: %.4f\n" % (self.gcMean, self.gcStdev)]
                          )
         return title
 
-    def plotMersOnAx(self, ax, kPCA1, kPCA2, contigColors, contigLengths, fileName="", ET=None, printID=False):
+    def plotMersOnAx(self, ax, kPCA1, kPCA2, contigGCs, contigLengths, contigColors, colorMapGC, fileName="", ET=None, printID=False, plotColorbar=True):
         """Plot a bins kmer sig PCAs in a given subplot
 
         If you pass through an EllipsoidTool then it will plot the minimum bounding ellipse as well!
         """
         disp_vals = np.array(zip([kPCA1[i] for i in self.rowIndices],
                                  [kPCA2[i] for i in self.rowIndices]))
-        disp_cols = np.array([contigColors[i] for i in self.rowIndices])
         disp_lens = np.array([np.sqrt(contigLengths[i]) for i in self.rowIndices])
 
         # reshape
         disp_vals = np.reshape(disp_vals, (len(self.rowIndices), 2))
-        disp_cols = np.reshape(disp_cols, (len(self.rowIndices), 3))
 
-        ax.scatter(disp_vals[:,0], disp_vals[:,1], edgecolors=disp_cols, c=disp_cols, s=disp_lens, marker='.')
+        sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], edgecolors='k', c=contigGCs[self.rowIndices], cmap=colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens, marker='.')
+
+        ax.set_xlabel('PC1')
+        ax.set_ylabel('PC2')
+        if plotColorbar:
+          cbar = plt.colorbar(sc, shrink=0.7)
+          cbar.ax.tick_params()
+          cbar.ax.set_title("% GC", size=10)
+          cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+          cbar.ax.set_ylim([0.15, 0.85])
+          cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
 
         if ET != None:
             (center, radii, rotation) = ET.getMinVolEllipse(disp_vals)
