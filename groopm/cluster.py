@@ -62,6 +62,7 @@ from numpy import (abs as np_abs,
                    append as np_append,
                    arange as np_arange,
                    argmax as np_argmax,
+                   argmin as np_argmin,
                    argsort as np_argsort,
                    around as np_around,
                    array as np_array,
@@ -599,11 +600,12 @@ class ClusterEngine:
         if len(row_indices) == 0:
           return None
 
-        print 'iter:' + str(iter)
-        print 'k_converged:' + str(k_converged)
-        print 'np_mean(k_deltas):' + str(np_mean(k_deltas))
-        print 'c_converged:' + str(c_converged)
-        print 'np_mean(c_deltas):' + str(np_mean(c_deltas))
+        if False:
+            print 'iter:' + str(iter)
+            print 'k_converged:' + str(k_converged)
+            print 'np_mean(k_deltas):' + str(np_mean(k_deltas))
+            print 'c_converged:' + str(c_converged)
+            print 'np_mean(c_deltas):' + str(np_mean(c_deltas))
 
         # check for convergence
         if np_mean(k_deltas) < k_converged and np_mean(c_deltas) < c_converged:
@@ -720,16 +722,16 @@ class ClusterEngine:
               part_bp = np_sum(l_dat[k_part])
               if self.BM.isGoodBin(part_bp, len(k_part), ms=5):
 
+                  # select just the subset of covs for this kmer range
                   data = np_copy(c_dat[k_part])
                   Center(data,verbose=0)
                   p = PCA(data)
                   components = p.pc()
                   data = np_array([float(i) for i in components[:,0]])
-                  data -= np_min(data)
-                  data /= np_max(data)
-
+                  
                   l_data = np_copy(l_dat[k_part])
     
+                  # The PCA may reverse the ordering. So we just check here quickly
                   if debugPlots:
                       (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV")
                   else:
@@ -744,25 +746,31 @@ class ClusterEngine:
     
                       start = 0
                       c_lines = []
-                      c_sizes = [len(p) for p in c_partitions]
+                      if k_part[c_partitions[0]][0] > k_part[c_partitions[-1]][0]:
+                          c_sizes = [len(p) for p in c_partitions][::-1]
+                          cc_keeps = c_keeps[::-1]
+                      else:
+                          c_sizes = [len(p) for p in c_partitions]
+                          cc_keeps = c_keeps
+
                       for c in range(len(c_sizes)-1):
                           c_lines.append(c_sorted_data[c_sizes[c]+start])
                           start += c_sizes[c]
-    
+                          
                       c_line_cols = []
                       for c in range(len(c_sizes)):
                           if c == 0:
-                              if c_keeps[c]:
+                              if cc_keeps[c]:
                                   c_line_cols = ['r-']
                               else:
                                   c_line_cols = ['r--']
                           elif c == len(c_sizes) - 1:
-                              if c_keeps[c]:
+                              if cc_keeps[c]:
                                   c_line_cols[-1] = 'r-'
-                              elif not c_keeps[c-1]:
+                              elif not cc_keeps[c-1]:
                                   c_line_cols[-1] = 'r--'
                           else:
-                              if c_keeps[c]:
+                              if cc_keeps[c]:
                                   c_line_cols[c-1] = 'r-'
                                   c_line_cols.append('r-')
                               else:
@@ -1355,17 +1363,7 @@ class HoughPartitioner:
         if len(last_squshed) > 0:
             squished_rets.append(np_array(last_squshed))
             squished_keeps.append(True)
-        print "=================="
-        print gradients
-        print keeps
-        print squished_keeps
-        for ii in rets:
-            print len(ii)
-        print "------------------"
-        for ii in squished_rets:
-            print len(ii)
-        
-        print "=================="
+
         return (np_array(squished_rets), np_array(squished_keeps))  
 
     def recursiveSelect(self,
