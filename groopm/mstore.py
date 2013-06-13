@@ -46,7 +46,7 @@ __version__ = "0.3.1"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
-__current_GMDB_version__ = 2
+__current_GMDB_version__ = 3
 
 ###############################################################################
 
@@ -131,6 +131,13 @@ class GMDataManager:
     'clustered'     : tables.BoolCol(pos=7)           # set to true after clustering is complete
     'complete'      : tables.BoolCol(pos=8)           # set to true after clustering finishing is complete
     'formatVersion' : tables.Int32Col(pos=9)          # groopm file version
+
+    **PC variance**
+    table = 'kpca_variance'
+    'pc1_var' : tables.FloatCol(pos=0)
+    'pc2_var' : tables.FloatCol(pos=1)
+    'pc3_var' : tables.FloatCol(pos=2)
+    ...
 
     ** Contigs **
     table = 'contigs'
@@ -280,7 +287,7 @@ class GMDataManager:
                     raise
 
                 # compute the PCA of the ksigs and store these too
-                pc_ksigs = conParser.PCAKSigs(con_ksigs)
+                pc_ksigs, sumvariance = conParser.PCAKSigs(con_ksigs)
 
                 db_desc = []
                 for i in xrange(0, len(pc_ksigs[0])):
@@ -349,6 +356,27 @@ class GMDataManager:
                              __current_GMDB_version__)
                 self.setMeta(h5file, meta_data)
 
+                # kmer signature variance table
+                pc_var = [sumvariance[0]]
+                for i in xrange(1, len(sumvariance)):
+                  pc_var.append(sumvariance[i]-sumvariance[i-1])
+                pc_var = tuple(pc_var)
+
+                db_desc = []
+                for i in xrange(0, len(pc_var)):
+                    db_desc.append(('pc' + str(i+1) + '_var', float))
+
+                try:
+                    h5file.createTable(meta_group,
+                                            'kpca_variance',
+                                            np.array([pc_var], dtype=db_desc),
+                                            title='Variance of kmer signature PCAs',
+                                            expectedrows=1
+                                            )
+                except:
+                    print "Error creating tmp_kpca_variance table:", exc_info()[0]
+                    raise
+
         except:
             print "Error creating database:", dbFileName, exc_info()[0]
             raise
@@ -400,6 +428,7 @@ class GMDataManager:
         upgrade_tasks = {}
         upgrade_tasks[(0,1)] = self.upgradeDB_0_to_1
         upgrade_tasks[(1,2)] = self.upgradeDB_1_to_2
+        upgrade_tasks[(2,3)] = self.upgradeDB_2_to_3
 
         # we need to apply upgrades in order!
         # keep applying the upgrades as long as we need to
@@ -422,7 +451,7 @@ class GMDataManager:
         # compute the PCA of the ksigs
         ksigs = self.getKmerSigs(dbFileName)
         CP = ContigParser()
-        pc_ksigs = CP.PCAKSigs(ksigs)
+        pc_ksigs, sumvariance = CP.PCAKSigs(ksigs)
         num_cons = len(pc_ksigs)
 
         db_desc = [('pc1', float),
@@ -456,7 +485,7 @@ class GMDataManager:
         print ""
         # the change in this version is that we'll be saving a variable number of kmerSig PCA's
         # and GC information for each contig
-        print "    Calculating and storing the kmerSig PCAs"
+        print "    Calculating and storing the kemr signature PCAs"
 
         # grab any data needed from database before opening if for modification
         bin_ids = self.getBins(dbFileName)
@@ -465,7 +494,7 @@ class GMDataManager:
 
         # compute the PCA of the ksigs
         conParser = ContigParser()
-        pc_ksigs = conParser.PCAKSigs(ksigs)
+        pc_ksigs, sumvariance = conParser.PCAKSigs(ksigs)
         num_cons = len(pc_ksigs)
 
         db_desc = []
@@ -491,7 +520,7 @@ class GMDataManager:
                     h5file.renameNode(pg, 'kpca', 'tmp_kpca', overwrite=True)
 
                 except:
-                    print "Error creating KMERVALS table:", exc_info()[0]
+                    print "Error creating kpca table:", exc_info()[0]
                     raise
 
                 # Add GC
@@ -532,6 +561,60 @@ class GMDataManager:
 
         # update the formatVersion field and we're done
         self.setGMDBFormat(dbFileName, 2)
+        print "*******************************************************************************"
+
+    def upgradeDB_2_to_3(self, dbFileName):
+        """Upgrade a GM db from version 2 to version 3"""
+        print "*******************************************************************************\n"
+        print "              *** Upgrading GM DB from version 2 to version 3 ***"
+        print ""
+        print "                            please be patient..."
+        print ""
+        # the change in this version is that we'll be saving the variance for each kmerSig PCA
+        print "    Calculating and storing variance of kmer signature PCAs"
+
+        # compute the PCA of the ksigs
+        conParser = ContigParser()
+        ksigs = self.getKmerSigs(dbFileName)
+        pc_ksigs, sumvariance = conParser.PCAKSigs(ksigs)
+
+        # calcualte variance of each PC
+        pc_var = [sumvariance[0]]
+        for i in xrange(1, len(sumvariance)):
+          pc_var.append(sumvariance[i]-sumvariance[i-1])
+        pc_var = tuple(pc_var)
+
+        db_desc = []
+        for i in xrange(0, len(pc_var)):
+          db_desc.append(('pc' + str(i+1) + '_var', float))
+
+        try:
+            with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+                meta = h5file.getNode('/', name='meta')
+                try:
+                    try:
+                        h5file.removeNode(meta, 'tmp_kpca_variance')
+                    except:
+                        pass
+
+                    h5file.createTable(meta,
+                                              'tmp_kpca_variance',
+                                              np.array([pc_var], dtype=db_desc),
+                                              title='Variance of kmer signature PCAs',
+                                              expectedrows=1
+                                              )
+
+                    h5file.renameNode(meta, 'kpca_variance', 'tmp_kpca_variance', overwrite=True)
+
+                except:
+                    print "Error creating kpca_variance table:", exc_info()[0]
+                    raise
+        except:
+            print "Error opening DB:", dbFileName, exc_info()[0]
+            raise
+
+        # update the formatVersion field and we're done
+        self.setGMDBFormat(dbFileName, 3)
         print "*******************************************************************************"
 
 #------------------------------------------------------------------------------
@@ -817,6 +900,15 @@ class GMDataManager:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
                     return np.array([list(h5file.root.profile.kpca[x.nrow]) for x in h5file.root.meta.contigs.where(condition)])
+        except:
+            print "Error opening DB:",dbFileName, exc_info()[0]
+            raise
+
+    def getKmerVarPC(self, dbFileName, condition='', indices=np.array([])):
+        """Load variance of kmer sig PCAs"""
+        try:
+            with tables.openFile(dbFileName, mode='r') as h5file:
+              return np.array(h5file.root.meta.kpca_variance)[0]
         except:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
@@ -1167,7 +1259,7 @@ class ContigParser:
         p = PCA(data, fraction=variance)
         components = p.pc()
 
-        return [tuple(i) for i in components]
+        return [tuple(i) for i in components], p.sumvariance[0:len(components[0])]
 
     def getWantedSeqs(self, contigFile, wanted, storage={}):
         """Do the heavy lifting of parsing"""

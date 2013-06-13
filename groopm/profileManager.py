@@ -53,6 +53,7 @@ from sys import exc_info, exit, stdout as sys_stdout
 from operator import itemgetter
 from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
 from numpy import (abs as np_abs,
@@ -128,11 +129,13 @@ class ProfileManager:
         self.kmerSigs = np_array([])        # raw kmer signatures
         self.kmerNormPC1 = np_array([])     # First PC of kmer sigs normalized to [0, 1]
         self.kmerPCs = np_array([])         # PCs of kmer sigs capturing specified variance
+        self.kmerVarPC = np_array([])       # variance of each PC
         self.stoitColNames = np_array([])
         self.contigNames = np_array([])
         self.contigLengths = np_array([])
         self.contigGCs = np_array([])
-        self.contigColors = np_array([])   # calculated from kmerNormPC1
+        self.contigColors = np_array([])   # calculated from GC
+        self.colorMapGC = None
 
         self.binIds = np_array([])          # list of bin IDs
         # --> end section
@@ -160,6 +163,7 @@ class ProfileManager:
                  silent=False,              # some to no output messages
                  loadCovProfiles=True,
                  loadKmerSigs=True,
+                 loadKmerVarPC=True,
                  loadRawKmers=False,
                  makeColors=True,
                  loadContigNames=True,
@@ -212,15 +216,20 @@ class ProfileManager:
                 self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indices=self.indices)
 
             if(loadKmerSigs):
-                PCs = self.dataManager.getKmerPCAs(self.dbFileName, indices=self.indices)
-                self.kmerPCs = PCs
+                self.kmerPCs = self.dataManager.getKmerPCAs(self.dbFileName, indices=self.indices)
 
                 if(verbose):
                     print "    Loading PCA kmer sigs (" + str(len(self.kmerPCs[0])) + " dimensional space)"
 
-                self.kmerNormPC1 = PCs[:,0]
+                self.kmerNormPC1 = np_copy(self.kmerPCs[:,0])
                 self.kmerNormPC1 -= np_min(self.kmerNormPC1)
                 self.kmerNormPC1 /= np_max(self.kmerNormPC1)
+
+            if(loadKmerVarPC):
+                self.kmerVarPC = self.dataManager.getKmerVarPC(self.dbFileName, indices=self.indices)
+
+                if(verbose):
+                    print "    Loading PCA kmer variance (total variance: %.2f" % sum(self.kmerVarPC) + ")"
 
             if(loadContigNames):
                 if(verbose):
@@ -245,6 +254,7 @@ class ProfileManager:
                     V = 1       # Pastels if that's your preference...
                     #self.contigColors = np_array([htr(val, S, V) for val in self.contigGCs])
                     self.contigColors = np_array([htr((1. + np_sin(np_pi * val - np_pi/2))/2., S, V) for val in self.contigGCs])
+                    self.colorMapGC = LinearSegmentedColormap.from_list('GC', [htr((1.0 + np_sin(np_pi * (val/1000.0) - np_pi/2))/2., S, V) for val in xrange(0, 1000)], N=1000)
 
             if(loadBins):
                 if(verbose):
@@ -768,22 +778,20 @@ class ProfileManager:
 
                     # now replot the highlighted guys
                     disp_vals = np_array([])
-                    disp_cols = np_array([])
                     num_points = 0
                     for bin in highlight:
                         for row_index in bin.rowIndices:
                             num_points += 1
                             disp_vals = np_append(disp_vals, self.transformedCP[row_index])
-                            disp_cols = np_append(disp_cols, self.contigColors[row_index])
 
                     # reshape
                     disp_vals = np_reshape(disp_vals, (num_points, 3))
-                    disp_cols = np_reshape(disp_cols, (num_points, 3))
                     ax.scatter(disp_vals[:,0],
                                disp_vals[:,1],
                                disp_vals[:,2],
                                edgecolors='none',
-                               c=disp_cols,
+                               c=self.contigGCs[bin.rowIndices],
+                               cmap=self.colorMapGc,
                                s=2,
                                marker='.')
             else:

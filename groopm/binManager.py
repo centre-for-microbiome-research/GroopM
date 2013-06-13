@@ -250,7 +250,7 @@ class BinManager:
                     invalid_bids.append(bid)
                 else:
                     self.bins[bid] = Bin(np_array(binMembers[bid]), bid, self.PM.scaleFactor-1)
-                    self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
+                    self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
         if len(invalid_bids) != 0:
             print "MT bins!"
             print invalid_bids
@@ -525,6 +525,7 @@ class BinManager:
         (bin_assignment_update, bids) = self.getSplitties(bid, n, mode)
 
         if(auto and saveBins):
+            print 'here!!!!'
             # charge on through
             self.deleteBins([bids[0]], force=True)  # delete the combined bin
             # save new bins
@@ -540,6 +541,7 @@ class BinManager:
         for pair in bid_tuples:
             bids[index] = pair[0]
             index += 1
+
         self.plotSideBySide(bids, use_elipses=use_elipses)
 
         user_option = self.promptOnSplit(n,mode)
@@ -630,20 +632,24 @@ class BinManager:
         for i in idx_sorted:
             if(idx[i] != current_group):
                 # bin is full!
+                holding_array = holding_array.astype(int)
                 split_bin = self.makeNewBin(holding_array)
+
                 for row_index in holding_array:
                     bin_assignment_update[row_index] = split_bin.id
-                split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
+                split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
                 bids.append(split_bin.id)
                 holding_array = np_array([])
                 current_group = idx[i]
-            holding_array = np_append(holding_array, bin.rowIndices[i])
+            holding_array = np_append(holding_array, int(bin.rowIndices[i]))
+
         # do the last one
         if(np_size(holding_array) != 0):
+            holding_array = holding_array.astype(int)
             split_bin = self.makeNewBin(holding_array)
             for row_index in holding_array:
-                bin_assignment_update[row_index] = split_bin.id
-            split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
+                bin_assignment_update[int(row_index)] = split_bin.id
+            split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
             bids.append(split_bin.id)
 
         return (bin_assignment_update, bids)
@@ -731,7 +737,7 @@ class BinManager:
             dead_bin = self.getBin(bids[0])
             for row_index in dead_bin.rowIndices:
                 self.PM.binIds[row_index] = parent_bin.id
-            parent_bin.consume(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths, dead_bin, verbose=verbose)
+            parent_bin.consume(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths, dead_bin, verbose=verbose)
             self.deleteBins([bids[0]], force=True)
         else:
             # just use the first given as the parent
@@ -748,7 +754,7 @@ class BinManager:
                 continue_merge = True
             else:
                 tmp_bin = self.makeNewBin(np_concatenate([parent_bin.rowIndices,dead_bin.rowIndices]))
-                tmp_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
+                tmp_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
                 self.plotSideBySide([parent_bin.id,dead_bin.id,tmp_bin.id], use_elipses=use_elipses)
                 self.deleteBins([tmp_bin.id], force=True)
                 user_option = self.promptOnMerge(bids=[parent_bin.id,dead_bin.id])
@@ -770,6 +776,7 @@ class BinManager:
                 parent_bin.consume(self.PM.transformedCP,
                                    self.PM.averageCoverages,
                                    self.PM.kmerNormPC1,
+                                   self.PM.contigGCs,
                                    self.PM.contigLengths,
                                    dead_bin,
                                    verbose=verbose)
@@ -973,35 +980,38 @@ class BinManager:
 
 #------------------------------------------------------------------------------
 # BIN STATS
-    def findCoreCentres(self, krange=None, getKVals=False):
+    def findCoreCentres(self, gc_range=None, getKVals=False):
         """Find the point representing the centre of each core"""
         bin_centroid_points = np_array([])
         bin_centroid_colors = np_array([])
         bin_centroid_kvals = np_array([])
+        bin_centroid_gc = np_array([])
         bids = np_array([])
-        k_low = 0.0
-        k_high = 0.0
-        if krange is not None:
+
+        if gc_range is not None:
             # we only want to plot a subset of these guys
-            k_low = float((krange - 1.5)/10.0)
-            k_high = float((krange + 1.5)/10.0)
+            gc_low = gc_range[0]
+            gc_high = gc_range[1]
         num_added = 0
         for bid in self.getBids():
             add_bin = True
-            if krange is not None:
-                ave_kval = np_mean([self.PM.kmerNormPC1[row_index] for row_index in self.bins[bid].rowIndices])
-                if ave_kval < k_low or ave_kval > k_high:
+            if gc_range is not None:
+                avg_gc = np_mean([self.PM.contigGCs[row_index] for row_index in self.bins[bid].rowIndices])
+                if avg_gc < gc_low or avg_gc > gc_high:
                     add_bin = False
             if add_bin:
                 bin_centroid_points = np_append(bin_centroid_points,
                                                 self.bins[bid].covMeans)
+
                 bin_centroid_colors = np_append(bin_centroid_colors,
                                                 np_mean([
                                                          self.PM.contigColors[row_index] for row_index in
                                                          self.bins[bid].rowIndices
                                                          ],
-                                                         axis=0)
-                                                )
+                                                         axis=0))
+
+                bin_centroid_gc = np_append(bin_centroid_gc, np_mean(self.PM.contigGCs[self.bins[bid].rowIndices]))
+
                 if getKVals:
                     bin_centroid_kvals = np_append(bin_centroid_kvals,
                                                    np_mean([
@@ -1019,8 +1029,9 @@ class BinManager:
             bin_centroid_colors = np_reshape(bin_centroid_colors, (num_added, 3))
 
         if getKVals:
-            return (bin_centroid_points, bin_centroid_colors, bin_centroid_kvals, bids)
-        return (bin_centroid_points, bin_centroid_colors, bids)
+            return (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bin_centroid_kvals, bids)
+
+        return (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bids)
 
     def getAngleBetween(self, rowIndex1, rowIndex2, ):
         """Find the angle between two contig's coverage vectors"""
@@ -1132,17 +1143,6 @@ class BinManager:
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING
 
-    def makeCentroidPalette(self):
-        """Return a hash of bin ids to colors"""
-        (bin_centroid_points, bin_centroid_colors, bids) = self.findCoreCentres()
-        pal = {}
-        for i in range(len(bids)):
-            pal[bids[i]] = (int(bin_centroid_colors[i][0]*255),
-                            int(bin_centroid_colors[i][1]*255),
-                            int(bin_centroid_colors[i][2]*255)
-                           )
-        return pal
-
     def printBins(self, outFormat, fileName=""):
         """Wrapper for print handles piping to file or stdout"""
         if("" != fileName):
@@ -1161,9 +1161,15 @@ class BinManager:
         # handle the headers first
         separator = "\t"
         if(outFormat == 'summary'):
-            stream.write(separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"cMean\"","\"cStdev\"","\"kMean\"","\"kStdev\""])+"\n")
+            stream.write(separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"cMean\"","\"cStdev\"","\"GC Mean\"","\"GC Stdev\""])+"\n")
         elif(outFormat == 'minimal'):
-            stream.write(separator.join(["#\"bid\"","\"cid\"","\"length\""])+"\n")
+            stream.write(separator.join(["#\"bid\"","\"cid\"","\"length\"","\"GC\""])+"\n")
+        elif(outFormat == 'user'):
+          header = ["\"bin id\"","\"length (bp)\"","\"# seqs\"","\"GC mean\"","\"GC std\""]
+          for i in xrange(0, len(self.PM.covProfiles[0])):
+            header.append("\"Coverage " + str(i+1) + " mean\"")
+            header.append("\"Coverage " + str(i+1) + " std\"")
+          stream.write(separator.join(header) + "\n")
         elif(outFormat == 'full'):
             pass
         else:
@@ -1171,8 +1177,8 @@ class BinManager:
             return
 
         for bid in self.getBids():
-            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
-            self.bins[bid].printBin(self.PM.contigNames, self.PM.contigLengths, outFormat=outFormat, separator=separator, stream=stream)
+            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
+            self.bins[bid].printBin(self.PM.contigNames, self.PM.covProfiles, self.PM.contigGCs, self.PM.contigLengths, outFormat=outFormat, separator=separator, stream=stream)
 
     def plotProfileDistributions(self):
         """Plot the coverage and kmer distributions for each bin"""
@@ -1184,40 +1190,45 @@ class BinManager:
         if plotEllipsoid and ET == None:
             ET = EllipsoidTool()
 
-        fig = plt.figure()
-
         # we need to do some fancy-schmancy stuff at times!
         if plotMers:
             num_cols = 2
         else:
             num_cols = 1
 
+        fig = plt.figure(figsize=(6.5*num_cols, 6.5))
         ax = fig.add_subplot(1,num_cols,1, projection='3d')
-        for bid in bids:
+        for i, bid in enumerate(bids):
             self.bins[bid].plotOnAx(ax,
                            self.PM.transformedCP,
-                           self.PM.contigColors,
+                           self.PM.contigGCs,
                            self.PM.contigLengths,
+                           self.PM.contigColors,
+                           self.PM.colorMapGC,
                            ET=ET,
-                           printID=True
+                           printID=True,
+                           plotColorbar=(num_cols==1 and i==0)
                            )
         if plotMers:
             ax.set_title('Coverage')
             ax = fig.add_subplot(1, 2, 2)
-            for bid in bids:
+            for i, bid in enumerate(bids):
                 self.bins[bid].plotMersOnAx(ax,
                                             self.PM.kmerPCs[:,0],
                                             self.PM.kmerPCs[:,1],
-                                            self.PM.contigColors,
+                                            self.PM.contigGCs,
                                             self.PM.contigLengths,
+                                            self.PM.contigColors,
+                                            self.PM.colorMapGC,
                                             ET=ET,
-                                            printID=True
+                                            printID=True,
+                                            plotColorbar=(i==0)
                                             )
-            ax.set_title('Kmer sig PCA')
+            ax.set_title('PCA of k-mer signature')
 
+        fig.set_size_inches(6*num_cols, 6)
         if(fileName != ""):
             try:
-                fig.set_size_inches(6,6)
                 plt.savefig(fileName,dpi=300)
             except:
                 print "Error saving image:", fileName, exc_info()[0]
@@ -1257,21 +1268,20 @@ class BinManager:
             for bids in bins:
                 ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
                 disp_vals = np_array([])
-                disp_cols = np_array([])
                 disp_lens = np_array([])
                 num_points = 0
                 for bid in bids:
                     for row_index in self.bins[bid].rowIndices:
                         num_points += 1
                         disp_vals = np_append(disp_vals, coords[row_index])
-                        disp_cols = np_append(disp_cols, self.PM.contigColors[row_index])
                         disp_lens = np_append(disp_lens, np_sqrt(self.PM.contigLengths[row_index]))
 
                 # reshape
                 disp_vals = np_reshape(disp_vals, (num_points, 3))
-                disp_cols = np_reshape(disp_cols, (num_points, 3))
 
-                ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors=disp_cols, c=disp_cols, s=disp_lens, marker='.')
+                sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', c=self.PM.contigGCs[self.bins[bid].rowIndices], cmap=self.PM.colorMapGC, s=disp_lens, marker='.')
+                sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+
                 plot_num += 1
         else:
             # plot all separately
@@ -1285,7 +1295,7 @@ class BinManager:
             ALL_BIDS = []
             for bids in bins:
                 for bid in bids:
-                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigColors, self.PM.contigLengths, ET=et, plotCentroid=pc)
+                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, ET=et, plotCentroid=pc)
 
             plot_num += 1
             if semi_untransformed:
@@ -1297,7 +1307,7 @@ class BinManager:
                 ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
                 plot_num += 1
                 for bid in bids:
-                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigColors, self.PM.contigLengths, ET=et, plotCentroid=pc)
+                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, ET=et, plotCentroid=pc)
 
         try:
             plt.show()
@@ -1318,7 +1328,7 @@ class BinManager:
             makeSurePathExists(folder)
 
         for bid in self.getBids():
-            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
+            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
         if(sideBySide):
             print "Plotting side by side"
             self.plotSideBySide(self.bins.keys(), tag=FNPrefix)
@@ -1326,9 +1336,9 @@ class BinManager:
             print "Plotting bins"
             for bid in self.getBids():
                 if folder != '':
-                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerNormPC1, self.PM.contigLengths, fileName=osp_join(folder, FNPrefix+"_"+str(bid)), ET=ET)
+                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, fileName=osp_join(folder, FNPrefix+"_"+str(bid)), ET=ET)
                 else:
-                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerNormPC1, self.PM.contigLengths, FNPrefix+"_"+str(bid), ET=ET)
+                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, FNPrefix+"_"+str(bid), ET=ET)
 
     def plotSideBySide(self, bids, fileName="", tag="", use_elipses=True):
         """Plot two bins side by side in 3d"""
@@ -1337,14 +1347,38 @@ class BinManager:
         else:
             ET = None
         fig = plt.figure()
+
+        # get plot extents
+        xMin = 1e6
+        xMax = 0
+        yMin = 1e6
+        yMax = 0
+        zMin = 1e6
+        zMax = 0
+
+        for bid in bids:
+            x = self.PM.transformedCP[self.bins[bid].rowIndices,0]
+            y = self.PM.transformedCP[self.bins[bid].rowIndices,1]
+            z = self.PM.transformedCP[self.bins[bid].rowIndices,2]
+
+            xMin = min(min(x), xMin)
+            xMax = max(max(x), xMax)
+
+            yMin = min(min(y), yMin)
+            yMax = max(max(y), yMax)
+
+            zMin = min(min(z), zMin)
+            zMax = max(max(z), zMax)
+
         # we need to work out how to shape the plots
         num_plots = len(bids)
         plot_rows = float(int(np_sqrt(num_plots)))
         plot_cols = np_ceil(float(num_plots)/plot_rows)
-        plot_num = 1
-        for bid in bids:
-            title = self.bins[bid].plotOnFig(fig, plot_rows, plot_cols, plot_num, self.PM.transformedCP, self.PM.contigColors, self.PM.contigLengths, ET=ET, fileName=fileName)
-            plot_num += 1
+        for plot_num, bid in enumerate(bids):
+            title = self.bins[bid].plotOnFig(fig, plot_rows, plot_cols, plot_num+1,
+                                              self.PM.transformedCP, self.PM.contigGCs, self.PM.contigLengths,
+                                              self.PM.contigColors, self.PM.colorMapGC, ET=ET, fileName=fileName,
+                                              plotColorbar=(plot_num == len(bids)-1), extents=[xMin, xMax, yMin, yMax, zMin, zMax])
             plt.title(title)
         if(fileName != ""):
             try:
@@ -1366,11 +1400,15 @@ class BinManager:
         """Plot stoit names on an existing axes"""
         self.PM.plotStoitNames(ax)
 
-    def plotBinIds(self, krange=None, ignoreRanges=False):
+    def plotBinIds(self, gc_range=None, ignoreRanges=False):
         """Render 3d image of core ids"""
-        (bin_centroid_points, bin_centroid_colors, bids) = self.findCoreCentres(krange=krange)
+        (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bids) = self.findCoreCentres(gc_range=gc_range)
         fig = plt.figure()
         ax = fig.gca(projection='3d')
+        ax.set_xlabel('x coverage')
+        ax.set_ylabel('y coverage')
+        ax.set_zlabel('z coverage')
+
         outer_index = 0
         for bid in bids:
             ax.text(bin_centroid_points[outer_index,0],
@@ -1380,6 +1418,7 @@ class BinManager:
                     color=bin_centroid_colors[outer_index]
                     )
             outer_index += 1
+
         if ignoreRanges:
             mm = np_max(bin_centroid_points, axis=0)
             ax.set_xlim3d(0, mm[0])
@@ -1399,12 +1438,26 @@ class BinManager:
             raise
         del fig
 
-    def plotBinPoints(self, ignoreRanges=False):
+    def plotBinPoints(self, ignoreRanges=False, plotColorbar=True):
         """Render the image for validating cores"""
-        (bin_centroid_points, bin_centroid_colors, bids) = self.findCoreCentres()
+        (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bids) = self.findCoreCentres()
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(bin_centroid_points[:,0], bin_centroid_points[:,1], bin_centroid_points[:,2], edgecolors=bin_centroid_colors, c=bin_centroid_colors)
+        print bin_centroid_gc
+        sc = ax.scatter(bin_centroid_points[:,0], bin_centroid_points[:,1], bin_centroid_points[:,2], edgecolors='k', c=bin_centroid_gc, cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0)
+        sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+
+        if plotColorbar:
+          cbar = plt.colorbar(sc, shrink=0.7)
+          cbar.ax.tick_params()
+          cbar.ax.set_title("% GC", size=10)
+          cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+          cbar.ax.set_ylim([0.15, 0.85])
+          cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+
+        ax.set_xlabel('x coverage')
+        ax.set_ylabel('y coverage')
+        ax.set_zlabel('z coverage')
 
         if not ignoreRanges:
             self.plotStoitNames(ax)

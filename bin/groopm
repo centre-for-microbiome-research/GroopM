@@ -246,7 +246,7 @@ if __name__ == '__main__':
     bin_printer.add_argument('dbname', help="name of the database to open")
     bin_printer.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to print (None for all)")
     bin_printer.add_argument('-o', '--outfile', default="", help="print to file not STDOUT")
-    bin_printer.add_argument('-f', '--format', default='summary', help="output format [full, minimal, summary]")
+    bin_printer.add_argument('-f', '--format', default='user', help="output format [full, minimal, summary, user]")
     bin_printer.add_argument('-u', '--unbinned', action="store_true", default=False, help="print unbinned contig IDs too")
 
     #-------------------------------------------------

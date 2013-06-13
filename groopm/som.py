@@ -102,28 +102,28 @@ class SOM:
         self.bestMatchCoords = [] # x/y coords of classified vectors
 
         self.radius = float(side)/2 # the radius of neighbour nodes which will be influenced by each new training vector
-        
+
         # initialise the nodes to random values between 0 -> 1
         self.weights = TM(self.side, dimension=self.dimension, randomize=True)
-        
+
         # cutoff for turning the VS_flat into a boundary mask
         # this is a magic number, but it seems to work OK
         self.maskCutoff = 16
-        self.boundaryMask = np.zeros((self.side,self.side)) 
+        self.boundaryMask = np.zeros((self.side,self.side))
         self.VS_flat = np.zeros((self.side,self.side))
-        
+
         # bin assignments
         self.binAssignments = np.zeros((self.side,self.side)) # the 0 bin is 'not assigned'
-        
+
         if lc is not None:
             diff = uc - lc
             self.weights.nodes *= uc
             self.weights.nodes += lc
         self.regions = None
-        
+
         # we'd like to know who is next to whom
         self.regionNeighbours = {}
-        
+
     def getWeights(self):
         """Get the weights nodes"""
         return self.weights.nodes
@@ -131,16 +131,16 @@ class SOM:
     def getRegions(self):
         """Get the regions nodes"""
         return self.regions.nodes
-    
+
     def loadWeights(self, nodes):
         """Use externally supplied data"""
         self.weights.nodes = nodes
-        
+
     def loadRegions(self, nodes):
         """Use externally supplied regions"""
         self.regions = TM(self.side, dimension=1)
         self.regions.nodes = nodes
-    
+
 #------------------------------------------------------------------------------
 # CLASSIFICATION
 
@@ -163,9 +163,9 @@ class SOM:
                 self.regions.nodes[row,col] = self.classifyPoint(self.weights.nodes[row,col],
                                                                  trainVector,
                                                                  bids)
-             
+
     def classifyPoint(self, point, trainVector, bids):
-        """Returns the bid if of the best match to the trainVector
+        """Returns the bid of the best match to the trainVector
         trainVector and bids must be in sync
         """
         return bids[np.argmin((((trainVector - point)**2).sum(axis=1))**0.5)]
@@ -199,7 +199,7 @@ class SOM:
                         nt = self.makeNTuple(s_bid,q_bid)
                         neighbours[nt] = True
         return neighbours.keys()
-        
+
     def makeNTuple(self, bid1, bid2):
         """A way for making standard tuples from bids"""
         if(bid1 < bid2): return (bid1, bid2)
@@ -212,10 +212,10 @@ class SOM:
             if(bid in self.regionNeighbours):
                 ret_list.extend([i for i in self.regionNeighbours[bid] if i not in ret_list])
         return ret_list
-        
+
 #------------------------------------------------------------------------------
 # TRAINING
-        
+
     def train(self,
               trainVector,
               weights=None,
@@ -231,10 +231,10 @@ class SOM:
         """Train the SOM
         Train vector is a list of numpy arrays
         """
-        
+
         if not silent:
             print "    Start SOM training. Side: %d Max: %d iterations" % (self.side, iterations)
-        
+
         if radius == 0.0:
             radius = self.radius
 
@@ -251,11 +251,11 @@ class SOM:
             cols = shape[1]
             flat_nodes = weights.reshape((rows*cols, self.dimension))
             replace_weights = False
-            
+
         # over time we'll shrink the radius of nodes which
         # are influenced by the current training node
         time_constant = iterations/log(radius)
-        
+
         # we would ideally like to select guys from the training set at random
         if(len(trainVector) <= vectorSubSet):
             index_array = np.arange(len(trainVector))
@@ -263,11 +263,11 @@ class SOM:
         else:
             rand_index_array = np.arange(len(trainVector))
             cut_off = vectorSubSet
-        
+
         for i in range(1, iterations+1):
             if not silent:
                 sys.stdout.write("\r    Iteration: % 4d of % 4d" % (i, iterations))
-                sys.stdout.flush()                
+                sys.stdout.flush()
 
 #--------
 # Make stamp
@@ -275,7 +275,7 @@ class SOM:
             radius_decaying=radius*exp(-1.0*i/time_constant)
             if(radius_decaying < 2):
                 return weights
-            
+
             grad = -1 * influenceRate / radius_decaying
             # we will make a "stamp" to speed things up
             max_radius = int(radius_decaying)
@@ -286,7 +286,7 @@ class SOM:
                     # now we check to see that the euclidean distance is less than
                     # the specified distance.
                     true_dist = np.sqrt( row**2 + col**2 )
-                    #if true_dist > 0.0: 
+                    #if true_dist > 0.0:
                     check_dist = np.round(true_dist+0.00001)
                     if(check_dist <= radius_decaying):
                         # influence is propotional to distance
@@ -308,8 +308,8 @@ class SOM:
             stamp[max_radius:,:max_radius+1] += np.rot90(q_stamp,3)
             # center
             stamp[max_radius, max_radius] = influenceRate
-            
-            
+
+
             # now find where the useless info is and cull it from the stamp
             max_vals = np.max(stamp, axis=0)
             k = 0
@@ -319,11 +319,11 @@ class SOM:
                 k += 1
             if k < len(max_vals):
                 stamp = stamp[k:2*max_radius+1-k,k:2*max_radius+1-k]
-            
+
             # keep track of how big the stamp is now
             stamp_side = len(stamp)
-            stamp_radius = int((stamp_side-1)/2) 
-            
+            stamp_radius = int((stamp_side-1)/2)
+
             # if there are more than vectorSubSet training vecs
             # take a random selection
             if(len(trainVector) > vectorSubSet):
@@ -356,12 +356,12 @@ class SOM:
                 loc = np.argmin(cdist(flat_nodes, [trainVector[j]]))
                 row = int(loc/cols)
                 col = loc-(row*cols)
-                
+
                 # row col represent the center of the stamp
                 weights_patch = worksheet[rows+row-stamp_radius:rows+row+stamp_radius+1,
                                           cols+col-stamp_radius:cols+col+stamp_radius+1]
                 weights_patch = -1*(weights_patch - trainVector[j])
-                #print row, col, rows, cols, stamp_radius, np.shape(weights_patch), np.shape(weights_patch[:,:,0]), np.shape(stamp), np.shape(deltasheet[rows+row-stamp_radius:rows+row+stamp_radius+1,cols+col-stamp_radius:cols+col+stamp_radius+1]) 
+                #print row, col, rows, cols, stamp_radius, np.shape(weights_patch), np.shape(weights_patch[:,:,0]), np.shape(stamp), np.shape(deltasheet[rows+row-stamp_radius:rows+row+stamp_radius+1,cols+col-stamp_radius:cols+col+stamp_radius+1])
                 weights_patch[:,:,0] *= stamp
                 weights_patch[:,:,1] *= stamp
                 weights_patch[:,:,2] *= stamp
@@ -369,11 +369,11 @@ class SOM:
 
                 deltasheet[rows+row-stamp_radius:rows+row+stamp_radius+1,
                            cols+col-stamp_radius:cols+col+stamp_radius+1] += weights_patch
-                           
+
             # now fold the deltas and update the weights
-            deltasheet[:,cols:2*cols] += deltasheet[:,0:cols] 
-            deltasheet[:,cols:2*cols] += deltasheet[:,2*cols:3*cols] 
-            deltasheet[rows:2*rows,cols:2*cols] += deltasheet[0:rows,cols:2*cols]                 
+            deltasheet[:,cols:2*cols] += deltasheet[:,0:cols]
+            deltasheet[:,cols:2*cols] += deltasheet[:,2*cols:3*cols]
+            deltasheet[rows:2*rows,cols:2*cols] += deltasheet[0:rows,cols:2*cols]
             deltasheet[rows:2*rows,cols:2*cols] += deltasheet[2*rows:3*rows,cols:2*cols]
 
             # add the deltas to the grid nodes and clip to keep between 0 and 1
@@ -384,10 +384,10 @@ class SOM:
                 for (r,c) in mask.keys():
                     weights[r,c] = np.clip(weights[r,c] + delta_fold[r,c], 0, 1)
                     flat_nodes = weights.reshape((rows*cols, self.dimension))
-            
+
             if replace_weights == True:
                 flat_nodes = self.weights.fixFlatNodes(weights=weights)
-            
+
             # make a tmp image, perhaps
             if(weightImgFileNamePrefix != ""):
                 filename = "%s_%04d.jpg" % (weightImgFileNamePrefix, i)
@@ -420,7 +420,7 @@ class SOM:
             shape = np.shape(weights)
             rows = shape[0]
             cols = shape[1]
-            
+
         if mask is None:
             mask = self.boundaryMask
         for r in range(rows):
@@ -432,7 +432,7 @@ class SOM:
                     if randint(10) <= noise_targets:
                         # add some noise
                         noise_amount = random() * max_noise + 1.0
-                        weights[r,c] *= noise_amount 
+                        weights[r,c] *= noise_amount
         if doFlat:
             self.weights.fixFlatNodes()
 
@@ -442,7 +442,7 @@ class SOM:
         rand_col_lower = 15
         rand_col_upper = 200
         bp_map = {}
-        
+
         # use a flood fill algorithm to color in adjacent spots
         # and assign bins to unmasked points
         for i in range(len(bids)):
@@ -493,7 +493,7 @@ class SOM:
                 mc = mc/2
                 mask = np.copy(self.boundaryMask)
                 for (r,c) in points.keys():
-                    if self.VS_flat[r,c] > mc: 
+                    if self.VS_flat[r,c] > mc:
                         mask[r,c] = 1.
                     else:
                         mask[r,c] = 0.
@@ -520,21 +520,21 @@ class SOM:
                         else:
                             self.binAssignments[r,c] = 0.
                     break
-                
+
             if not resolved:
                 print "Cannot repair map, bin %d may be incorrectly merged with bin %d" % (bid, collision_bid)
                 return
-                 
+
     def makeBinMask(self, profile, fileName="", dim=False):
         """Return a mask of the region this profile falls in"""
         [r, c] = self.weights.bestMatch(profile)
         points = self.floodFill(r, c, self.boundaryMask)
-        if fileName != "":       
+        if fileName != "":
             ret_mask = np.ones_like(self.boundaryMask)
             for (r,c) in points.keys():
-                ret_mask[r,c] = 0      
+                ret_mask[r,c] = 0
             self.renderBoundaryMask(fileName, mask=ret_mask)
-            
+
         return points
 
     def floodFill(self, startR, startC, mask):
@@ -548,9 +548,9 @@ class SOM:
             if mask[r,c] == 1:
                 # we are at the boundary of a region
                 continue
-            
+
             points[(r,c)] = [r,c]
-            
+
             # don't forget we're on a torus
             if r == 0: rm1 = self.side - 1
             else: rm1 = r - 1
@@ -564,9 +564,9 @@ class SOM:
             if (rp1,c) not in seen: toFill.add((rp1,c)); seen[(rp1,c)] = True
             if (r,cm1) not in seen: toFill.add((r,cm1)); seen[(r,cm1)] = True
             if (r,cp1) not in seen: toFill.add((r,cp1)); seen[(r,cp1)] = True
-        
+
         return points
-                    
+
     def secondsToStr(self, t):
         rediv = lambda ll,b : list(divmod(ll[0],b)) + ll[1:]
         return "%d:%02d:%02d.%03d" % tuple(reduce(rediv,[[t*1000,],1000,60,60]))
@@ -589,7 +589,7 @@ class SOM:
             self.weights.renderSurface(filename)
         else:
             self.weights.renderSurface(filename, nodes=weights)
-            
+
     def renderRegions(self, tag, palette):
         """Render the regions
         palette is a hash of bid -> color
@@ -607,7 +607,7 @@ class SOM:
         except:
             print sys.exc_info()[0]
             raise
-        
+
     def renderBoundaryMask(self, fileName, mask=None, colMap=None):
         """Plot the boundary mask"""
         if mask is None:
@@ -621,7 +621,7 @@ class SOM:
                             try:
                                 col = colMap[self.binAssignments[r,c]]
                             except KeyError:
-                                col = (255,255,255)  
+                                col = (255,255,255)
                         else:
                             col = (255,255,255)
                         img.putpixel((c,r), col)
@@ -632,7 +632,7 @@ class SOM:
         except:
             print sys.exc_info()[0]
             raise
-        
+
     def transColour(self, val):
         """Transform color value"""
         return 10 * log(val)
@@ -666,8 +666,8 @@ class SOM:
         except:
             print sys.exc_info()[0]
             raise
-    
+
 ###############################################################################
 ###############################################################################
 ###############################################################################
-############################################################################### 
+###############################################################################

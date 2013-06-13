@@ -271,7 +271,7 @@ class ClusterEngine:
                         bin = self.BM.makeNewBin(rowIndices=center_row_indices)
 
                         # work out the distribution in points in this bin
-                        bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigLengths)
+                        bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
 
                         # append this bins list of mapped rowIndices to the main list
                         bids_made.append(bin.id)
@@ -324,7 +324,7 @@ class ClusterEngine:
                             sub_counter += 10
                             print "\n%4d" % sub_counter,
 
-                        bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerNormPC1, self.PM.contigLengths, fileName="P_BIN_%d"%(bin.id)) #***slow plot!
+                        bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, fileName="P_BIN_%d"%(bin.id)) #***slow plot!
 
                     except BinNotFoundException: pass
 
@@ -415,6 +415,8 @@ class ClusterEngine:
     def smartTwoWayContraction(self, rowIndices, positionInPlane):
       """Partition a collection of contigs into 'core' groups"""
 
+      debugPlots = True
+
       # sanity check that there is enough data here to try a determine 'core' groups
       total_BP = np_sum(self.PM.contigLengths[rowIndices])
       if not self.BM.isGoodBin(total_BP, len(rowIndices), ms=5): # Can we trust very small bins?.
@@ -457,8 +459,8 @@ class ClusterEngine:
       k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours-1])
 
       # calculate convergence criteria
-      k_converged = 5e-1 * np_mean(k_dist)
-      c_converged = 5e-1 * np_mean(c_whiten_dist)
+      k_converged = 5e-2 * np_mean(k_dist)
+      c_converged = 5e-2 * np_mean(c_whiten_dist)
       max_iterations = 50
 
       k_move_perc = 0.15
@@ -469,7 +471,7 @@ class ClusterEngine:
       while iter < max_iterations:
         iter += 1
 
-        if True:
+        if debugPlots:
           if iter == 1:
             try:
               self.cluster_num
@@ -478,16 +480,16 @@ class ClusterEngine:
 
             self.cluster_num += 1
 
-          disp_cols = self.PM.contigColors[row_indices]
-
           fig = plt.figure()
           ax = fig.add_subplot(111, projection='3d')
 
           ax.scatter(c_dat[:,0],
                      c_dat[:,1],
                      c_dat[:,2],
-                     edgecolors=disp_cols,
-                     c=disp_cols,
+                     edgecolors='k',
+                     c=self.PM.contigGCs[row_indices],
+                     cmap=self.PM.colorMapGC,
+                     vmin=0.0, vmax=1.0,
                      marker='.')
 
           title = "Points: " + str(len(c_dat[:,0]))
@@ -609,102 +611,105 @@ class ClusterEngine:
 
       # perform hough transform clustering
       self.HP.hc += 1
-      #(k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat)
-      (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
+      if debugPlots:
+          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
+      else:
+          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat)
 
       if(len(k_partitions) == 0):
         return None
 
       partitions = []
-
+      k_sizes = [len(p) for p in k_partitions]
+      
       #-----------------------
       # GRID
-      fig = plt.figure()
+      if debugPlots:
+        c_max = np_max(c_dat[:,2]/10) * 1.1
+        k_max = np_max(k_dat[:,0]) * 1.1
+        c_min = np_min(c_dat[:,2]/10) * 0.9
+        k_min = np_min(k_dat[:,0]) * 0.9
+        k_eps = (k_max - k_min) / len(row_indices)
+        c_eps = (c_max - c_min) / len(row_indices)
 
-      orig_k_dat = self.PM.kmerPCs[rowIndices,0]
-      orig_k2_dat = self.PM.kmerPCs[rowIndices,1]
-      orig_c_dat = self.PM.transformedCP[rowIndices][:,2]/10
-      orig_l_dat = np_sqrt(self.PM.contigLengths[rowIndices])
-      orig_col_dat = self.PM.contigColors[rowIndices]
+        k_index_sort = np_argsort(k_dat[:,0])
+        start = 0
+        k_lines = []
+        for k in range(len(k_sizes)-1):
+            k_lines.append(k_dat[k_index_sort,0][k_sizes[k]+start])
+            start += k_sizes[k]
 
-      ax = plt.subplot(221)
-      plt.xlabel("PCA1")
-      plt.ylabel("PCA2")
+        fig = plt.figure()
 
-      from matplotlib.patches import Rectangle
-      alpha = 0.35
-      ax.scatter(orig_k_dat, orig_k2_dat, edgecolors='none', c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
-      XX = ax.get_xlim()
-      YY = ax.get_ylim()
-      ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+        orig_k_dat = self.PM.kmerPCs[rowIndices,0]
+        orig_k2_dat = self.PM.kmerPCs[rowIndices,1]
+        orig_c_dat = self.PM.transformedCP[rowIndices][:,2]/10
+        orig_l_dat = np_sqrt(self.PM.contigLengths[rowIndices])
+        orig_col_dat = self.PM.contigColors[rowIndices]
 
-      ax = plt.subplot(223)
-      plt.title("%s contigs" % len(rowIndices))
-      plt.xlabel("MER PARTS")
-      plt.ylabel("COV PARTS")
-      ax.scatter(orig_k_dat, orig_c_dat, edgecolors='none', c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
-      XX = ax.get_xlim()
-      YY = ax.get_ylim()
-      ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+        ax = plt.subplot(221)
+        plt.xlabel("PCA1")
+        plt.ylabel("PCA2")
 
-      lens = np_sqrt(self.PM.contigLengths[row_indices])
+        from matplotlib.patches import Rectangle
+        alpha = 0.35
+        ax.scatter(orig_k_dat, orig_k2_dat, edgecolors='none', c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
+        XX = ax.get_xlim()
+        YY = ax.get_ylim()
+        ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
 
-      ax = plt.subplot(222)
-      plt.xlabel("PCA1")
-      plt.ylabel("PCA2")
-      ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors='none', c=disp_cols, s=lens, zorder=10, alpha=alpha)
-      XX = ax.get_xlim()
-      YY = ax.get_ylim()
-      ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+        ax = plt.subplot(223)
+        plt.title("%s contigs" % len(rowIndices))
+        plt.xlabel("MER PARTS")
+        plt.ylabel("COV PARTS")
+        ax.scatter(orig_k_dat, orig_c_dat, edgecolors='none', c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
+        XX = ax.get_xlim()
+        YY = ax.get_ylim()
+        ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
 
-      ax = plt.subplot(224)
-      plt.title("%s contigs" % len(row_indices))
-      plt.xlabel("MER PARTS")
-      plt.ylabel("COV PARTS")
-      ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors='none', c=disp_cols, zorder=10)
+        lens = np_sqrt(self.PM.contigLengths[row_indices])
 
-      c_max = np_max(c_dat[:,2]/10) * 1.1
-      k_max = np_max(k_dat[:,0]) * 1.1
-      c_min = np_min(c_dat[:,2]/10) * 0.9
-      k_min = np_min(k_dat[:,0]) * 0.9
-      k_eps = (k_max - k_min) / len(row_indices)
-      c_eps = (c_max - c_min) / len(row_indices)
+        ax = plt.subplot(222)
+        plt.xlabel("PCA1")
+        plt.ylabel("PCA2")
+        ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors='none', c=self.PM.contigGCs[row_indices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=lens, zorder=10, alpha=alpha)
+        XX = ax.get_xlim()
+        YY = ax.get_ylim()
+        ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
 
-      ax.set_xlim(k_min, k_max)
-      ax.set_ylim(c_min, c_max)
-      XX = ax.get_xlim()
-      YY = ax.get_ylim()
-      ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+        ax = plt.subplot(224)
+        plt.title("%s contigs" % len(row_indices))
+        plt.xlabel("MER PARTS")
+        plt.ylabel("COV PARTS")
+        ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors='none', c=self.PM.contigGCs[row_indices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, zorder=10, alpha=alpha)
 
-      k_index_sort = np_argsort(k_dat[:,0])
-      k_sizes = [len(p) for p in k_partitions]
-      start = 0
-      k_lines = []
-      for k in range(len(k_sizes)-1):
-          k_lines.append(k_dat[k_index_sort,0][k_sizes[k]+start])
-          start += k_sizes[k]
+        ax.set_xlim(k_min, k_max)
+        ax.set_ylim(c_min, c_max)
+        XX = ax.get_xlim()
+        YY = ax.get_ylim()
+        ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
 
-      k_line_cols = []
-      for k in range(len(k_sizes)):
-          if k == 0:
-              if k_keeps[k]:
-                  k_line_cols = ['r-']
-              else:
-                  k_line_cols = ['r--']
-          elif k == len(k_sizes) - 1:
-              if k_keeps[k]:
-                  k_line_cols[-1] = 'r-'
-              elif not k_keeps[k-1]:
-                  k_line_cols[-1] = 'r--'
-          else:
-              if k_keeps[k]:
-                  k_line_cols[k-1] = 'r-'
-                  k_line_cols.append('r-')
-              else:
-                  k_line_cols.append('r--')
-                  
-      for k in range(len(k_lines)):
-          plt.plot([k_lines[k],k_lines[k]], [c_min, c_max], k_line_cols[k], zorder=11)
+        k_line_cols = []
+        for k in range(len(k_sizes)):
+            if k == 0:
+                if k_keeps[k]:
+                    k_line_cols = ['r-']
+                else:
+                    k_line_cols = ['r--']
+            elif k == len(k_sizes) - 1:
+                if k_keeps[k]:
+                    k_line_cols[-1] = 'r-'
+                elif not k_keeps[k-1]:
+                    k_line_cols[-1] = 'r--'
+            else:
+                if k_keeps[k]:
+                    k_line_cols[k-1] = 'r-'
+                    k_line_cols.append('r-')
+                else:
+                    k_line_cols.append('r--')
+
+        for k in range(len(k_lines)):
+            plt.plot([k_lines[k],k_lines[k]], [c_min, c_max], k_line_cols[k], zorder=11)
 
       pc = 0
       for k in range(len(k_sizes)):
@@ -714,7 +719,7 @@ class ClusterEngine:
               k_sep_indices = row_indices[k_part]
               part_bp = np_sum(l_dat[k_part])
               if self.BM.isGoodBin(part_bp, len(k_part), ms=5):
-    
+
                   data = np_copy(c_dat[k_part])
                   Center(data,verbose=0)
                   p = PCA(data)
@@ -722,70 +727,74 @@ class ClusterEngine:
                   data = np_array([float(i) for i in components[:,0]])
                   data -= np_min(data)
                   data /= np_max(data)
-    
+
                   l_data = np_copy(l_dat[k_part])
     
+                  if debugPlots:
+                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV")
+                  else:
+                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data)
+                  
     
-                  #(c_partitions, c_keeps) = self.HP.houghPartition(data, l_data)
-                  (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV")
+                  if debugPlots:
+                      #-----
+                      # GRID
+                      c_sorted_data = np_copy(c_dat[k_part,2])/10.
+                      c_sorted_data = c_sorted_data[np_argsort(c_sorted_data)]
     
-                  #-----
-                  # GRID
-                  c_sorted_data = np_copy(c_dat[k_part,2])/10.
-                  c_sorted_data = c_sorted_data[np_argsort(c_sorted_data)]
+                      start = 0
+                      c_lines = []
+                      c_sizes = [len(p) for p in c_partitions]
+                      for c in range(len(c_sizes)-1):
+                          c_lines.append(c_sorted_data[c_sizes[c]+start])
+                          start += c_sizes[c]
     
-                  start = 0
-                  c_lines = []
-                  c_sizes = [len(p) for p in c_partitions]
-                  for c in range(len(c_sizes)-1):
-                      c_lines.append(c_sorted_data[c_sizes[c]+start])
-                      start += c_sizes[c]
-
-                  c_line_cols = []
-                  for c in range(len(c_sizes)):
-                      if c == 0:
-                          if c_keeps[c]:
-                              c_line_cols = ['r-']
+                      c_line_cols = []
+                      for c in range(len(c_sizes)):
+                          if c == 0:
+                              if c_keeps[c]:
+                                  c_line_cols = ['r-']
+                              else:
+                                  c_line_cols = ['r--']
+                          elif c == len(c_sizes) - 1:
+                              if c_keeps[c]:
+                                  c_line_cols[-1] = 'r-'
+                              elif not c_keeps[c-1]:
+                                  c_line_cols[-1] = 'r--'
                           else:
-                              c_line_cols = ['r--']
-                      elif c == len(c_sizes) - 1:
-                          if c_keeps[c]:
-                              c_line_cols[-1] = 'r-'
-                          elif not c_keeps[c-1]:
-                              c_line_cols[-1] = 'r--'
+                              if c_keeps[c]:
+                                  c_line_cols[c-1] = 'r-'
+                                  c_line_cols.append('r-')
+                              else:
+                                  c_line_cols.append('r--')
+    
+                      if pc == 1:
+                          k_line_min = k_min
                       else:
-                          if c_keeps[c]:
-                              c_line_cols[c-1] = 'r-'
-                              c_line_cols.append('r-')
-                          else:
-                              c_line_cols.append('r--')
+                          k_line_min = k_lines[pc-2]
     
-                  if pc == 1:
-                      k_line_min = k_min
-                  else:
-                      k_line_min = k_lines[pc-2]
-    
-                  if pc == len(k_partitions):
-                      k_line_max = k_max
-                  else:
-                      k_line_max = k_lines[pc-1]
-    
-                  for c in range(len(c_lines)):
-                      print c, [k_line_min,k_line_max], [c_lines[c], c_lines[c]]
-                      plt.plot([k_line_min,k_line_max], [c_lines[c], c_lines[c]], c_line_cols[c], zorder=11)
-    
+                      if pc == len(k_partitions):
+                          k_line_max = k_max
+                      else:
+                          k_line_max = k_lines[pc-1]
+
+                      for c in range(len(c_lines)):
+                          print c, [k_line_min,k_line_max], [c_lines[c], c_lines[c]]
+                          plt.plot([k_line_min,k_line_max], [c_lines[c], c_lines[c]], c_line_cols[c], zorder=11)
+
                   for c in range(len(c_partitions)):
                       if c_keeps[c]:
                           c_part = c_partitions[c]
                           partitions.append(np_array(k_part[c_part]))
 
-      fig.set_size_inches(12,12)
-      plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
-      plt.close()
-      del fig
+      if debugPlots:
+          fig.set_size_inches(12,12)
+          plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
+          plt.close()
+          del fig
 
       if len(partitions) == 0:
-        return None
+          return None
 
       ret_parts = []
       for p in partitions:
@@ -1020,20 +1029,17 @@ class ClusterEngine:
         ax = fig.add_subplot(111, projection='3d')
 
         disp_vals = np_array([])
-        disp_cols = np_array([])
         disp_lens = np_array([])
         num_points = 0
         for row_index in rowIndices:
             num_points += 1
             disp_vals = np_append(disp_vals, self.PM.transformedCP[row_index])
-            disp_cols = np_append(disp_cols, self.PM.contigColors[row_index])
             disp_lens = np_append(disp_lens, np_sqrt(self.PM.contigLengths[row_index]))
 
         # reshape
         disp_vals = np_reshape(disp_vals, (num_points, 3))
-        disp_cols = np_reshape(disp_cols, (num_points, 3))
 
-        ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors=disp_cols, c=disp_cols, s=disp_lens, marker='.')
+        ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', c=self.PM.contigGCs[rowIndices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens, marker='.')
 
         if(fileName != ""):
             fig.set_size_inches(6,6)
@@ -1177,7 +1183,7 @@ class HoughPartitioner:
         
         sorted_indices_raw = np_argsort(dAta)
         nUm_points = len(dAta)
-        
+
         # fudge the data to make longer contigs have more say in the
         # diff line we'll be making. This way we may be able to avoid lumping
         # super long contigs in with the short riff raff by accident.
@@ -1202,7 +1208,7 @@ class HoughPartitioner:
                     left_stop = dAta[real_index]
                 else:
                     left_stop = (dAta[real_index] + dAta[sorted_indices_raw[i-1]])/2.
-                    
+
                 if i == nUm_points-1:
                     right_stop = dAta[real_index]
                 else:
@@ -1210,7 +1216,7 @@ class HoughPartitioner:
 
                 spread_jump = (right_stop - left_stop) / (rep + 1.)
 
-                
+
                 for ii in range(rep):
                     spread_data.append(left_stop + ((ii + 1) * spread_jump))
                     spread2real[j] = real_index
@@ -1431,6 +1437,7 @@ class HoughPartitioner:
         tmp = {}
         for ii in np_arange(spread_start, spread_end):
             real_index = spread2real[ii] 
+
             if real_index not in assigned:
                 tmp[real_index] = None
                 assigned[real_index] = None

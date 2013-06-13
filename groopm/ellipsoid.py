@@ -54,7 +54,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy import linalg
 
-np.seterr(all='raise')     
+np.seterr(all='raise')
 
 ###############################################################################
 ###############################################################################
@@ -64,36 +64,36 @@ np.seterr(all='raise')
 class EllipsoidTool:
     """Some stuff for playing with ellipsoids"""
     def __init__(self): pass
-    
+
     def getMinVolEllipse(self, P, tolerance=0.01, retA=False):
         """ Find the minimum volume ellipsoid which holds all the points
-        
+
         Based on work by Nima Moshtagh
         http://www.mathworks.com/matlabcentral/fileexchange/9542
         and also by looking at:
         http://cctbx.sourceforge.net/current/python/scitbx.math.minimum_covering_ellipsoid.html
         Which is based on the first reference anyway!
-        
+
         Here, P is a numpy array of 3D points like this:
         P = [[x,y,z],
              [x,y,z],
              [x,y,z]]
-        
+
         Returns:
         (center, radii, rotation)
-        
+
         """
         (N, d) = np.shape(P)
-    
+
         # Q will be out working array
         Q = np.copy(P.T)
         Q = np.vstack([Q, np.ones(N)])
         QT = Q.T
-    
+
         # initializations
         err = 1 + tolerance
         u = np.array([1.0 / N for i in range(N)]) # first iteration
-    
+
         # Khachiyan Algorithm
         singular = False
         while err > tolerance:
@@ -101,6 +101,8 @@ class EllipsoidTool:
             try:
                 M = np.diag(np.dot(QT , np.dot(linalg.inv(V), Q)))    # M the diagonal vector of an NxN matrix
             except linalg.linalg.LinAlgError:
+                print 'SINGULAR!!!!!!!!!!!!!'
+
                 # most likely a singular matrix
                 # permute the values a little and then we'll try again
                 from random import random, randint
@@ -115,7 +117,7 @@ class EllipsoidTool:
                 (A, center, radii, rotation) = self.getMinVolEllipse(PP, retA=True)
                 singular = True
                 break
-                
+
             j = np.argmax(M)
             maximum = M[j]
             step_size = (maximum - d - 1.0) / ((d + 1.0) * (maximum - 1.0))
@@ -125,19 +127,23 @@ class EllipsoidTool:
             u = new_u
 
         if not singular:
-            # center of the ellipse 
+            # center of the ellipse
             center = np.dot(P.T, u)
-        
+
             # the A matrix for the ellipse
-            A = linalg.inv(
-                           np.dot(P.T, np.dot(np.diag(u), P)) - 
-                           np.array([[a * b for b in center] for a in center])
-                           ) / d
-    
+            try:
+                A = linalg.inv(
+                               np.dot(P.T, np.dot(np.diag(u), P)) -
+                               np.array([[a * b for b in center] for a in center])
+                               ) / d
+            except linalg.linalg.LinAlgError:
+                print 'Still Singular!'
+                print 'Mike - what is up with this?'
+
         # Get the values we'd like to return
         U, s, rotation = linalg.svd(A)
         radii = 1.0/np.sqrt(s)
-        
+
         if retA:
             return (A, center, radii, rotation)
         else:
@@ -152,7 +158,7 @@ class EllipsoidTool:
 
     def doesIntersect3D(self, A, cA, B, cB):
         """Rough test to see if ellipsoids A and B intersect
-        
+
         Not perfect, should work for "well overlapping" ones
         We assume that the volume of B is less than (or =) volume of A
         """
@@ -167,7 +173,7 @@ class EllipsoidTool:
             # in in A
             p_c = cB - cA
             return np.dot(p_c.T, np.dot(A, p_c)) <= 1
-        
+
         u = np.linspace(0.0, 2.0 * np.pi, 100)
         v = np.linspace(0.0, np.pi, 100)
         # cartesian coordinates that correspond to the spherical angles:
@@ -188,7 +194,7 @@ class EllipsoidTool:
 
     def doesIntersect2D(self, A, cA, B, cB):
         """Rough test to see if ellipsoids A and B intersect
-        
+
         Not perfect, should work for "well overlapping" ones
         We assume that the volume of B is less than (or =) volume of A
         """
@@ -226,10 +232,10 @@ class EllipsoidTool:
         if make_ax:
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
-            
+
         u = np.linspace(0.0, 2.0 * np.pi, 100)
         v = np.linspace(0.0, np.pi, 100)
-        
+
         # cartesian coordinates that correspond to the spherical angles:
         x = radii[0] * np.outer(np.cos(u), np.sin(v))
         y = radii[1] * np.outer(np.sin(u), np.sin(v))
@@ -238,7 +244,7 @@ class EllipsoidTool:
         for i in range(len(x)):
             for j in range(len(x)):
                 [x[i,j],y[i,j],z[i,j]] = np.dot([x[i,j],y[i,j],z[i,j]], rotation) + center
-    
+
         if plotAxes:
             # make some purdy axes
             axes = np.array([[radii[0],0.0,0.0],
@@ -247,27 +253,27 @@ class EllipsoidTool:
             # rotate accordingly
             for i in range(len(axes)):
                 axes[i] = np.dot(axes[i], rotation)
-    
-    
+
+
             # plot axes
             for p in axes:
                 X3 = np.linspace(-p[0], p[0], 100) + center[0]
                 Y3 = np.linspace(-p[1], p[1], 100) + center[1]
                 Z3 = np.linspace(-p[2], p[2], 100) + center[2]
                 ax.plot(X3, Y3, Z3, color=cageColor)
-    
+
         # plot ellipsoid
         ax.plot_wireframe(x, y, z,  rstride=4, cstride=4, color=cageColor, alpha=cageAlpha)
 
-        if label is not None:        
-            ax.text(center[0], 
-                    center[1], 
-                    center[2], 
-                    label, 
+        if label is not None:
+            ax.text(center[0],
+                    center[1],
+                    center[2],
+                    label,
                     color=[0,0,0],
                     weight='bold'
                     )
-        
+
         if make_ax:
             plt.show()
             plt.close(fig)
@@ -279,44 +285,44 @@ class EllipsoidTool:
         if make_ax:
             fig = plt.figure()
             ax = fig.add_subplot(111)
-            
+
         u = np.linspace(0.0, 2.0 * np.pi, 100)
-        
+
         # cartesian coordinates that correspond to the spherical angles:
         x = radii[0] * np.cos(u)
         y = radii[1] * np.sin(u)
-        
+
         # rotate accordingly
         for i in range(len(x)):
             [x[i],y[i]] = np.dot([x[i],y[i]], rotation) + center
-    
+
         if plotAxes:
             # make some purdy axes
             axes = np.array([[radii[0],0.0],[0.0,radii[1]]])
             # rotate accordingly
             for i in range(len(axes)):
                 axes[i] = np.dot(axes[i], rotation)
-    
+
             # plot axes
             for p in axes:
                 X3 = np.linspace(-p[0], p[0], 100) + center[0]
                 Y3 = np.linspace(-p[1], p[1], 100) + center[1]
                 ax.plot(X3, Y3, color=cageColor)
-    
+
         # plot ellipsoid
         if linewidth == -1:
             ax.plot(x, y, color=cageColor, alpha=cageAlpha)
         else:
             ax.plot(x, y, color=cageColor, alpha=cageAlpha, linewidth=linewidth, zorder = 10)
 
-        if label is not None:        
-            ax.text(center[0], 
-                    center[1], 
-                    label, 
+        if label is not None:
+            ax.text(center[0],
+                    center[1],
+                    label,
                     color=[0,0,0],
                     weight='bold'
                     )
-        
+
         if make_ax:
             plt.show()
             plt.close(fig)
