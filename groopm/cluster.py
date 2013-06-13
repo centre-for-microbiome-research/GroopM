@@ -62,6 +62,7 @@ from numpy import (abs as np_abs,
                    append as np_append,
                    arange as np_arange,
                    argmax as np_argmax,
+                   argmin as np_argmin,
                    argsort as np_argsort,
                    around as np_around,
                    array as np_array,
@@ -415,7 +416,7 @@ class ClusterEngine:
     def smartTwoWayContraction(self, rowIndices, positionInPlane):
       """Partition a collection of contigs into 'core' groups"""
 
-      debugPlots = False
+      debugPlots = True
 
       # sanity check that there is enough data here to try a determine 'core' groups
       total_BP = np_sum(self.PM.contigLengths[rowIndices])
@@ -597,11 +598,12 @@ class ClusterEngine:
         if len(row_indices) == 0:
           return None
 
-        print 'iter:' + str(iter)
-        print 'k_converged:' + str(k_converged)
-        print 'np_mean(k_deltas):' + str(np_mean(k_deltas))
-        print 'c_converged:' + str(c_converged)
-        print 'np_mean(c_deltas):' + str(np_mean(c_deltas))
+        if False:
+            print 'iter:' + str(iter)
+            print 'k_converged:' + str(k_converged)
+            print 'np_mean(k_deltas):' + str(np_mean(k_deltas))
+            print 'c_converged:' + str(c_converged)
+            print 'np_mean(c_deltas):' + str(np_mean(c_deltas))
 
         # check for convergence
         if np_mean(k_deltas) < k_converged and np_mean(c_deltas) < c_converged:
@@ -609,33 +611,34 @@ class ClusterEngine:
 
       # perform hough transform clustering
       self.HP.hc += 1
-      (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat)
-      #(k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
+      if debugPlots:
+          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
+      else:
+          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat)
 
       if(len(k_partitions) == 0):
         return None
 
       partitions = []
-
+      k_sizes = [len(p) for p in k_partitions]
+      
       #-----------------------
       # GRID
-      c_max = np_max(c_dat[:,2]/10) * 1.1
-      k_max = np_max(k_dat[:,0]) * 1.1
-      c_min = np_min(c_dat[:,2]/10) * 0.9
-      k_min = np_min(k_dat[:,0]) * 0.9
-      k_eps = (k_max - k_min) / len(row_indices)
-      c_eps = (c_max - c_min) / len(row_indices)
-
-      k_sizes = [len(p) for p in k_partitions]
-
-      k_index_sort = np_argsort(k_dat[:,0])
-      start = 0
-      k_lines = []
-      for k in range(len(k_sizes)-1):
-          k_lines.append(k_dat[k_index_sort,0][k_sizes[k]+start]+k_eps)
-          start += k_sizes[k]
-
       if debugPlots:
+        c_max = np_max(c_dat[:,2]/10) * 1.1
+        k_max = np_max(k_dat[:,0]) * 1.1
+        c_min = np_min(c_dat[:,2]/10) * 0.9
+        k_min = np_min(k_dat[:,0]) * 0.9
+        k_eps = (k_max - k_min) / len(row_indices)
+        c_eps = (c_max - c_min) / len(row_indices)
+
+        k_index_sort = np_argsort(k_dat[:,0])
+        start = 0
+        k_lines = []
+        for k in range(len(k_sizes)-1):
+            k_lines.append(k_dat[k_index_sort,0][k_sizes[k]+start])
+            start += k_sizes[k]
+
         fig = plt.figure()
 
         orig_k_dat = self.PM.kmerPCs[rowIndices,0]
@@ -677,7 +680,7 @@ class ClusterEngine:
         plt.title("%s contigs" % len(row_indices))
         plt.xlabel("MER PARTS")
         plt.ylabel("COV PARTS")
-        ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors='none', c=self.PM.contigGCs[row_indices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=lens, zorder=10, alpha=alpha)
+        ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors='none', c=self.PM.contigGCs[row_indices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, zorder=10, alpha=alpha)
 
         ax.set_xlim(k_min, k_max)
         ax.set_ylim(c_min, c_max)
@@ -705,7 +708,7 @@ class ClusterEngine:
                     k_line_cols.append('r--')
 
         for k in range(len(k_lines)):
-            plt.plot([k_lines[k],k_lines[k]], [c_min, c_max], k_line_cols[k])
+            plt.plot([k_lines[k],k_lines[k]], [c_min, c_max], k_line_cols[k], zorder=11)
 
       pc = 0
       for k in range(len(k_sizes)):
@@ -716,64 +719,73 @@ class ClusterEngine:
               part_bp = np_sum(l_dat[k_part])
               if self.BM.isGoodBin(part_bp, len(k_part), ms=5):
 
+                  # select just the subset of covs for this kmer range
                   data = np_copy(c_dat[k_part])
                   Center(data,verbose=0)
                   p = PCA(data)
                   components = p.pc()
                   data = np_array([float(i) for i in components[:,0]])
-                  data -= np_min(data)
-                  data /= np_max(data)
-
+                  
                   l_data = np_copy(l_dat[k_part])
-
-
-                  (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data)
-                  #(c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV")
-
-                  #-----
-                  # GRID
-                  c_sorted_data = self.PM.transformedCP[k_sep_indices][:,2]/10
-                  c_sorted_data = c_sorted_data[np_argsort(c_sorted_data)]
-
-                  start = 0
-                  c_lines = []
-                  c_sizes = [len(p) for p in c_partitions]
-                  for c in range(len(c_sizes)-1):
-                      c_lines.append(c_sorted_data[c_sizes[c]+start]+c_eps)
-                      start += c_sizes[c]
-
-                  c_line_cols = []
-                  for c in range(len(c_sizes)):
-                      if c == 0:
-                          if c_keeps[c]:
-                              c_line_cols = ['r-']
-                          else:
-                              c_line_cols = ['r--']
-                      elif c == len(c_sizes) - 1:
-                          if c_keeps[c]:
-                              c_line_cols[-1] = 'r-'
-                          elif not c_keeps[c-1]:
-                              c_line_cols[-1] = 'r--'
-                      else:
-                          if c_keeps[c]:
-                              c_line_cols[c-1] = 'r-'
-                              c_line_cols.append('r-')
-                          else:
-                              c_line_cols.append('r--')
-
-                  if pc == 1:
-                      k_line_min = k_min
-                  else:
-                      k_line_min = k_lines[pc-2]
-
-                  if pc == len(k_partitions):
-                      k_line_max = k_max
-                  else:
-                      k_line_max = k_lines[pc-1]
-
+    
+                  # The PCA may reverse the ordering. So we just check here quickly
                   if debugPlots:
-                    for c in range(len(c_lines)):
-                        plt.plot([k_line_min,k_line_max], [c_lines[c], c_lines[c]], c_line_cols[c])
+                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV")
+                  else:
+                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data)
+                  
+    
+                  if debugPlots:
+                      #-----
+                      # GRID
+                      c_sorted_data = np_copy(c_dat[k_part,2])/10.
+                      c_sorted_data = c_sorted_data[np_argsort(c_sorted_data)]
+    
+                      start = 0
+                      c_lines = []
+                      if k_part[c_partitions[0]][0] > k_part[c_partitions[-1]][0]:
+                          c_sizes = [len(p) for p in c_partitions][::-1]
+                          cc_keeps = c_keeps[::-1]
+                      else:
+                          c_sizes = [len(p) for p in c_partitions]
+                          cc_keeps = c_keeps
+
+                      for c in range(len(c_sizes)-1):
+                          c_lines.append(c_sorted_data[c_sizes[c]+start])
+                          start += c_sizes[c]
+                          
+                      c_line_cols = []
+                      for c in range(len(c_sizes)):
+                          if c == 0:
+                              if cc_keeps[c]:
+                                  c_line_cols = ['r-']
+                              else:
+                                  c_line_cols = ['r--']
+                          elif c == len(c_sizes) - 1:
+                              if cc_keeps[c]:
+                                  c_line_cols[-1] = 'r-'
+                              elif not cc_keeps[c-1]:
+                                  c_line_cols[-1] = 'r--'
+                          else:
+                              if cc_keeps[c]:
+                                  c_line_cols[c-1] = 'r-'
+                                  c_line_cols.append('r-')
+                              else:
+                                  c_line_cols.append('r--')
+    
+                      if pc == 1:
+                          k_line_min = k_min
+                      else:
+                          k_line_min = k_lines[pc-2]
+    
+                      if pc == len(k_partitions):
+                          k_line_max = k_max
+                      else:
+                          k_line_max = k_lines[pc-1]
+
+                      for c in range(len(c_lines)):
+                          print c, [k_line_min,k_line_max], [c_lines[c], c_lines[c]]
+                          plt.plot([k_line_min,k_line_max], [c_lines[c], c_lines[c]], c_line_cols[c], zorder=11)
 
                   for c in range(len(c_partitions)):
                       if c_keeps[c]:
@@ -781,13 +793,13 @@ class ClusterEngine:
                           partitions.append(np_array(k_part[c_part]))
 
       if debugPlots:
-        fig.set_size_inches(12,12)
-        plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
-        plt.close()
-        del fig
+          fig.set_size_inches(12,12)
+          plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
+          plt.close()
+          del fig
 
       if len(partitions) == 0:
-        return None
+          return None
 
       ret_parts = []
       for p in partitions:
@@ -1161,7 +1173,8 @@ class HoughPartitioner:
     def __init__(self):
         self.hc = 0
 
-    def houghPartition(self, dAta, lengths, level=0, side="C", imgTag=None):
+    def houghPartition(self, dAta, lengths, imgTag=None):
+        """Use the hough transform to find k clusters for some unknown value of K"""
         d_len_raw = int(len(dAta))
         if d_len_raw < 2:
             return np_array([[0]])
@@ -1169,6 +1182,10 @@ class HoughPartitioner:
         if d_len_raw < 3:
             return np_array([[0,1]])
 
+        #----------------------------------------------------------------------
+        # prep the data
+        #
+        
         sorted_indices_raw = np_argsort(dAta)
         nUm_points = len(dAta)
 
@@ -1240,43 +1257,137 @@ class HoughPartitioner:
         t_data = np_array(zip(diffs, np_arange(d_len)))
         im_shape = (int(np_max(t_data, axis=0)[0]+1), d_len)
 
-        # Apply hough transformation
-        # and find the most prominent line
-        (m, c, accumulator) = self.hough(t_data.astype(float), im_shape)
+        #----------------------------------------------------------------------
+        # Apply hough transformation and find the most prominent line
+        #
+        # rets should be an array of arrays of real indices
+        # IE. indices into the array dAta
+        rets = self.recursiveSelect(t_data,
+                                    im_shape,
+                                    spread2real,
+                                    0,
+                                    d_len,
+                                    {},
+                                    imgTag=imgTag)
+        
+        #----------------------------------------------------------------------
+        # Squish things up
+        #
+        # build a flat data set similar to the gradiated data set
+        real2spread = {}
+        j = 0
+        flat_data = []
+        for i in range(len(dAta)):
+            real_index = sorted_indices_raw[i]
+            rep = scales_per[real_index] 
+            for k in range(rep):
+                flat_data.append(dAta[real_index])
+                try:
+                    real2spread[real_index].append(j)
+                except KeyError:
+                    real2spread[real_index] = [j]
+                j += 1
+        data -= np_min(flat_data)
+        back_diffs = [float(data[i] - data[i-1]) for i in range(1,d_len)]
+        diffs = [back_diffs[0]]
+        for i in range(len(back_diffs)-1):
+            diffs.append((back_diffs[i] + back_diffs[i+1])/2)
+        diffs.append(back_diffs[-1])
+        diffs = np_array(diffs)**2
+        for i in range(1, d_len):
+            diffs[i] += diffs[i-1]
+        diffs -= np_min(diffs)
+        try:
+            diffs /= np_max(diffs)
+        except FloatingPointError:
+            pass
+        diffs *= len(diffs)
+
+        # diffs is now the same size as the gradiated data sent through
+        # to hough in level 0. We wish to find the gradients of the lines
+        # returned by recursive partitioning
+        gradients = []
+        for ret in rets:
+            sis = []
+            for ii in ret:
+                for si in real2spread[ii]:
+                    sis.append(diffs[si])
+            l_sis = len(sis)
+            if l_sis == 1:
+                gradients.append(-1)
+            else:
+                sis = sorted(sis)
+                gradients.append((sis[-1] - sis[0])/l_sis)
+
+        gradients = np_array(gradients)
+        
+        # get all the -1 gradients and make them equal to the larger 
+        # of their neighbours
+        last = 0.
+        for g in range(len(gradients)):
+            if gradients[g] == -1:
+                h = g + 1
+                next = 0.
+                # find the next not -1 gradient
+                while(h < len(gradients)):
+                    if gradients[h] != -1:
+                        # use this one
+                        next = gradients[h]
+                        break
+                    h += 1
+                gradients[g] = np_max([last, next])
+            else:
+                last = gradients[g]
+        
+        keeps = np_where(gradients >= 1, False, True)
+        
+        squished_rets = []
+        squished_keeps = []
+        last_squshed = []
+        for i in range(len(rets)):
+            if keeps[i]:
+                for ii in rets[i]:
+                    last_squshed.append(ii)
+            else:
+                if len(last_squshed) > 0:
+                    squished_rets.append(np_array(last_squshed))
+                    last_squshed = []
+                    squished_keeps.append(True)
+                
+                # add the dud
+                squished_rets.append(rets[i])
+                squished_keeps.append(False)
+        if len(last_squshed) > 0:
+            squished_rets.append(np_array(last_squshed))
+            squished_keeps.append(True)
+
+        return (np_array(squished_rets), np_array(squished_keeps))  
+
+    def recursiveSelect(self,
+                        tData,
+                        imShape,
+                        spread2real,
+                        startRange,
+                        endRange,
+                        assigned,
+                        level=0,
+                        side="C",
+                        imgTag=None):
+        """Recursively select clusters from the data"""
+        d_len = len(tData)
+        (m, c, accumulator) = self.houghTransform(tData.astype(float)[startRange:endRange,:], imShape)
 
         # draw a nice thick line over the top of the data
         # found_line is a set of points
-        found_line = self.points2Line(np_array([[c,0],[m*im_shape[1]+c,im_shape[1]]]), im_shape[1], im_shape[0], 3)
+        found_line = self.points2Line(np_array([[c,0],[m*imShape[1]+c,imShape[1]]]), imShape[1], imShape[0], 3)
 
-        # see which points lie on the line
-        # we need to protect against the data line crossing
-        # in and out of the "found line"
-        in_block = False
-        block_starts = []
-        block_lens = []
-        ii = -1
-        for p in t_data.astype('int'):
-            ii += 1
-            if tuple(p) in found_line:
-                if not in_block:
-                    in_block = True
-                    block_starts.append(ii)
-            else:
-                if in_block:
-                    in_block = False
-                    block_lens.append(ii - block_starts[-1] + 1)
-
-        if in_block:
-            # finishing block
-            block_lens.append(ii - block_starts[-1] + 1)
-
+        # make an image if we're that way inclined
         if imgTag is not None:
-            print "%d_%s_%s_%d DL: %d BL: %d" % (self.hc, imgTag, side, level, len(data), len(block_lens))
             # make a pretty picture
-            fff = np_ones(im_shape) * 255
+            fff = np_ones(imShape) * 255
             for p in found_line.keys():
                 fff[p[0],p[1]] = 220
-            for p in t_data:
+            for p in tData:
                 fff[p[0],p[1]] = 0
             # scale so colors look sharper
             accumulator -= np_min(accumulator)
@@ -1285,132 +1396,109 @@ class HoughPartitioner:
 
             imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
 
+        # see which points lie on the line
+        # we need to protect against the data line crossing
+        # in and out of the "found line"
+        in_block = False
+        block_starts = []
+        block_lens = []
+        for ii in np_arange(startRange, endRange):
+            p = tData.astype('int')[ii]
+            if tuple(p) in found_line:
+                if not in_block:
+                    in_block = True
+                    block_starts.append(ii)
+            else:
+                if in_block:
+                    in_block = False
+                    block_lens.append(ii - block_starts[-1])
+
+        if in_block:
+            # finishing block
+            block_lens.append(endRange - block_starts[-1])
+
         # check to see the line hit something
         if len(block_lens) == 0:
-            return np_array([np_arange(len(dAta))])
+            return np_array([np_arange(startRange, endRange)])
 
         # get the start and end indices in the longest block found
         longest_block = np_argmax(block_lens)
         spread_start = block_starts[longest_block]
-        spread_end =  block_lens[longest_block] + spread_start
+        spread_end =  block_lens[longest_block] + spread_start  # 1 after the end of the block
 
         # select all the guys with their centres between the start and end
-        assigned = {}
+        # this is the end of the line for these guys so we fill centre with
+        # "real" indices. 
         tmp = {}
-        for ii in range(spread_start, spread_end):
-            real_index = spread2real[ii]
-            tmp[real_index] = None
-            assigned[real_index] = None
+        for ii in np_arange(spread_start, spread_end):
+            real_index = spread2real[ii] 
+
+            if real_index not in assigned:
+                tmp[real_index] = None
+                assigned[real_index] = None
         centre = np_array(tmp.keys())
-
-        # select all the guys with their centres to the left of the start
-        tmp = {}
-        for ii in range(spread_start):
-            real_index = spread2real[ii]
-            if real_index not in assigned:
-                tmp[real_index] = None
-                assigned[real_index] = None
-        left = np_array(tmp.keys())
-
-        # select all the guys with their centres right of the end
-        tmp = {}
-        for ii in range(spread_end, d_len):
-            real_index = spread2real[ii]
-            if real_index not in assigned:
-                tmp[real_index] = None
-                assigned[real_index] = None
-        right = np_array(tmp.keys())
-
+        
         rets = []
+        
         # recursive call for leftmost indices
-        if len(left) > 0:
-            left_p = self.houghPartition(dAta[left], lengths[left], side="%sL" %side, level=level+1, imgTag=imgTag)
-            for A in left_p:
-                rets.append(np_array([left[i] for i in A]))
+        if (spread_start - startRange) > 0:
+            if (spread_start - startRange) < 3:
+                # end of the line for left expansion, give up "real" indices
+                # select all the guys with their centres to the left of the start
+                tmp = {}
+                for ii in np_arange(startRange, spread_start):
+                    real_index = spread2real[ii] 
+                    if real_index not in assigned:
+                        tmp[real_index] = None
+                        assigned[real_index] = None
+                rets.append(np_array(tmp.keys()))
+                
+            else:
+                # otherwise we keep working with ranges
+                left_p = self.recursiveSelect(tData,
+                                              imShape,
+                                              spread2real,
+                                              startRange,
+                                              spread_start,
+                                              assigned,
+                                              level=level+1,
+                                              side="%sL" %side,
+                                              imgTag=imgTag) 
+                for L in left_p:
+                    if len(L) > 0:
+                        rets.append(L)
 
         # add the centre in
         if len(centre) > 0:
             rets.append(centre)
 
         # recursive call for rightmost indices
-        if len(right) > 0:
-            right_p = self.houghPartition(dAta[right], lengths[right], side="%sR" %side, level=level+1, imgTag=imgTag)
-            for A in right_p:
-                rets.append(np_array([right[i] for i in A]))
-
-        # only do this for the top level
-        if level == 0:
-            # build a flat data set similar to the gradiated data set
-            real2spread = {}
-            j = 0
-            flat_data = []
-            for i in range(len(dAta)):
-                real_index = sorted_indices_raw[i]
-                rep = scales_per[real_index]
-                for k in range(rep):
-                    flat_data.append(dAta[real_index])
-                    try:
-                        real2spread[real_index].append(j)
-                    except KeyError:
-                        real2spread[real_index] = [j]
-                    j += 1
-            data -= np_min(flat_data)
-            back_diffs = [float(data[i] - data[i-1]) for i in range(1,d_len)]
-            diffs = [back_diffs[0]]
-            for i in range(len(back_diffs)-1):
-                diffs.append((back_diffs[i] + back_diffs[i+1])/2)
-            diffs.append(back_diffs[-1])
-            diffs = np_array(diffs)**2
-            for i in range(1, d_len):
-                diffs[i] += diffs[i-1]
-            diffs -= np_min(diffs)
-            try:
-                diffs /= np_max(diffs)
-            except FloatingPointError:
-                pass
-            diffs *= len(diffs)
-
-            # diffs is now the same size as the gradiated data sent through
-            # to hough in level 0. We wish to find the gradients of the lines
-            # returned by recursive partitioning
-            gradients = []
-            for ret in rets:
-                sis = []
-                for ii in ret:
-                    for si in real2spread[ii]:
-                        sis.append(diffs[si])
-                l_sis = float(len(sis))
-                if l_sis == 1:
-                    gradients.append(1)
-                else:
-                    sis = sorted(sis)
-                    gradients.append((sis[-1] - sis[0])/l_sis)
-            gradients = np_array(gradients)
-            keeps = np_where(gradients >= 1, False, True)
-
-            squished_rets = []
-            squished_keeps = []
-            last_squshed = []
-            for i in range(len(rets)):
-                if keeps[i]:
-                    for ii in rets[i]:
-                        last_squshed.append(ii)
-                else:
-                    if len(last_squshed) > 0:
-                        squished_rets.append(np_array(last_squshed))
-                        last_squshed = []
-                        squished_keeps.append(True)
-
-                    # add the dud
-                    squished_rets.append(rets[i])
-                    squished_keeps.append(False)
-            if len(last_squshed) > 0:
-                squished_rets.append(np_array(last_squshed))
-                squished_keeps.append(True)
-            return (np_array(squished_rets), np_array(squished_keeps))
-
-        return np_array(rets)
-
+        if (endRange - spread_end) > 0:
+            if (endRange - spread_end) < 3:
+                # end of the line for left expansion, give up "real" indices
+                # select all the guys with their centres right of the end
+                tmp = {}
+                for ii in np_arange(spread_end, endRange):
+                    real_index = spread2real[ii] 
+                    if real_index not in assigned:
+                        tmp[real_index] = None
+                        assigned[real_index] = None
+                rets.append(np_array(tmp.keys()))
+            else:
+                right_p = self.recursiveSelect(tData,
+                                               imShape,
+                                               spread2real,
+                                               spread_end,
+                                               endRange,
+                                               assigned,
+                                               level=level+1,
+                                               side="%sR" %side,
+                                               imgTag=imgTag)             
+                for R in right_p:
+                    if len(R) > 0:
+                        rets.append(R)
+        return rets
+    
     def points2Line(self, points, xIndexLim, yIndexLim, thickness):
         """Draw a thick line between a series of points"""
         line_points = []
@@ -1442,7 +1530,7 @@ class HoughPartitioner:
 
         return thick_points
 
-    def hough(self, data, imShape):
+    def houghTransform(self, data, imShape):
         """Calculate Hough transform
 
         Data is a 2D numpy array"""
