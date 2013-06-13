@@ -516,10 +516,10 @@ class Bin:
         del fig
 
 
-    def plotBin(self, transformedCP, contigGCs, kmerNormPC1, contigLengths, contigColors, colorMapGC, fileName="", ET=None):
+    def plotBin(self, transformedCP, contigGCs, kmerNormPC1, contigLengths, colorMapGC, fileName="", ET=None):
         """Plot a single bin"""
         fig = plt.figure()
-        title = self.plotOnFig(fig, 1, 1, 1, transformedCP, contigGCs, contigLengths, contigColors, colorMapGC, fileName=fileName, ET=ET)
+        title = self.plotOnFig(fig, 1, 1, 1, transformedCP, contigGCs, contigLengths, colorMapGC, fileName=fileName, ET=ET)
         plt.title(title)
         if(fileName != ""):
             try:
@@ -537,11 +537,11 @@ class Bin:
         plt.close(fig)
         del fig
 
-    def plotOnFig(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigGCs, contigLengths, contigColors, colorMapGC, fileName="", ET=None, plotColorbar=True, extents=None):
+    def plotOnFig(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigGCs, contigLengths, colorMapGC, fileName="", ET=None, plotColorbar=True, extents=None):
         ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
-        return self.plotOnAx(ax, transformedCP, contigGCs, contigLengths, contigColors, colorMapGC, fileName=fileName, ET=ET, plotColorbar=plotColorbar, extents=extents)
+        return self.plotOnAx(ax, transformedCP, contigGCs, contigLengths, colorMapGC, fileName=fileName, ET=ET, plotColorbar=plotColorbar, extents=extents)
 
-    def plotOnAx(self, ax, transformedCP, contigGCs, contigLengths, contigColors, colorMapGC, fileName="", plotCentroid=True, ET=None, printID=False, plotColorbar=True, extents=None):
+    def plotOnAx(self, ax, transformedCP, contigGCs, contigLengths, colorMapGC, fileName="", plotCentroid=True, ET=None, printID=False, plotColorbar=True, extents=None):
         """Plot a bin in a given subplot
 
         If you pass through an EllipsoidTool then it will plot the minimum bounding ellipsoid as well!
@@ -588,8 +588,8 @@ class Bin:
 
         if ET != None:
             (center, radii, rotation) = self.getBoundingEllipsoid(transformedCP, ET=ET)
-            centroid_color = np.mean([contigColors[row_index] for row_index in self.rowIndices],
-                                      axis=0)
+            centroid_gc = np.mean(contigGCs[self.rowIndices])
+            centroid_color = colorMapGC(centroid_gc)
             if printID:
                 ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color, label=self.id)
             else:
@@ -608,7 +608,7 @@ class Bin:
                          )
         return title
 
-    def plotMersOnAx(self, ax, kPCA1, kPCA2, contigGCs, contigLengths, contigColors, colorMapGC, fileName="", ET=None, printID=False, plotColorbar=True):
+    def plotMersOnAx(self, ax, kPCA1, kPCA2, contigGCs, contigLengths, colorMapGC, fileName="", ET=None, printID=False, plotColorbar=True):
         """Plot a bins kmer sig PCAs in a given subplot
 
         If you pass through an EllipsoidTool then it will plot the minimum bounding ellipse as well!
@@ -634,8 +634,8 @@ class Bin:
 
         if ET != None:
             (center, radii, rotation) = ET.getMinVolEllipse(disp_vals)
-            centroid_color = np.mean([contigColors[row_index] for row_index in self.rowIndices],
-                                      axis=0)
+            centroid_gc = np.mean(contigGCs[self.rowIndices])
+            centroid_color = colorMapGC(centroid_gc)
             if printID:
                 ET.plotEllipse(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color, label=self.id)
             else:

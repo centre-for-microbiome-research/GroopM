@@ -279,7 +279,7 @@ class ClusterEngine:
                         self.updatePostBin(bin)
 
                         if(self.debugPlots):
-                            bin.plotBin(self.PM.transformedCP, self.PM.contigColors, self.PM.kmerNormPC1, self.PM.contigLengths, fileName="FRESH_"+str(self.imageCounter))
+                            bin.plotBin(self.PM.transformedCP, self.PM.kmerNormPC1, self.PM.contigLengths, fileName="FRESH_"+str(self.imageCounter))
                             self.imageCounter += 1
                             self.plotHeat("HM_%d.%d.png" % (self.roundNumber, sub_round_number), max=max_blur_value, x=max_x, y=max_y)
                             sub_round_number += 1
@@ -324,7 +324,7 @@ class ClusterEngine:
                             sub_counter += 10
                             print "\n%4d" % sub_counter,
 
-                        bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, fileName="P_BIN_%d"%(bin.id)) #***slow plot!
+                        bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.colorMapGC, fileName="P_BIN_%d"%(bin.id)) #***slow plot!
 
                     except BinNotFoundException: pass
 
@@ -428,7 +428,6 @@ class ClusterEngine:
       k_dat = np_copy(self.PM.kmerPCs[rowIndices])
       c_dat = np_copy(self.PM.transformedCP[rowIndices])
       l_dat = np_copy(self.PM.contigLengths[rowIndices])
-      col_dat = np_copy(self.PM.contigColors[rowIndices])
       row_indices = np_copy(rowIndices)
 
       # calculate shortest distance to a corner (this isn't currently used)
@@ -590,7 +589,6 @@ class ClusterEngine:
           c_dat = np_delete(c_dat, noise, axis = 0)
           k_dat = np_delete(k_dat, noise, axis = 0)
           l_dat = np_delete(l_dat, noise, axis = 0)
-          col_dat = np_delete(col_dat, noise, axis = 0)
           row_indices = np_delete(row_indices, noise, axis = 0)
 
         # get whitened version of modified coverage data (using original transformation)
@@ -644,7 +642,6 @@ class ClusterEngine:
         orig_k2_dat = self.PM.kmerPCs[rowIndices,1]
         orig_c_dat = self.PM.transformedCP[rowIndices][:,2]/10
         orig_l_dat = np_sqrt(self.PM.contigLengths[rowIndices])
-        orig_col_dat = self.PM.contigColors[rowIndices]
 
         ax = plt.subplot(221)
         plt.xlabel("PCA1")
@@ -652,7 +649,7 @@ class ClusterEngine:
 
         from matplotlib.patches import Rectangle
         alpha = 0.35
-        ax.scatter(orig_k_dat, orig_k2_dat, edgecolors='none', c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
+        ax.scatter(orig_k_dat, orig_k2_dat, edgecolors='none', c=self.PM.contigGCs[rowIndices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=orig_l_dat, zorder=10, alpha=alpha)
         XX = ax.get_xlim()
         YY = ax.get_ylim()
         ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
@@ -661,7 +658,7 @@ class ClusterEngine:
         plt.title("%s contigs" % len(rowIndices))
         plt.xlabel("MER PARTS")
         plt.ylabel("COV PARTS")
-        ax.scatter(orig_k_dat, orig_c_dat, edgecolors='none', c=orig_col_dat, s=orig_l_dat, zorder=10, alpha=alpha)
+        ax.scatter(orig_k_dat, orig_c_dat, edgecolors='none', c=self.PM.contigGCs[rowIndices], cmap=self.PM.colorMapGC, s=orig_l_dat, zorder=10, alpha=alpha)
         XX = ax.get_xlim()
         YY = ax.get_ylim()
         ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
@@ -1069,7 +1066,7 @@ class ClusterEngine:
                             if row_index not in self.PM.binnedRowIndices and row_index not in self.PM.restrictedRowIndices:
                                 num_points += 1
                                 disp_vals = np_append(disp_vals, self.PM.transformedCP[row_index])
-                                disp_cols = np_append(disp_cols, self.PM.contigColors[row_index])
+                                disp_cols = np_append(disp_cols, self.PM.colorMapGC(self.PM.contigGCs[row_index]))
 
         # make a black mark at the max values
         small_span = self.span/2

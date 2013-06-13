@@ -281,11 +281,14 @@ class GroopMOptionsParser():
             print " [[GroopM]] Running in bin plotting mode..."
             print "*******************************************************************************"
             BM = binManager.BinManager(dbFileName=options.dbname)
+
             if options.bids is None:
                 bids = []
             else:
                 bids = options.bids
             BM.loadBins(timer, makeBins=True, silent=False, bids=bids, loadContigNames=False)
+
+            BM.setColorMap(options.cm)
 
             if options.bids is None:
                 bids = BM.getBids()

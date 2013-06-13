@@ -54,6 +54,7 @@ from operator import itemgetter
 from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.cm import get_cmap
 from mpl_toolkits.mplot3d import axes3d, Axes3D
 from pylab import plot,subplot,axis,stem,show,figure
 from numpy import (abs as np_abs,
@@ -134,7 +135,6 @@ class ProfileManager:
         self.contigNames = np_array([])
         self.contigLengths = np_array([])
         self.contigGCs = np_array([])
-        self.contigColors = np_array([])   # calculated from GC
         self.colorMapGC = None
 
         self.binIds = np_array([])          # list of bin IDs
@@ -252,9 +252,8 @@ class ProfileManager:
                     # use HSV to RGB to generate colors
                     S = 1       # SAT and VAL remain fixed at 1. Reduce to make
                     V = 1       # Pastels if that's your preference...
-                    #self.contigColors = np_array([htr(val, S, V) for val in self.contigGCs])
-                    self.contigColors = np_array([htr((1. + np_sin(np_pi * val - np_pi/2))/2., S, V) for val in self.contigGCs])
                     self.colorMapGC = LinearSegmentedColormap.from_list('GC', [htr((1.0 + np_sin(np_pi * (val/1000.0) - np_pi/2))/2., S, V) for val in xrange(0, 1000)], N=1000)
+                    #self.colorMapGC = get_cmap('gist_rainbow')
 
             if(loadBins):
                 if(verbose):
@@ -296,7 +295,7 @@ class ProfileManager:
         self.transformedCP = np_delete(self.transformedCP, deadRowIndices, axis=0)
         self.contigNames = np_delete(self.contigNames, deadRowIndices, axis=0)
         self.contigLengths = np_delete(self.contigLengths, deadRowIndices, axis=0)
-        self.contigColors = np_delete(self.contigColors, deadRowIndices, axis=0)
+        self.contigGCs = np_delete(self.contigGCs, deadRowIndices, axis=0)
         #self.kmerSigs = np_delete(self.kmerSigs, deadRowIndices, axis=0)
         self.kmerPCs = np_delete(self.kmerPCs, deadRowIndices, axis=0)
         self.binIds = np_delete(self.binIds, deadRowIndices, axis=0)
@@ -593,6 +592,44 @@ class ProfileManager:
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING
 
+    def setColorMap(self, colorMapStr):
+        if colorMapStr == 'HSV':
+            S = 1
+            V = 1
+            self.colorMapGC = LinearSegmentedColormap.from_list('GC_HSV', [htr((1.0 + np_sin(np_pi * (val/512.0) - np_pi/2))/2., S, V) for val in xrange(0, 512)], N=512)
+        elif colorMapStr == 'Accent':
+            self.colorMapGC = get_cmap('Accent')
+        elif colorMapStr == 'Blues':
+            self.colorMapGC = get_cmap('Blues')
+        elif colorMapStr == 'Spectral':
+            self.colorMapGC = get_cmap('spectral')
+        elif colorMapStr == 'Grayscale':
+            self.colorMapGC = get_cmap('gist_yarg')
+        elif colorMapStr == 'Discrete':
+            discrete_map = [(0,0,0)]
+            discrete_map.append((0,0,0))
+            discrete_map.append((0,0,0))
+
+            discrete_map.append((0,0,0))
+            discrete_map.append((141/255.0,211/255.0,199/255.0))
+            discrete_map.append((255/255.0,255/255.0,179/255.0))
+            discrete_map.append((190/255.0,186/255.0,218/255.0))
+            discrete_map.append((251/255.0,128/255.0,114/255.0))
+            discrete_map.append((128/255.0,177/255.0,211/255.0))
+            discrete_map.append((253/255.0,180/255.0,98/255.0))
+            discrete_map.append((179/255.0,222/255.0,105/255.0))
+            discrete_map.append((252/255.0,205/255.0,229/255.0))
+            discrete_map.append((217/255.0,217/255.0,217/255.0))
+            discrete_map.append((188/255.0,128/255.0,189/255.0))
+            discrete_map.append((204/255.0,235/255.0,197/255.0))
+            discrete_map.append((255/255.0,237/255.0,111/255.0))
+            discrete_map.append((1,1,1))
+
+            discrete_map.append((0,0,0))
+            discrete_map.append((0,0,0))
+            discrete_map.append((0,0,0))
+            self.colorMapGC = LinearSegmentedColormap.from_list('GC_DISCRETE', discrete_map, N=20)
+
     def plotStoitNames(self, ax):
         """Plot stoit names on an existing axes"""
         outer_index = 0
@@ -620,7 +657,7 @@ class ProfileManager:
 
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
-        ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
+        ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
         self.plotStoitNames(ax1)
 
         try:
@@ -645,7 +682,7 @@ class ProfileManager:
 
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
-        ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
+        ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
         self.plotStoitNames(ax1)
 
         try:
@@ -696,7 +733,7 @@ class ProfileManager:
             }
 
             ax = fig.add_subplot(131, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
             ax.azim = 0
             ax.elev = 0
             ax.set_xlim3d(0,self.scaleFactor)
@@ -716,7 +753,7 @@ class ProfileManager:
             ax.w_zaxis._AXINFO = myAXINFO
 
             ax = fig.add_subplot(132, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
             ax.azim = 90
             ax.elev = 0
             ax.set_xlim3d(0,self.scaleFactor)
@@ -736,7 +773,7 @@ class ProfileManager:
             ax.w_zaxis._AXINFO = myAXINFO
 
             ax = fig.add_subplot(133, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors=self.contigColors, c=self.contigColors, marker='.')
+            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
             ax.azim = 0
             ax.elev = 90
             ax.set_xlim3d(0,self.scaleFactor)
@@ -762,7 +799,7 @@ class ProfileManager:
                                self.transformedCP[:,1],
                                self.transformedCP[:,2],
                                edgecolors='none',
-                               c=self.contigColors,
+                               c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0,
                                s=2,
                                marker='.')
                 else:
@@ -771,7 +808,7 @@ class ProfileManager:
                                self.transformedCP[:,1],
                                self.transformedCP[:,2],
                                edgecolors='none',
-                               c=self.contigColors,
+                               c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0,
                                s=2,
                                marker='.',
                                alpha=alpha)
@@ -801,7 +838,7 @@ class ProfileManager:
                 for i in range(len(self.indices)):
                     if self.binIds[i] not in restrictedBids:
                         r_trans = np_append(r_trans, self.transformedCP[i])
-                        r_cols = np_append(r_cols, self.contigColors[i])
+                        r_cols = np_append(r_cols, self.colorMapGC(self.contigGCs[i]))
                         num_added += 1
                 r_trans = np_reshape(r_trans, (num_added,3))
                 r_cols = np_reshape(r_cols, (num_added,3))
