@@ -251,13 +251,13 @@ class ClusterEngine:
 
             # now search for the "hottest" spots on the blurred map
             # and check for possible bin centroids
-            bids_made = []
             putative_clusters = self.findNewClusterCenters()
 
 
             if(putative_clusters is None):
                 break
             else:
+                bids_made = []
                 partitions = putative_clusters[0]
                 [max_blur_value, max_x, max_y] = putative_clusters[1]
                 self.roundNumber += 1
@@ -302,7 +302,8 @@ class ClusterEngine:
                                         None,
                                         bids=bids_made,
                                         loose=2.,
-                                        silent=True)
+                                        verbose=True,
+                                        silent=False)
 
                 # do some post processing
                 for bid in bids_made:
@@ -325,7 +326,7 @@ class ClusterEngine:
                             sub_counter += 10
                             print "\n%4d" % sub_counter,
 
-                        bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, fileName="P_BIN_%d"%(bin.id)) #***slow plot!
+                        bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, fileName="CORE_BIN_%d"%(bin.id)) #***slow plot!
 
                     except BinNotFoundException: pass
 
@@ -613,6 +614,10 @@ class ClusterEngine:
 
       # perform hough transform clustering
       self.HP.hc += 1
+      
+      print "======================\n======================\n======================"
+      print "GRID %d " % self.HP.hc
+      
       if debugPlots:
           (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
       else:
@@ -1363,7 +1368,17 @@ class HoughPartitioner:
         if len(last_squshed) > 0:
             squished_rets.append(np_array(last_squshed))
             squished_keeps.append(True)
-
+        print "=================="
+        print gradients
+        print keeps
+        print squished_keeps
+        for ii in rets:
+            print len(ii)
+        print "------------------"
+        for ii in squished_rets:
+            print len(ii)
+        
+        print "=================="
         return (np_array(squished_rets), np_array(squished_keeps))  
 
     def recursiveSelect(self,
@@ -1382,7 +1397,7 @@ class HoughPartitioner:
 
         # draw a nice thick line over the top of the data
         # found_line is a set of points
-        found_line = self.points2Line(np_array([[c,0],[m*imShape[1]+c,imShape[1]]]), imShape[1], imShape[0], 3)
+        found_line = self.points2Line(np_array([[c,0],[m*imShape[1]+c,imShape[1]]]), imShape[1], imShape[0], 5)
 
         # make an image if we're that way inclined
         if imgTag is not None:

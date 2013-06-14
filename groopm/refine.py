@@ -534,14 +534,14 @@ class RefineEngine:
         if cCut is None:
             cCut = self.getCCut(loose=loose)
 
-        if bids == []:
+        if len(bids) == 0:
             bids = self.BM.getBids()
 
         if not silent:
             print "    Merging similar bins (%d) with kCut %0.4f cCut %0.4f" % (len(bids),kCut,cCut)
 
         # identify merging groups
-        mergers = self.findMergeGroups(verbose=verbose)
+        mergers = self.findMergeGroups(verbose=verbose, bids=bids)
         num_bins_removed = 0
         # and then merge them
         for merge in mergers:
@@ -553,6 +553,7 @@ class RefineEngine:
 
     def findMergeGroups(self, bids=[], verbose=False):
         """Identify groups of contigs which could be merged"""
+        print "-->", bids
         tdm = []                # these are used in the neighbor search
         bid_2_tdm_index = {}
         tdm_index_2_bid = {}
