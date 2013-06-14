@@ -288,7 +288,7 @@ if __name__ == '__main__':
     # do what we came here to do
     try:
         GM_parser = groopm.GroopMOptionsParser()
-        if(False):
+        if(True):
             import cProfile
             cProfile.run('GM_parser.parseOptions(args)', 'prof')
             ##########################################

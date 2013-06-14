@@ -416,6 +416,8 @@ class ClusterEngine:
     def smartTwoWayContraction(self, rowIndices, positionInPlane):
       """Partition a collection of contigs into 'core' groups"""
 
+      print 'Starting two way contraction' #$$$
+
       debugPlots = False
 
       # sanity check that there is enough data here to try a determine 'core' groups
@@ -469,7 +471,6 @@ class ClusterEngine:
       # perform two-way contraction of kmer and coverage space
       iter = 0
       while iter < max_iterations:
-        print 'iter: ' + str(iter)
         iter += 1
 
         if debugPlots:
@@ -609,6 +610,9 @@ class ClusterEngine:
         # check for convergence
         if np_mean(k_deltas) < k_converged and np_mean(c_deltas) < c_converged:
           break
+
+      print 'Ending two way contraction' #$$$
+      print 'Starting Hough Transform' #$$$
 
       # perform hough transform clustering
       self.HP.hc += 1
@@ -805,6 +809,8 @@ class ClusterEngine:
       ret_parts = []
       for p in partitions:
           ret_parts.append(np_array(row_indices[p]))
+
+      print 'Ending Hough Transform' #$$$
 
       return np_array(ret_parts)
 
@@ -1502,6 +1508,9 @@ class HoughPartitioner:
 
     def points2Line(self, points, xIndexLim, yIndexLim, thickness):
         """Draw a thick line between a series of points"""
+
+        print "In points2Line" #$$$
+
         line_points = []
         num_points = len(points)
         for i in range(1, num_points):
@@ -1529,12 +1538,18 @@ class HoughPartitioner:
                     for x in range(np_max([point[1]-thickness, 0]),np_min([point[1]+thickness+1,xIndexLim])):
                         thick_points[(y,x)] = 1
 
+        print "Exiting points2Line" #$$$
+
         return thick_points
 
     def houghTransform(self, data, imShape):
         """Calculate Hough transform
 
         Data is a 2D numpy array"""
+
+
+        print "In houghTransform" #$$$
+
         (rows, cols) = imShape
         d_len = len(data)
         half_rows = rows/2
@@ -1545,6 +1560,8 @@ class HoughPartitioner:
         dr = rmax / (half_rows)
         dth = np_pi / cols
         accumulator = np_ones((rows * cols))*255
+
+        print "a" #$$$
 
         """
         For speed we numpify this loop. I just keep this here
@@ -1568,6 +1585,8 @@ class HoughPartitioner:
         Cs = np_array(range(cols)*d_len)
         flat_indices = Rs * cols + Cs
 
+        print "b" #$$$
+
         # update the accumulator with integer decrements
         decrements = np_bincount(flat_indices.astype('int'))
         index = 0
@@ -1582,6 +1601,8 @@ class HoughPartitioner:
         min_col = minindex - (min_row*cols)
         theta = float(min_col) * dth
         rad = float(min_row - half_rows)*dr
+
+        print "c" #$$$
 
         # now de hough!
         try:
@@ -1601,6 +1622,8 @@ class HoughPartitioner:
 
         if m < 0:
             m = 0.
+
+        print "Exiting houghTransform" #$$$
 
         return (m, c, accumulator.reshape((rows, cols)))
 

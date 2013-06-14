@@ -251,10 +251,10 @@ class GMDataManager:
                 #------------------------
                 # build a table template based on the number of bamfiles we have
                 db_desc = []
-                for bf in bamFiles:
+                for i, bf in enumerate(bamFiles):
                     # assume the file is called something like "fred.bam"
                     # we want to rip off the ".bam" part
-                    bam_desc = getBamDescriptor(bf)
+                    bam_desc = getBamDescriptor(bf, i + 1)
                     db_desc.append((bam_desc, float))
                     stoitColNames.append(bam_desc)
 
@@ -1403,9 +1403,11 @@ class BamParser:
                     pass
         return (rowwise_links, np.array(cov_sigs))
 
-def getBamDescriptor(fullPath):
+def getBamDescriptor(fullPath, index_num):
     """AUX: Reduce a full path to just the file name minus extension"""
-    return op_splitext(op_basename(fullPath))[0]
+    name = op_splitext(op_basename(fullPath))[0]
+    name = str(index_num) + '_'
+    return name
 
 ###############################################################################
 ###############################################################################
