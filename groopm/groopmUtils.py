@@ -80,12 +80,12 @@ class GMExtractor:
                  folder='',
                  ):
         self.dbFileName = dbFileName
-        
+
         if bids is None:
             self.bids = []
         else:
             self.bids = bids
-        
+
         if(folder == ''):
             # write to current working dir
             self.outDir = os.getcwd()
@@ -94,31 +94,31 @@ class GMExtractor:
 
         # make the dir if need be
         makeSurePathExists(self.outDir)
-        
+
     def extractContigs(self, timer, fasta=[], cutoff=0):
         """Extract contigs and write to file"""
         self.BM = binManager.BinManager(dbFileName=self.dbFileName)   # bins
         self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
         self.PM = self.BM.PM
-        
+
         # load all the contigs which have been assigned to bins
         CP = mstore.ContigParser()
         # contigs looks like cid->seq
         contigs = {}
         try:
             for file_name in fasta:
-                with open(file_name, "r") as f:  
+                with open(file_name, "r") as f:
                     contigs = CP.getWantedSeqs(f, self.PM.contigNames, storage=contigs)
         except:
             print "Could not parse contig file:",fasta[0],sys.exc_info()[0]
             raise
-        
+
         # now print out the sequences
         print "Writing files"
         for bid in self.BM.getBids():
             file_name = os.path.join(self.outDir, "BIN_%d.fa" % bid)
             try:
-                with open(file_name, 'w') as f: 
+                with open(file_name, 'w') as f:
                     for row_index in self.BM.getBin(bid).rowIndices:
                         cid = self.PM.contigNames[row_index]
                         if(cid in contigs):
@@ -127,14 +127,14 @@ class GMExtractor:
                             print "WTF", bid, cid
             except:
                 print "Could not open file for writing:",file_name,sys.exc_info()[0]
-                raise               
-        
+                raise
+
     def  extractReads(self, bams=[]):
         """Extract reads from sam files and write to file"""
         # load data
         self.BM = binManager.BinManager(dbFileName=self.dbFileName)   # bins
         self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
-        self.PM = self.BM.PM         
+        self.PM = self.BM.PM
 
         print "Extracting reads"
         # work out a set of targets to pass to the parser
@@ -146,13 +146,13 @@ class GMExtractor:
                 targets[self.PM.contigNames[row_index]] = bid
         # get something to parse the bams with
         bam_parser = BTBP()
-        bam_parser.extractReads(bams, 
-                                '', 
-                                targets,   
-                                combineBams=False, 
+        bam_parser.extractReads(bams,
+                                '',
+                                targets,
+                                combineBams=False,
                                 headersOnly = True,
                                 dontTrustSamFlags=False,
-                                folder=self.outDir, 
+                                folder=self.outDir,
                                 verbose=True
                                 )
 
@@ -203,12 +203,12 @@ class BinExplorer:
             if bids is not None:
                 for bid in bids:
                     bins.append(self.BM.getBin(bid))
-    
+
             if show:
                 file=""
             elif not file.endswith(filetype):
                 file += "." + filetype
-                    
+
             self.PM.renderTransCPData(fileName=file,
                                       elev=elevation,
                                       azim=azimuth,
@@ -221,15 +221,15 @@ class BinExplorer:
                                       alpha=alpha
                                       )
             del fig
-    
+
             if invert:
                 # invert the colors
                 from PIL import Image
-                import PIL.ImageOps    
+                import PIL.ImageOps
                 image = Image.open(file)
                 inverted_image = PIL.ImageOps.invert(image)
-                inverted_image.save(file)        
-        
+                inverted_image.save(file)
+
     def plotFlyOver(self, timer, fps=10.0, totalTime=120.0):
         """Plot a flyover of the data with bins being removed"""
         self.BM.loadBins(timer,
@@ -244,7 +244,7 @@ class BinExplorer:
         else:
             print "Plotting flyover"
             all_bids = self.BM.getBids()
-    
+
             # control image form and output
             current_azim = 45.0
             current_elev = 0.0
@@ -254,7 +254,7 @@ class BinExplorer:
             total_elev_shift = 360.0
             azim_increment = total_azim_shift / total_frames
             elev_increment = total_elev_shift / total_frames
-            
+
             print "Need",total_frames,"frames:"
             # we need to know when to remove each bin
             bid_remove_rate = float(len(all_bids)) / total_frames
@@ -279,11 +279,11 @@ class BinExplorer:
                 current_frame += 1
                 current_azim += azim_increment
                 current_elev += elev_increment
-                print bid_remove_rate*current_frame, current_frame, "BR:",bids_removed, int(bid_remove_rate*current_frame) 
+                print bid_remove_rate*current_frame, current_frame, "BR:",bids_removed, int(bid_remove_rate*current_frame)
                 while bids_removed < int(bid_remove_rate*current_frame):
                     restricted_bids.append(all_bids[current_bid_index])
                     current_bid_index += 1
-                    bids_removed += 1                
+                    bids_removed += 1
             del fig
 
     def plotBinProfiles(self, timer):
@@ -317,7 +317,7 @@ class BinExplorer:
                 if self.bids == []:
                     self.bids = self.BM.getBids()
                 self.BM.plotMultipleBins([self.bids], squash=True)
-    
+
     def plotPoints(self, timer):
         """plot points"""
         self.BM.loadBins(timer,
@@ -330,7 +330,7 @@ class BinExplorer:
         else:
             print "Plotting bin points"
             self.BM.plotBinPoints()
-    
+
     def plotSideBySide(self, timer, coreCut):
         """Plot cores side by side with their contigs"""
         self.PM2 = binManager.ProfileManager(dbFileName=self.BM.PM.dbFileName)
@@ -357,13 +357,13 @@ class BinExplorer:
         if len(self.BM.bins) == 0:
             print "Sorry, no bins to plot"
         else:
-            print "Plotting side by side graphs"        
+            print "Plotting side by side graphs"
             (bin_centroid_points, bin_centroid_colors, bin_ids) = self.BM.findCoreCentres()
             self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colors)
 
     def plotIds(self, timer):
         """Make a 3d plot of the bins but use IDs instead of points
-        
+
         This function will help users know which bins to merge
         """
         self.BM.loadBins(timer,
@@ -374,16 +374,16 @@ class BinExplorer:
         if len(self.BM.bins) == 0:
             print "Sorry, no bins to plot"
         else:
-            print "Plotting bin IDs"        
+            print "Plotting bin IDs"
             self.BM.plotBinIds()
 
     def plotUnbinned(self, timer, coreCut):
         """Plot all contigs over a certain length which are unbinned"""
-        print "Plotting unbinned contigs"        
+        print "Plotting unbinned contigs"
         self.PM.plotUnbinned(timer, coreCut, transform=self.transform)
-            
+
 #------------------------------------------------------------------------------
-# IO and IMAGE RENDERING 
+# IO and IMAGE RENDERING
 
     def plotCoresVsContigs(self, binCentroidPoints, binCentroidColors, azim=0, elev=0, fileName='', dpi=300, format='png'):
         """Render the image for validating cores"""
@@ -392,7 +392,7 @@ class BinExplorer:
             # plot on screen for user
             fig = plt.figure()
             ax1 = fig.add_subplot(121, projection='3d')
-            ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors=self.PM2.contigColors, c=self.PM2.contigColors, s=disp_lens, marker='.')
+            ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors='k', c=self.PM2.contigGCs, cmap=self.PM2.colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens, marker='.')
             ax2 = fig.add_subplot(122, projection='3d')
             ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColors, c=binCentroidColors)
             self.BM.plotStoitNames(ax1)
@@ -409,7 +409,7 @@ class BinExplorer:
             f_name2 = fileName + "_2"
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors='none', c=self.PM2.contigColors, marker='.')
+            ax.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors='none', c=self.PM2.contigGCs, cmap=self.PM2.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
             ax.azim = azim
             ax.elev = elev
             ax.set_xlim3d(0,self.PM2.scaleFactor)
@@ -424,26 +424,26 @@ class BinExplorer:
             self.BM.plotStoitNames(ax)
 
             try:
-                fig.set_size_inches(12,12)            
+                fig.set_size_inches(12,12)
                 plt.savefig(f_name1,dpi=dpi,format=format)
                 plt.close(fig)
             except:
                 print "Error saving image",f_name1, sys.exc_info()[0]
                 raise
             del fig
-            
+
             fig = plt.figure()
             ax = fig.gca(projection='3d')
             outer_index = 0
             for bid in self.BM.getBids():
-                ax.text(binCentroidPoints[outer_index,0], 
-                        binCentroidPoints[outer_index,1], 
-                        binCentroidPoints[outer_index,2], 
-                        str(int(bid)), 
+                ax.text(binCentroidPoints[outer_index,0],
+                        binCentroidPoints[outer_index,1],
+                        binCentroidPoints[outer_index,2],
+                        str(int(bid)),
                         color=binCentroidColors[outer_index]
                         )
                 outer_index += 1
-            
+
             ax.azim = azim
             ax.elev = elev
             ax.set_xlim3d(0,self.PM2.scaleFactor)
@@ -458,7 +458,7 @@ class BinExplorer:
             self.BM.plotStoitNames(ax)
 
             try:
-                fig.set_size_inches(12,12)            
+                fig.set_size_inches(12,12)
                 plt.savefig(f_name2,dpi=dpi,format=format)
                 plt.close(fig)
             except:

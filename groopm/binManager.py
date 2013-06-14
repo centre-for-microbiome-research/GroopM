@@ -146,6 +146,9 @@ class BinManager:
         self.squish=squish
 
 
+    def setColorMap(self, colorMapStr):
+      self.PM.setColorMap(colorMapStr)
+
 #------------------------------------------------------------------------------
 # LOADING / SAVING
 
@@ -1003,12 +1006,7 @@ class BinManager:
                 bin_centroid_points = np_append(bin_centroid_points,
                                                 self.bins[bid].covMeans)
 
-                bin_centroid_colors = np_append(bin_centroid_colors,
-                                                np_mean([
-                                                         self.PM.contigColors[row_index] for row_index in
-                                                         self.bins[bid].rowIndices
-                                                         ],
-                                                         axis=0))
+                bin_centroid_colors = np_append(bin_centroid_colors, self.PM.colorMapGC(np_mean(self.PM.contigGCs[self.bins[bid].rowIndices])))
 
                 bin_centroid_gc = np_append(bin_centroid_gc, np_mean(self.PM.contigGCs[self.bins[bid].rowIndices]))
 
@@ -1026,7 +1024,7 @@ class BinManager:
 
         if num_added != 0:
             bin_centroid_points = np_reshape(bin_centroid_points, (num_added, 3))
-            bin_centroid_colors = np_reshape(bin_centroid_colors, (num_added, 3))
+            bin_centroid_colors = np_reshape(bin_centroid_colors, (num_added, 4))
 
         if getKVals:
             return (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bin_centroid_kvals, bids)
@@ -1203,14 +1201,21 @@ class BinManager:
                            self.PM.transformedCP,
                            self.PM.contigGCs,
                            self.PM.contigLengths,
-                           self.PM.contigColors,
                            self.PM.colorMapGC,
                            ET=ET,
                            printID=True,
                            plotColorbar=(num_cols==1 and i==0)
                            )
         if plotMers:
-            ax.set_title('Coverage')
+
+            title = "Bin: %d : %d contigs : %s BP\n" % (bid, len(self.bins[bid].rowIndices), np_sum(self.PM.contigLengths[self.bins[bid].rowIndices]))
+            title += "Coverage centroid: %d %d %d\n" % (np_mean(self.PM.transformedCP[self.bins[bid].rowIndices,0]),
+                                                                        np_mean(self.PM.transformedCP[self.bins[bid].rowIndices,1]),
+                                                                        np_mean(self.PM.transformedCP[self.bins[bid].rowIndices,2]))
+            title += "GC: mean: %.4f stdev: %.4f\n" % (np_mean(self.PM.contigGCs[self.bins[bid].rowIndices]), np_std(self.PM.contigGCs[self.bins[bid].rowIndices]))
+
+            ax.set_title(title)
+
             ax = fig.add_subplot(1, 2, 2)
             for i, bid in enumerate(bids):
                 self.bins[bid].plotMersOnAx(ax,
@@ -1218,7 +1223,6 @@ class BinManager:
                                             self.PM.kmerPCs[:,1],
                                             self.PM.contigGCs,
                                             self.PM.contigLengths,
-                                            self.PM.contigColors,
                                             self.PM.colorMapGC,
                                             ET=ET,
                                             printID=True,
@@ -1295,7 +1299,7 @@ class BinManager:
             ALL_BIDS = []
             for bids in bins:
                 for bid in bids:
-                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, ET=et, plotCentroid=pc)
+                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, ET=et, plotCentroid=pc)
 
             plot_num += 1
             if semi_untransformed:
@@ -1307,7 +1311,7 @@ class BinManager:
                 ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
                 plot_num += 1
                 for bid in bids:
-                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, ET=et, plotCentroid=pc)
+                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, ET=et, plotCentroid=pc)
 
         try:
             plt.show()
@@ -1336,9 +1340,9 @@ class BinManager:
             print "Plotting bins"
             for bid in self.getBids():
                 if folder != '':
-                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, fileName=osp_join(folder, FNPrefix+"_"+str(bid)), ET=ET)
+                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.colorMapGC, fileName=osp_join(folder, FNPrefix+"_"+str(bid)), ET=ET)
                 else:
-                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, FNPrefix+"_"+str(bid), ET=ET)
+                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.colorMapGC, FNPrefix+"_"+str(bid), ET=ET)
 
     def plotSideBySide(self, bids, fileName="", tag="", use_elipses=True):
         """Plot two bins side by side in 3d"""
@@ -1377,7 +1381,7 @@ class BinManager:
         for plot_num, bid in enumerate(bids):
             title = self.bins[bid].plotOnFig(fig, plot_rows, plot_cols, plot_num+1,
                                               self.PM.transformedCP, self.PM.contigGCs, self.PM.contigLengths,
-                                              self.PM.contigColors, self.PM.colorMapGC, ET=ET, fileName=fileName,
+                                              self.PM.colorMapGC, ET=ET, fileName=fileName,
                                               plotColorbar=(plot_num == len(bids)-1), extents=[xMin, xMax, yMin, yMax, zMin, zMax])
             plt.title(title)
         if(fileName != ""):
