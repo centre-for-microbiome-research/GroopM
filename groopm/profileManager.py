@@ -630,6 +630,31 @@ class ProfileManager:
             discrete_map.append((0,0,0))
             self.colorMapGC = LinearSegmentedColormap.from_list('GC_DISCRETE', discrete_map, N=20)
 
+        elif colorMapStr == 'DiscretePaired':
+            discrete_map = [(0,0,0)]
+            discrete_map.append((0,0,0))
+            discrete_map.append((0,0,0))
+
+            discrete_map.append((0,0,0))
+            discrete_map.append((166/255.0,206/255.0,227/255.0))
+            discrete_map.append((31/255.0,120/255.0,180/255.0))
+            discrete_map.append((178/255.0,223/255.0,138/255.0))
+            discrete_map.append((51/255.0,160/255.0,44/255.0))
+            discrete_map.append((251/255.0,154/255.0,153/255.0))
+            discrete_map.append((227/255.0,26/255.0,28/255.0))
+            discrete_map.append((253/255.0,191/255.0,111/255.0))
+            discrete_map.append((255/255.0,127/255.0,0/255.0))
+            discrete_map.append((202/255.0,178/255.0,214/255.0))
+            discrete_map.append((106/255.0,61/255.0,154/255.0))
+            discrete_map.append((255/255.0,255/255.0,179/255.0))
+            discrete_map.append((217/255.0,95/255.0,2/255.0))
+            discrete_map.append((1,1,1))
+
+            discrete_map.append((0,0,0))
+            discrete_map.append((0,0,0))
+            discrete_map.append((0,0,0))
+            self.colorMapGC = LinearSegmentedColormap.from_list('GC_DISCRETE', discrete_map, N=20)
+
     def plotStoitNames(self, ax):
         """Plot stoit names on an existing axes"""
         outer_index = 0

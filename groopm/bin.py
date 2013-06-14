@@ -62,6 +62,7 @@ from pylab import plot,subplot,axis,stem,show,figure
 import numpy as np
 #import scipy.ndimage as ndi
 import scipy.spatial.distance as ssdist
+from scipy.spatial.distance import cdist, pdist
 from scipy.stats import kstest
 
 import time
@@ -105,7 +106,7 @@ class Bin:
         self.cValUpperLimit = 0.0
         self.cValLowerLimit = 0.0
 
-        # KMER VALUES (1ST AXIS IN PCA)
+        # KMER DISTANCE VALUES
         self.kValMean = 0.0
         self.kValStdev = 0.0
         self.kValUpperLimit = 0.0
@@ -233,7 +234,7 @@ class Bin:
         (self.covMeans, self.covStdevs) = self.getCentroidStats(transformedCP)
         (self.lengthMean, self.lengthStd) = self.getCentroidStats(contigLengths)
 
-        kvals = [kmerNormPC1[i] for i in self.rowIndices]
+        kvals = kmerNormPC1[self.rowIndices]
         self.kValMean = np.mean(kvals)
         self.kValStdev = np.std(kvals)
 

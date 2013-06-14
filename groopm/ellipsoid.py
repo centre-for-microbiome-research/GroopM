@@ -101,8 +101,6 @@ class EllipsoidTool:
             try:
                 M = np.diag(np.dot(QT , np.dot(linalg.inv(V), Q)))    # M the diagonal vector of an NxN matrix
             except linalg.linalg.LinAlgError:
-                print 'SINGULAR!!!!!!!!!!!!!'
-
                 # most likely a singular matrix
                 # permute the values a little and then we'll try again
                 from random import random, randint
@@ -137,8 +135,20 @@ class EllipsoidTool:
                                np.array([[a * b for b in center] for a in center])
                                ) / d
             except linalg.linalg.LinAlgError:
-                print 'Still Singular!'
-                print 'Mike - what is up with this?'
+                # the matrix is singular so we need to return a degenerate ellipse
+                #print '[Notice] Degenerate ellipse constructed indicating a bin with extremely small coverage divergence.'
+                center = np.mean(P, axis=0)
+                radii = np.max(P,axis=0) - np.min(P, axis=0)
+
+                if len(P[0]) == 3:
+                  rotation = [[0,0,0],[0,0,0],[0,0,0]]
+                else:
+                  rotation = [[0,0],[0,0]]
+
+                if retA:
+                  return (None, center, radii, rotation)
+                else:
+                  return (center, radii, rotation)
 
         # Get the values we'd like to return
         U, s, rotation = linalg.svd(A)
@@ -154,7 +164,7 @@ class EllipsoidTool:
         if len(radii) == 2:
             return np.pi*radii[0]*radii[1]
         else:
-            return 0.75*np.pi*radii[0]*radii[1]*radii[2]
+            return (4.0/3.0)*np.pi*radii[0]*radii[1]*radii[2]
 
     def doesIntersect3D(self, A, cA, B, cB):
         """Rough test to see if ellipsoids A and B intersect
@@ -164,6 +174,17 @@ class EllipsoidTool:
         """
         #To make things simple, we just check if the points on a wire frame of
         #B lie within A
+
+        # Quick check if the centre of B is within ellipse A. This deals with
+        # degenerate cases where B is only a single point or an otherwise
+        # degenerate ellipse.
+        p_c = cB - cA
+        if np.dot(p_c.T, np.dot(A, p_c)) <= 1:
+          return True
+
+        if A == None or B == None: # degenerate ellipse that can't be processed
+          return False
+
         U, s, rotation = linalg.svd(B)
         try:
             radii_B = 1.0/np.sqrt(s)
@@ -176,10 +197,12 @@ class EllipsoidTool:
 
         u = np.linspace(0.0, 2.0 * np.pi, 100)
         v = np.linspace(0.0, np.pi, 100)
+
         # cartesian coordinates that correspond to the spherical angles:
         x = radii_B[0] * np.outer(np.cos(u), np.sin(v))
         y = radii_B[1] * np.outer(np.sin(u), np.sin(v))
         z = radii_B[2] * np.outer(np.ones_like(u), np.cos(v))
+
         # rotate accordingly
         for i in range(len(x)):
             for j in range(len(x)):
@@ -190,6 +213,7 @@ class EllipsoidTool:
                 p_c = wire_point - cA
                 if np.dot(p_c.T, np.dot(A, p_c)) <= 1:
                     return True
+
         return False
 
     def doesIntersect2D(self, A, cA, B, cB):
@@ -200,6 +224,17 @@ class EllipsoidTool:
         """
         #To make things simple, we just check if the points on a wire frame of
         #B lie within A
+
+        # Quick check if the centre of B is within ellipse A. This deals with
+        # degenerate cases where B is only a single point or an otherwise
+        # degenerate ellipse.
+        p_c = cB - cA
+        if np.dot(p_c.T, np.dot(A, p_c)) <= 1:
+          return True
+
+        if A == None or B == None:  # degenerate ellipse that can't be processed
+          return False
+
         U, s, rotation = linalg.svd(B)
         try:
             radii_B = 1.0/np.sqrt(s)

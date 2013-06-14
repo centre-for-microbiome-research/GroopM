@@ -109,7 +109,7 @@ from numpy.random import (randint as randint,
 
 from scipy.spatial import KDTree as kdt
 from scipy.cluster.vq import kmeans,vq,whiten,kmeans2
-from scipy.spatial.distance import cdist, squareform
+from scipy.spatial.distance import cdist, squareform, pdist
 
 # GroopM imports
 from binManager import BinManager
@@ -231,16 +231,17 @@ class RefineEngine:
                 print "  4. Spectral"
                 print "  5. Grayscale"
                 print "  6. Discrete (14 colors)"
+                print "  7. Discrete paired (14 colors)"
 
                 bValid = False
                 while(not bValid):
                   try:
                       colormap_id = int(raw_input(" Enter colormap number (e.g., 1): "))
-                      if colormap_id < 1 or colormap_id > 6:
+                      if colormap_id < 1 or colormap_id > 7:
                         raise ValueError('Invalid colormap id.')
                       bValid = True
                   except ValueError:
-                        print "Colormap must be specified as a number between 1 and 6."
+                        print "Colormap must be specified as a number between 1 and 7."
 
                 if colormap_id == 1:
                   self.PM.setColorMap('HSV')
@@ -254,6 +255,8 @@ class RefineEngine:
                   self.PM.setColorMap('Grayscale')
                 elif colormap_id == 6:
                   self.PM.setColorMap('Discrete')
+                elif colormap_id == 7:
+                  self.PM.setColorMap('DiscretePaired')
 
             elif(user_option == 'E'):
                 if use_elipses:
@@ -849,7 +852,8 @@ class RefineEngine:
             should_merge = False
             # test if the mer dist is teensy tiny.
             # this is a time saver...
-            k_diff = np_abs(self.BM.bins[bid1].kValMean - self.BM.bins[bid2].kValMean)
+            k_diff = np_mean(cdist(self.PM.kmerPCs[self.BM.bins[bid1].rowIndices], self.PM.kmerPCs[self.BM.bins[bid2].rowIndices]))
+
             #if VVB:
             #    print bid1, bid2, k_diff,
             mers_OK = False
@@ -1382,8 +1386,8 @@ class RefineEngine:
         mean_k_vals = []
         for bid in self.BM.getBids():
             bin = self.BM.bins[bid]
-            bin_k_vals = [[self.PM.kmerNormPC1[row_index]] for row_index in bin.rowIndices]
-            k_dist = squareform(cdist(bin_k_vals, bin_k_vals))
+            bin_k_vals = self.PM.kmerPCs[bin.rowIndices]
+            k_dist = pdist(bin_k_vals)
             if len(k_dist) > 0:
                 mean_k_vals.append(np_mean(k_dist))
 
