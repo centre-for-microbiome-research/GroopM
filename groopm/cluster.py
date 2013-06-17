@@ -272,7 +272,7 @@ class ClusterEngine:
                         bin = self.BM.makeNewBin(rowIndices=center_row_indices)
 
                         # work out the distribution in points in this bin
-                        bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
+                        bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.kmerPCs, self.PM.contigGCs, self.PM.contigLengths)
 
                         # append this bins list of mapped rowIndices to the main list
                         bids_made.append(bin.id)
@@ -280,7 +280,10 @@ class ClusterEngine:
                         self.updatePostBin(bin)
 
                         if(self.debugPlots):
-                            bin.plotBin(self.PM.transformedCP, self.PM.kmerNormPC1, self.PM.contigLengths, fileName="FRESH_"+str(self.imageCounter))
+                            bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
+                                          self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric[bid],
+                                          fileName="FRESH_"+str(self.imageCounter))
+
                             self.imageCounter += 1
                             self.plotHeat("HM_%d.%d.png" % (self.roundNumber, sub_round_number), max=max_blur_value, x=max_x, y=max_y)
                             sub_round_number += 1
@@ -302,8 +305,8 @@ class ClusterEngine:
                                         None,
                                         bids=bids_made,
                                         loose=2.,
-                                        verbose=True,
-                                        silent=False)
+                                        verbose=False,
+                                        silent=True)
 
                 # do some post processing
                 for bid in bids_made:
@@ -326,7 +329,7 @@ class ClusterEngine:
                             sub_counter += 10
                             print "\n%4d" % sub_counter,
 
-                        bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, fileName="CORE_BIN_%d"%(bin.id)) #***slow plot!
+                        #bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric[bid], fileName="CORE_BIN_%d"%(bin.id)) #***slow plot!
 
                     except BinNotFoundException: pass
 
@@ -416,8 +419,6 @@ class ClusterEngine:
 
     def smartTwoWayContraction(self, rowIndices, positionInPlane):
       """Partition a collection of contigs into 'core' groups"""
-
-      print 'Starting two way contraction' #$$$
 
       debugPlots = False
 
@@ -612,15 +613,12 @@ class ClusterEngine:
         if np_mean(k_deltas) < k_converged and np_mean(c_deltas) < c_converged:
           break
 
-      print 'Ending two way contraction' #$$$
-      print 'Starting Hough Transform' #$$$
-
       # perform hough transform clustering
       self.HP.hc += 1
-      
-      print "======================\n======================\n======================"
-      print "GRID %d " % self.HP.hc
-      
+
+      #print "======================\n======================\n======================"
+      #print "GRID %d " % self.HP.hc
+
       if debugPlots:
           (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
       else:
@@ -814,8 +812,6 @@ class ClusterEngine:
       ret_parts = []
       for p in partitions:
           ret_parts.append(np_array(row_indices[p]))
-
-      print 'Ending Hough Transform' #$$$
 
       return np_array(ret_parts)
 
@@ -1383,9 +1379,9 @@ class HoughPartitioner:
             print "------------------"
             for ii in squished_rets:
                 print len(ii)
-            
+
             print "=================="
-        return (np_array(squished_rets), np_array(squished_keeps))  
+        return (np_array(squished_rets), np_array(squished_keeps))
 
     def recursiveSelect(self,
                         tData,
@@ -1475,7 +1471,9 @@ class HoughPartitioner:
                     if real_index not in assigned:
                         tmp[real_index] = None
                         assigned[real_index] = None
-                rets.append(np_array(tmp.keys()))
+
+                if len(tmp.keys()) > 0:
+                  rets.append(np_array(tmp.keys()))
 
             else:
                 # otherwise we keep working with ranges
@@ -1507,7 +1505,9 @@ class HoughPartitioner:
                     if real_index not in assigned:
                         tmp[real_index] = None
                         assigned[real_index] = None
-                rets.append(np_array(tmp.keys()))
+
+                if len(tmp.keys()) > 0:
+                  rets.append(np_array(tmp.keys()))
             else:
                 right_p = self.recursiveSelect(tData,
                                                imShape,
@@ -1525,8 +1525,6 @@ class HoughPartitioner:
 
     def points2Line(self, points, xIndexLim, yIndexLim, thickness):
         """Draw a thick line between a series of points"""
-
-        print "In points2Line" #$$$
 
         line_points = []
         num_points = len(points)
@@ -1555,17 +1553,12 @@ class HoughPartitioner:
                     for x in range(np_max([point[1]-thickness, 0]),np_min([point[1]+thickness+1,xIndexLim])):
                         thick_points[(y,x)] = 1
 
-        print "Exiting points2Line" #$$$
-
         return thick_points
 
     def houghTransform(self, data, imShape):
         """Calculate Hough transform
 
         Data is a 2D numpy array"""
-
-
-        print "In houghTransform" #$$$
 
         (rows, cols) = imShape
         d_len = len(data)
@@ -1577,8 +1570,6 @@ class HoughPartitioner:
         dr = rmax / (half_rows)
         dth = np_pi / cols
         accumulator = np_ones((rows * cols))*255
-
-        print "a" #$$$
 
         """
         For speed we numpify this loop. I just keep this here
@@ -1602,8 +1593,6 @@ class HoughPartitioner:
         Cs = np_array(range(cols)*d_len)
         flat_indices = Rs * cols + Cs
 
-        print "b" #$$$
-
         # update the accumulator with integer decrements
         decrements = np_bincount(flat_indices.astype('int'))
         index = 0
@@ -1618,8 +1607,6 @@ class HoughPartitioner:
         min_col = minindex - (min_row*cols)
         theta = float(min_col) * dth
         rad = float(min_row - half_rows)*dr
-
-        print "c" #$$$
 
         # now de hough!
         try:
@@ -1639,8 +1626,6 @@ class HoughPartitioner:
 
         if m < 0:
             m = 0.
-
-        print "Exiting houghTransform" #$$$
 
         return (m, c, accumulator.reshape((rows, cols)))
 

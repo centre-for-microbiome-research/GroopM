@@ -106,11 +106,15 @@ class Bin:
         self.cValUpperLimit = 0.0
         self.cValLowerLimit = 0.0
 
-        # KMER DISTANCE VALUES
-        self.kValMean = 0.0
-        self.kValStdev = 0.0
-        self.kValUpperLimit = 0.0
-        self.kValLowerLimit = 0.0
+        # KMER VALUES for ALL PCs
+        self.kMeans = None
+        self.kStdev = None
+
+        # NORMALIZED PC1 KMER VALUES
+        self.kValMeanNormPC1 = 0.0
+        self.kValStdevNormPC1  = 0.0
+        self.kValUpperLimitNormPC1  = 0.0
+        self.kValLowerLimitNormPC1  = 0.0
 
         # GC VALUES
         self.gcMean = 0.0
@@ -127,9 +131,9 @@ class Bin:
 
     def __cmp__(self, alien):
         """Sort bins based on the normalized first PC of kmer signatures."""
-        if self.kValMean < alien.kValMean:
+        if self.kValMeanNormPC1 < alien.kValMean:
             return -1
-        elif self.kValMean == alien.kValMean:
+        elif self.kValMeanNormPC1 == alien.kValMean:
             return 0
         else:
             return 1
@@ -137,7 +141,7 @@ class Bin:
 #------------------------------------------------------------------------------
 # Grow and shrink
 
-    def consume(self, transformedCP, averageCoverages, kmerNormPC1, contigGCs, contigLengths, deadBin, verbose=False):
+    def consume(self, transformedCP, averageCoverages, kmerNormPC1, kmerPCs, contigGCs, contigLengths, deadBin, verbose=False):
         """Combine the contigs of another bin with this one"""
         # consume all the other bins rowIndices
         if(verbose):
@@ -146,7 +150,7 @@ class Bin:
         self.binSize  = self.rowIndices.shape[0]
 
         # fix the stats on our bin
-        self.makeBinDist(transformedCP, averageCoverages, kmerNormPC1, contigGCs, contigLengths)
+        self.makeBinDist(transformedCP, averageCoverages, kmerNormPC1, kmerPCs, contigGCs, contigLengths)
 
     def scoreProfile(self, kmerVal, transformedCP):
         """Determine how similar this profile is to the bin distribution
@@ -155,39 +159,10 @@ class Bin:
         """
         #print self.covStdevs, self.binSize
         covZ = np.abs(np.mean(np.abs(transformedCP - self.covMeans)/self.covStdevs))
-        merZ = np.abs(kmerVal - self.kValMean)/self.kValStdev
+        merZ = np.abs(kmerVal - self.kValMeanNormPC1)/self.kValStdevNormPC1
         return (covZ,merZ)
 
-    def isSimilar(self, alien, merValTol=5, covTol=5):
-        """See if two bins are similar
-
-        Uses huge tolerances, so USE with caution!
-        """
-        this_upper = self.kValMean + merValTol * self.kValStdev
-        this_lower = self.kValMean - merValTol * self.kValStdev
-        that_upper = alien.kValMean + merValTol * alien.kValStdev
-        that_lower = alien.kValMean - merValTol * alien.kValStdev
-        if(alien.kValMean < this_lower or alien.kValMean > this_upper):
-            #print "1", (alien.kValMean < this_lower), (alien.kValMean > this_upper), alien.kValMean, this_lower, this_upper
-            return False
-        if(self.kValMean < that_lower or self.kValMean > that_upper):
-            #print "2", (self.kValMean < that_lower), (self.kValMean > that_upper), self.kValMean, that_lower, that_upper
-            return False
-
-        this_upper = self.covMeans + covTol*self.covStdevs
-        this_lower = self.covMeans - covTol*self.covStdevs
-        that_upper = alien.covMeans + covTol*alien.covStdevs
-        that_lower = alien.covMeans - covTol*alien.covStdevs
-        for i in range(3):
-            if(alien.covMeans[i] < this_lower[i] or alien.covMeans[i] > this_upper[i]):
-                #print "3", i, (alien.covMeans[i] < this_lower[i]),(alien.covMeans[i] > this_upper[i]), alien.covMeans[i], this_lower[i], this_upper[i]
-                return False
-            if(self.covMeans[i] < that_lower[i] or self.covMeans[i] > that_upper[i]):
-                #print "4", i, (self.covMeans[i] < that_lower[i]), (self.covMeans[i] > that_upper[i]), self.covMeans[i], that_lower[i], that_upper[i]
-                return False
-        return True
-
-    def purge(self, deadIndices, transformedCP, averageCoverages, kmerNormPC1, contigGCs, contigLengths):
+    def purge(self, deadIndices, transformedCP, averageCoverages, kmerNormPC1, kmerPCs, contigGCs, contigLengths):
         """Delete some rowIndices and remake stats"""
         old_ri = self.rowIndices
         self.rowIndices = np.array([])
@@ -196,7 +171,7 @@ class Bin:
                 self.rowIndices = np.append(self.rowIndices, i)
 
         # fix the stats on our bin
-        self.makeBinDist(transformedCP, averageCoverages, kmerNormPC1, contigGCs, contigLengths)
+        self.makeBinDist(transformedCP, averageCoverages, kmerNormPC1, kmerPCs, contigGCs, contigLengths)
 
 #------------------------------------------------------------------------------
 # Stats and properties
@@ -210,17 +185,20 @@ class Bin:
         self.covLowerLimits = np.zeros((3)) # lower and upper limits based on tolerance
         self.covUpperLimits = np.zeros((3))
 
-        self.kValMean = 0.0
-        self.kValStdev = 0.0
-        self.kValUpperLimit = 0.0
-        self.kValLowerLimit = 0.0
+        self.kMeans = None
+        self.kStdevs = None
+
+        self.kValMeanNormPC1 = 0.0
+        self.kValStdevNormPC1 = 0.0
+        self.kValUpperLimitNormPC1 = 0.0
+        self.kValLowerLimitNormPC1 = 0.0
 
         self.gcMean = 0.0
         self.gcStdev = 0.0
         self.gcUpperLimit = 0.0
         self.gcLowerLimit = 0.0
 
-    def makeBinDist(self, transformedCP, averageCoverages, kmerNormPC1, contigGCs, contigLengths, covTol=-1, merTol=-1):
+    def makeBinDist(self, transformedCP, averageCoverages, kmerNormPC1, kmerPCs, contigGCs, contigLengths, covTol=-1, merTol=-1):
         """Determine the distribution of the points in this bin
 
         The distribution is largely normal, except at the boundaries.
@@ -234,17 +212,18 @@ class Bin:
         (self.covMeans, self.covStdevs) = self.getCentroidStats(transformedCP)
         (self.lengthMean, self.lengthStd) = self.getCentroidStats(contigLengths)
 
-        kvals = kmerNormPC1[self.rowIndices]
-        self.kValMean = np.mean(kvals)
-        self.kValStdev = np.std(kvals)
+        self.kValMeanNormPC1 = np.mean(kmerPCs[self.rowIndices])
+        self.kValStdevNormPC1 = np.std(kmerPCs[self.rowIndices])
+
+        self.kMeans = np.mean(kmerPCs[self.rowIndices], axis=0)
+        self.kStdevs = np.mean(kmerPCs[self.rowIndices], axis=0)
 
         cvals = self.getAverageCoverageDist(averageCoverages)
         self.cValMean = np.around(np.mean(cvals), decimals=3)
         self.cValStdev = np.around(np.std(cvals), decimals=3)
 
-        GCs = [contigGCs[i] for i in self.rowIndices]
-        self.gcMean = np.mean(GCs)
-        self.gcStdev = np.std(GCs)
+        self.gcMean = np.mean(contigGCs[self.rowIndices])
+        self.gcStdev = np.std(contigGCs[self.rowIndices])
 
         # work out the total size
         self.totalBP = sum([contigLengths[i] for i in self.rowIndices])
@@ -269,10 +248,10 @@ class Bin:
             if(self.covUpperLimits[i] > self.upperCov):
                 self.covUpperLimits[i] = self.upperCov
 
-        self.kValLowerLimit = self.kValMean - merTol * self.kValStdev
-        if(self.kValLowerLimit < 0):
-            self.kValLowerLimit = 0
-        self.kValUpperLimit = self.kValMean + merTol * self.kValStdev
+        self.kValLowerLimitNormPC1 = self.kValMeanNormPC1 - merTol * self.kValStdevNormPC1
+        if(self.kValLowerLimitNormPC1 < 0):
+            self.kValLowerLimitNormPC1 = 0
+        self.kValUpperLimitNormPC1 = self.kValMeanNormPC1 + merTol * self.kValStdevNormPC1
 
         self.gcLowerLimit = self.gcMean - gcTol * self.gcStdev
         if(self.gcLowerLimit < 0):
@@ -317,7 +296,7 @@ class Bin:
         """Work out the variance for the coverage/kmer/gc profile"""
         dists = []
         if(mode == "kmer"):
-            dists = [np.abs(self.kValMean - profile[i]) for i in self.rowIndices]
+            dists = [np.abs(self.kValMeanNormPC1 - profile[i]) for i in self.rowIndices]
         elif(mode =="cov"):
             dists = [self.getCDist(profile[i]) for i in self.rowIndices]
         elif(mode =="gc"):
@@ -403,7 +382,7 @@ class Bin:
         inRange = lambda x,l,u : x >= l and x < u
 
         # make the distribution
-        self.makeBinDist(PM.transformedCP, PM.averageCoverages, PM.kmerNormPC1, PM.contigGCs, PM.contigLengths)
+        self.makeBinDist(PM.transformedCP, PM.averageCoverages, PM.kmerNormPC1, PM.kmerPCs, PM.contigGCs, PM.contigLengths)
         c_lens = PM.contigLengths[self.rowIndices]
 
         for x in self.makeRanges(self.covMeans[0], inclusivity*self.covStdevs[0], PM.scaleFactor):
@@ -433,17 +412,6 @@ class Bin:
         self.rowIndices = np.array(adds)
         self.binSize = self.rowIndices.shape[0]
 
-#------------------------------------------------------------------------------
-# MEASURING
-#
-    def withinLimits(self, kmerNormPC1, averageCoverages, rowIndex, verbose=False):
-        """Is the contig within the limits of this bin?"""
-        if verbose:
-            print self.kValLowerLimit, kmerNormPC1[rowIndex], self.kValUpperLimit
-            print self.cValLowerLimit, averageCoverages[rowIndex], self.cValUpperLimit
-            print (kmerNormPC1[rowIndex] >= self.kValLowerLimit and kmerNormPC1[rowIndex] <= self.kValUpperLimit and averageCoverages[rowIndex] >= self.cValLowerLimit and averageCoverages[rowIndex] <= self.cValUpperLimit)
-            print "++++"
-        return kmerNormPC1[rowIndex] >= self.kValLowerLimit and kmerNormPC1[rowIndex] <= self.kValUpperLimit and averageCoverages[rowIndex] >= self.cValLowerLimit and averageCoverages[rowIndex] <= self.cValUpperLimit
 
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING
@@ -517,10 +485,11 @@ class Bin:
         del fig
 
 
-    def plotBin(self, transformedCP, contigGCs, kmerNormPC1, contigLengths, colorMapGC, fileName="", ET=None):
+    def plotBin(self, transformedCP, contigGCs, kmerNormPC1, contigLengths, colorMapGC, bLikelyChimeric, fileName="", ET=None):
         """Plot a single bin"""
         fig = plt.figure()
-        title = self.plotOnFig(fig, 1, 1, 1, transformedCP, contigGCs, contigLengths, colorMapGC, fileName=fileName, ET=ET)
+        title = self.plotOnFig(fig, 1, 1, 1, transformedCP, contigGCs, contigLengths, colorMapGC, bLikelyChimeric, fileName=fileName, ET=ET)
+
         plt.title(title)
         if(fileName != ""):
             try:
@@ -538,11 +507,11 @@ class Bin:
         plt.close(fig)
         del fig
 
-    def plotOnFig(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigGCs, contigLengths, colorMapGC, fileName="", ET=None, plotColorbar=True, extents=None):
+    def plotOnFig(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigGCs, contigLengths, colorMapGC, bLikelyChimeric, fileName="", ET=None, plotColorbar=True, extents=None):
         ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
-        return self.plotOnAx(ax, transformedCP, contigGCs, contigLengths, colorMapGC, fileName=fileName, ET=ET, plotColorbar=plotColorbar, extents=extents)
+        return self.plotOnAx(ax, transformedCP, contigGCs, contigLengths, colorMapGC, bLikelyChimeric, fileName=fileName, ET=ET, plotColorbar=plotColorbar, extents=extents)
 
-    def plotOnAx(self, ax, transformedCP, contigGCs, contigLengths, colorMapGC, fileName="", plotCentroid=True, ET=None, printID=False, plotColorbar=True, extents=None):
+    def plotOnAx(self, ax, transformedCP, contigGCs, contigLengths, colorMapGC, bLikelyChimeric, fileName="", plotCentroid=True, ET=None, printID=False, plotColorbar=True, extents=None):
         """Plot a bin in a given subplot
 
         If you pass through an EllipsoidTool then it will plot the minimum bounding ellipsoid as well!
@@ -607,6 +576,10 @@ class Bin:
                                cc_string,
                                "GC: mean: %.4f stdev: %.4f\n" % (self.gcMean, self.gcStdev)]
                          )
+
+        if bLikelyChimeric:
+          title += "\nLikely Chimeric"
+
         return title
 
     def plotMersOnAx(self, ax, kPCA1, kPCA2, contigGCs, contigLengths, colorMapGC, fileName="", ET=None, printID=False, plotColorbar=True):
@@ -642,20 +615,20 @@ class Bin:
             else:
                 ET.plotEllipse(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color)
 
-    def printBin(self, contigNames, covProfiles, contigGCs, contigLengths, outFormat="summary", separator="\t", stream=sys.stdout):
+    def printBin(self, contigNames, covProfiles, contigGCs, contigLengths, isLikelyChimeric, outFormat="summary", separator="\t", stream=sys.stdout):
         """print this bin info in csvformat"""
-        kvm_str = "%.4f" % self.kValMean
-        kvs_str = "%.4f" % self.kValStdev
+        kvm_str = "%.4f" % self.kValMeanNormPC1
+        kvs_str = "%.4f" % self.kValStdevNormPC1
         cvm_str = "%.4f" % self.cValMean
         cvs_str = "%.4f" % self.cValStdev
         gcm_str = "%.4f" % self.gcMean
         gcs_str = "%.4f" % self.gcStdev
 
         if(outFormat == 'summary'):
-            #print separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"cMean\"","\"cStdev\"","\"gcMean\"","\"gcStdev\"","\"kMean\"","\"kStdev\""])
-            stream.write(separator.join([str(self.id), str(self.totalBP), str(self.binSize), cvm_str, cvs_str, gcm_str, gcs_str])+"\n")
+            stream.write(separator.join([str(self.id), str(isLikelyChimeric[self.id]), str(self.totalBP), str(self.binSize), cvm_str, cvs_str, gcm_str, gcs_str])+"\n")
         elif(outFormat == 'full'):
             stream.write("#bid_"+str(self.id)+
+                  "_likelyChimeric_"+str(isLikelyChimeric[self.id])+
                   "_totalBP_"+str(self.totalBP)+
                   "_numCons_"+str(self.binSize)+
                   "_gcMean_"+gcm_str+
@@ -663,15 +636,14 @@ class Bin:
                   "_kMean_"+kvm_str+
                   "_kStdev_"+kvs_str+
                   "\n")
-            stream.write(separator.join(["#\"bid\"","\"cid\"","\"length\""])+"\n")
+            stream.write(separator.join(["#\"bid\"""\"cid\"","\"length\""])+"\n")
             for row_index in self.rowIndices:
                 stream.write(separator.join([str(self.id), contigNames[row_index], str(contigLengths[row_index])])+"\n")
         elif(outFormat == 'minimal'):
-            #print separator.join(["#\"bid\"","\"cid\"","\"length\"","\"GC\""])
             for row_index in self.rowIndices:
                 stream.write(separator.join([str(self.id), contigNames[row_index], str(contigLengths[row_index]), '%.4f' % contigGCs[row_index]])+"\n")
         elif(outFormat == 'user'):
-            data = [str(self.id), str(self.totalBP), str(self.binSize), gcm_str, gcs_str]
+            data = [str(self.id), str(isLikelyChimeric[self.id]), str(self.totalBP), str(self.binSize), gcm_str, gcs_str]
             cov_mean = np.mean(covProfiles[self.rowIndices], axis=0)
             cov_std = np.std(covProfiles[self.rowIndices], axis=0)
             for i in xrange(0, len(cov_mean)):

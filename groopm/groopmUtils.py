@@ -116,7 +116,10 @@ class GMExtractor:
         # now print out the sequences
         print "Writing files"
         for bid in self.BM.getBids():
-            file_name = os.path.join(self.outDir, "BIN_%d.fa" % bid)
+            if self.BM.PM.isLikelyChimeric[bid]:
+              file_name = os.path.join(self.outDir, "BIN_%d.chimeric.fa" % bid)
+            else:
+              file_name = os.path.join(self.outDir, "BIN_%d.fa" % bid)
             try:
                 with open(file_name, 'w') as f:
                     for row_index in self.BM.getBin(bid).rowIndices:
@@ -137,6 +140,7 @@ class GMExtractor:
         self.PM = self.BM.PM
 
         print "Extracting reads"
+
         # work out a set of targets to pass to the parser
         targets = {}
         bids = self.BM.getBids()
@@ -144,6 +148,7 @@ class GMExtractor:
             bin = self.BM.getBin(bid)
             for row_index in bin.rowIndices:
                 targets[self.PM.contigNames[row_index]] = bid
+
         # get something to parse the bams with
         bam_parser = BTBP()
         bam_parser.extractReads(bams,

@@ -83,6 +83,7 @@ from numpy import (abs as np_abs,
                    delete as np_delete,
                    dot as np_dot,
                    eye as np_eye,
+                   hstack as np_hstack,
                    max as np_max,
                    mean as np_mean,
                    median as np_median,
@@ -175,6 +176,7 @@ class RefineEngine:
             ignoreRanges=False
         else:
             ignoreRanges=True
+
         if auto:
             print "    Start automatic bin refinement"
             num_binned = len(self.PM.binnedRowIndices.keys())
@@ -200,6 +202,7 @@ class RefineEngine:
                     self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                                self.PM.averageCoverages,
                                                self.PM.kmerNormPC1,
+                                               self.PM.kmerPCs,
                                                self.PM.contigGCs,
                                                self.PM.contigLengths)
                 self.BM.plotBins(FNPrefix=plotFinal, ET=self.ET)
@@ -212,6 +215,7 @@ class RefineEngine:
     def plotterRefineBins(self, ignoreRanges=False):
         """combine similar bins using 3d plots"""
         use_elipses = True
+        show_chimeric_bins = False
         ET = self.ET
         self.printRefinePlotterInstructions()
         #self.BM.plotBinIds(ignoreRanges=ignoreRanges)
@@ -262,17 +266,25 @@ class RefineEngine:
                 if use_elipses:
                     ET = None
                     use_elipses = False
-                    print "Ellipses off"
+                    print "\nEllipses off"
                 else:
                     ET = self.ET
                     use_elipses = True
-                    print "Ellipses on"
+                    print "\nEllipses on"
+
+            elif(user_option == 'X'):
+                if show_chimeric_bins:
+                    show_chimeric_bins = False
+                    print "\nShowing likely chimeric bins."
+                else:
+                    show_chimeric_bins = True
+                    print "\nHiding likely chimeric bins."
 
             elif(user_option == 'R'):
-                self.BM.plotBinIds(ignoreRanges=ignoreRanges)
+                self.BM.plotBinIds(ignoreRanges=ignoreRanges, showChimeric=show_chimeric_bins)
 
             elif(user_option == 'P'):
-                self.BM.plotBinPoints(ignoreRanges=ignoreRanges)
+                self.BM.plotBinPoints(ignoreRanges=ignoreRanges, showChimeric=show_chimeric_bins)
 
             elif(user_option == 'M'):
                 # merge bins
@@ -388,6 +400,7 @@ class RefineEngine:
                 self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                               self.PM.averageCoverages,
                                               self.PM.kmerNormPC1,
+                                              self.PM.kmerPCs,
                                               self.PM.contigGCs,
                                               self.PM.contigLengths)
                 # now go point shopping
@@ -432,6 +445,7 @@ class RefineEngine:
                                            self.PM.contigGCs,
                                            self.PM.contigLengths,
                                            self.PM.colorMapGC,
+                                           self.PM.isLikelyChimeric,
                                            ET=ET)
                 try:
                     plt.show()
@@ -456,8 +470,6 @@ class RefineEngine:
         """Automagically refine bins"""
 
         sys_stdout.flush()
-        kCut = self.getKCut()
-        cCut = self.getCCut()
         graph = None
         if makeGraph:
             # lets make a graph
@@ -485,8 +497,10 @@ class RefineEngine:
                     graph[1].append('\t%d -> "OUTLIERS";' % (bid))
 
         # merge bins together
+        kCut = self.getKCut()
+        cCut = self.getCCut()
         if mergeSimilarBins:
-            self.mergeSimilarBins(kCut, cCut, graph=graph)
+            self.mergeSimilarBins(kCut, cCut, graph=graph, verbose=False)
             print "    %s" % timer.getTimeStamp()
             sys_stdout.flush()
 
@@ -496,6 +510,7 @@ class RefineEngine:
                 self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                               self.PM.averageCoverages,
                                               self.PM.kmerNormPC1,
+                                              self.PM.kmerPCs,
                                               self.PM.contigGCs,
                                               self.PM.contigLengths)
             self.BM.plotBins(FNPrefix="AFTER_OB", ET=self.ET)
@@ -503,7 +518,7 @@ class RefineEngine:
             sys_stdout.flush()
 
         if shuffleRefine:
-            nuked = self.shuffleRefineConitgs(timer)
+            nuked = self.shuffleRefineContigs(timer)
             print "    %s" % timer.getTimeStamp()
             sys_stdout.flush()
             if makeGraph:
@@ -528,39 +543,46 @@ class RefineEngine:
             return self.writeGV(graph)
 
     def nukeOutliers(self, verbose=False):
-        """Identify and remove small bins which contain mixed genomes
-
-        Uses Grubbs testing to identify outliers
-        """
+        """ Identify bins which contain mixed genomes based on GC.
+              Small bins are nuked, large bins are flagged as chimeric. """
         print "    Identifying possible chimeric cores"
         sys_stdout.flush()
 
         bids = self.BM.getBids()
+
         # first we need to build a distribution!
-        kval_stdev_distrb = []
+        gc_stdev_distrb = []
         for bid in bids:
             self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                        self.PM.averageCoverages,
                                        self.PM.kmerNormPC1,
+                                       self.PM.kmerPCs,
                                        self.PM.contigGCs,
                                        self.PM.contigLengths)
-            kval_stdev_distrb.append(self.BM.bins[bid].kValStdev)
+            gc_stdev_distrb.append(self.BM.bins[bid].gcStdev)
 
         # now we work out the distribution of stdevs
-        stdstd = np_std(kval_stdev_distrb)
-        stdmean = np_mean(kval_stdev_distrb)
+        stdstd = np_std(gc_stdev_distrb)
+        stdmean = np_mean(gc_stdev_distrb)
+
         dead_bins = []
+        num_chimeric_bins = 0
         for bid in bids:
-            Z = (self.BM.bins[bid].kValStdev - stdmean)/stdstd
-            if Z > 2 and self.BM.bins[bid].totalBP < 100000:
-                 dead_bins.append(bid)
+            Z = (self.BM.bins[bid].gcStdev - stdmean)/stdstd
+            if Z > 2:
+                if self.BM.bins[bid].totalBP < 100000:
+                    dead_bins.append(bid)
+                else:
+                    self.PM.isLikelyChimeric[bid] = True
+                num_chimeric_bins += 1
 
         # delete the bad bins
         self.BM.deleteBins(dead_bins,
                            force=True,
                            freeBinnedRowIndices=True,
                            saveBins=False)
-        print "    Identified %d possible chimeras leaving %d cores" % (len(dead_bins), len(self.BM.bins))
+
+        print "    Identified %d likely chimeras, removed %d small chimeric bins" % (num_chimeric_bins, len(dead_bins))
         return dead_bins
 
     def mergeSimilarBins(self, kCut, cCut, bids=[], verbose=False, graph=None, silent=False, loose=0.):
@@ -579,24 +601,30 @@ class RefineEngine:
         # identify merging groups
         mergers = self.findMergeGroups(verbose=verbose, bids=bids)
         num_bins_removed = 0
+
         # and then merge them
         for merge in mergers:
             bins_removed = self.combineMergers(merge, kCut, cCut, graph=graph)
             num_bins_removed += len(bins_removed)
         if not silent:
             print "    Merged %d of %d cores leaving %d cores total" % (num_bins_removed, len(bids), len(self.BM.bins))
+
         return num_bins_removed
 
     def findMergeGroups(self, bids=[], verbose=False):
         """Identify groups of contigs which could be merged"""
-        print "-->", bids
-        tdm = []                # these are used in the neighbor search
+        cov_tdm = []                # these are used in the neighbor search
+        kmer_tdm = []
+
         bid_2_tdm_index = {}
         tdm_index_2_bid = {}
 
         if bids == []:
             bids = self.BM.getBids()
-        K = 10                   # number of neighbours to test
+
+        K = 6                   # number of neighbours to test,
+                                # 6 seems reasonable since this allwos
+                                # for 1 neighbour per side in a 3D space
         if K > len(bids):
             K = len(bids)
 
@@ -625,25 +653,31 @@ class RefineEngine:
 
         index = 0
         for bid in bids:
+            if self.PM.isLikelyChimeric[bid]: # ignore bins that are likely chimeric
+              continue
+
             bin = self.BM.bins[bid]
+
             bin.makeBinDist(self.PM.transformedCP,
                             self.PM.averageCoverages,
                             self.PM.kmerNormPC1,
+                            self.PM.kmerPCs,
                             self.PM.contigGCs,
                             self.PM.contigLengths,
                             merTol=2.5)  # make the merTol a little larger...
 
-            # use a 4 dimensional vector [cov, cov, cov, mer]
-            tdm.append(np_append(bin.covMeans, [1000*bin.kValMean]))
+            # build coverage and kmer vectors for each bin (normalized as required)
+            cov_tdm.append(bin.covMeans)
+            kmer_tdm.append(bin.kMeans)
 
             # work out the volume of the minimum bounding coverage ellipsoid and kmer ellipse
             (bin_c_ellipsoids[bid], bin_c_ellipsoid_volumes[bid]) = bin.getBoundingCEllipsoidVol(self.PM.transformedCP, ET=self.ET, retA=True)
-            BP = np_array(zip([self.PM.kmerPCs[i,0]  for i in bin.rowIndices],
-                              [self.PM.kmerPCs[i,1] for i in bin.rowIndices])
-                          )
+
+            BP = self.PM.kmerPCs[bin.rowIndices,0:3]
             (bin_k_ellipses[bid], bin_k_ellipse_areas[bid]) = bin.getBoundingKEllipseArea(BP,
                                                                                           ET=self.ET,
                                                                                           retA=True)
+
             bin_c_lengths[bid] = [self.PM.contigLengths[row_index] for row_index in bin.rowIndices]
 
             bid_2_tdm_index[bid] = index
@@ -655,30 +689,40 @@ class RefineEngine:
             processed_pairs[self.BM.makeBidKey(bid, bid)] = True
 #-----
 # ALL Vs ALL
-        # make a search tree
-        search_tree = kdt(tdm)
-        tdm = np_array(tdm)
+        # make a search tree from whitened coverage means and kmer means
+        cp_cov_tdm = np_copy(cov_tdm)
+        c_mean_tdm = np_mean(cp_cov_tdm, axis=0)
+        c_std_tdm = np_std(cp_cov_tdm, axis=0)
+        c_whiten_tdm = (cp_cov_tdm - c_mean_tdm) / c_std_tdm
+
+        cov_search_tree = kdt(c_whiten_tdm)
+        kmer_search_tree = kdt(kmer_tdm)
         for bid in bids:
-            # get the base bid and trace the chain
-            # up through mergers...
+            if self.PM.isLikelyChimeric[bid]: # ignore bins that are likely chimeric
+              continue
+
+            # get the base bid and trace the chain up through mergers...
             merged_base_bid = bid
             base_bid = bid
             while merged_base_bid in merged_bins:
                 merged_base_bid = merged_bins[merged_base_bid]
             base_bin = self.BM.bins[base_bid]
 
-            # get the K closest bins
-            neighbor_list = [tdm_index_2_bid[i] for i in search_tree.query(tdm[bid_2_tdm_index[bid]],k=K)[1]]
+            # get the K closest bins in coverage and kmer space
+            cov_neighbor_list = [tdm_index_2_bid[i] for i in cov_search_tree.query(c_whiten_tdm[bid_2_tdm_index[bid]], k=K)[1]]
+            kmer_neighbor_list = [tdm_index_2_bid[i] for i in kmer_search_tree.query(kmer_tdm[bid_2_tdm_index[bid]], k=K)[1]]
+            common_neighbors = set(cov_neighbor_list).intersection(set(kmer_neighbor_list))
 
             if verbose:
                 print "++++++++++"
-                print bid, neighbor_list
+                print bid, cov_neighbor_list
+                print bid, kmer_neighbor_list
+                print bid, common_neighbors
 
             # test each neighbor in turn
-            for i in range(1,K):
-                # get the query bid and trace the chain
-                # up through mergers...
-                query_bid = neighbor_list[i]
+            for i, neighbor_index in enumerate(common_neighbors):
+                # get the query bid and trace the chain up through mergers...
+                query_bid = neighbor_index
                 merged_query_bid = query_bid
                 while merged_query_bid in merged_bins:
                     merged_query_bid = merged_bins[merged_query_bid]
@@ -691,8 +735,7 @@ class RefineEngine:
 
                 # process each BID pair once only (takes care of self comparisons too!)
                 seen_key = self.BM.makeBidKey(base_bid, query_bid)
-                if(seen_key in processed_pairs or
-                   merged_base_bid == merged_query_bid):
+                if(seen_key in processed_pairs or merged_base_bid == merged_query_bid):
                     if verbose:
                         print "TW"
                     continue
@@ -717,17 +760,17 @@ class RefineEngine:
 #-----
 # KMER ELLIPSE OVERLAP
                 if (bin_k_ellipse_areas[base_bid] <= bin_k_ellipse_areas[query_bid]):
-                    INTT = self.ET.doesIntersect2D(bin_k_ellipses[query_bid][0],
+                    INTT = self.ET.doesIntersect3D(bin_k_ellipses[query_bid][0],
                                                    bin_k_ellipses[query_bid][1],
                                                    bin_k_ellipses[base_bid][0],
                                                    bin_k_ellipses[base_bid][1])
                 else:
-                    INTT = self.ET.doesIntersect2D(bin_k_ellipses[base_bid][0],
+                    INTT = self.ET.doesIntersect3D(bin_k_ellipses[base_bid][0],
                                                    bin_k_ellipses[base_bid][1],
                                                    bin_k_ellipses[query_bid][0],
                                                    bin_k_ellipses[query_bid][1])
-                if verbose:
 
+                if verbose:
                     fig = plt.figure()
                     ax = fig.add_subplot(1, 1, 1)
                     base_bin.plotMersOnAx(ax,
@@ -771,9 +814,9 @@ class RefineEngine:
                 if verbose:
                     fig = plt.figure()
                     ax = fig.add_subplot(1, 1, 1, projection='3d')
-                    base_bin.plotOnAx(ax, self.PM.transformedCP, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, ET=self.ET)
-                    query_bin.plotOnAx(ax, self.PM.transformedCP, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, ET=self.ET)
-                    plt.title("MERGE: %d -> %d (%d)" % (base_bid, query_bid, INTT))
+                    base_bin.plotOnAx(ax, self.PM.transformedCP, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric, ET=self.ET)
+                    query_bin.plotOnAx(ax, self.PM.transformedCP, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric, ET=self.ET)
+                    plt.title("MERGE: %d -> %d (%d)" % (base_bid, query_bid, intersects))
                     plt.show()
                     plt.close(fig)
                     del fig
@@ -851,6 +894,7 @@ class RefineEngine:
             bid1 = bidList[i]
             bid2 = bidList[j]
             should_merge = False
+
             # test if the mer dist is teensy tiny.
             # this is a time saver...
             k_diff = np_mean(cdist(self.PM.kmerPCs[self.BM.bins[bid1].rowIndices], self.PM.kmerPCs[self.BM.bins[bid2].rowIndices]))
@@ -941,17 +985,18 @@ class RefineEngine:
                  silent=False,
                  animateFilePrefix=""):
         """Build, train and return a SOM for the given bids"""
-        bids = self.BM.getBids()
 
-        som_side = np_max([100, len(bids)*5])
         # produce the actual training data
         # this is the bin centroid values
-        training_data = np_zeros((len(bids),SOMDIM))
+        bids = self.BM.getNonChimericBinIds()
+        training_data = np_zeros((len(bids), SOMDIM))
         i = 0
         for bid in bids:
-            training_data[i,:-1] = np_mean([self.PM.transformedCP[row_index] for row_index in self.BM.bins[bid].rowIndices], axis=0)
-            training_data[i,-1] = np_mean([self.PM.kmerNormPC1[row_index] for row_index in self.BM.bins[bid].rowIndices], axis=0)
+            training_data[i,:-1] = np_mean(self.PM.transformedCP[self.BM.bins[bid].rowIndices], axis=0)
+            training_data[i,-1] = np_mean(self.PM.kmerNormPC1[self.BM.bins[bid].rowIndices], axis=0)
             i += 1
+
+        som_side = np_max([100, len(bids)*5])
 
         # normalise the data so it fits between 0 and 1
         # but make sure that the max global CP and mer values are
@@ -1093,7 +1138,7 @@ class RefineEngine:
             SS.renderWeights("S_%d"%bid)
 
 
-    def shuffleRefineConitgs(self, timer, inclusivity=2):
+    def shuffleRefineContigs(self, timer, inclusivity=2):
         """refine bins by shuffling contigs around"""
         print "    Start shuffle refinement"
 
@@ -1103,7 +1148,6 @@ class RefineEngine:
         for bid in bids:
             bin_c_lengths[bid] = [self.PM.contigLengths[row_index] for row_index in self.BM.bins[bid].rowIndices]
 
-        start_num_bins = len(bids)
         (SS, minz, maxz, side) = self.buildSOM(timer,
                                                maskBoundaries=True,
                                                defineBins=True,
@@ -1122,6 +1166,7 @@ class RefineEngine:
         block = np_zeros((len(self.PM.transformedCP),SOMDIM))
         block[:,:-1] = self.PM.transformedCP
         block[:,-1] = self.PM.kmerNormPC1
+
         # apply sane normalisation
         block -= minz
         block /= maxz
@@ -1213,7 +1258,8 @@ class RefineEngine:
         print "\n    ---------------------------------------------"
 
         # now get ready for saving.
-        # first, we nuke all the bins
+        # first, we nuke all non-chimeric bins
+        chimeric_bids = self.BM.getChimericBinIds()
         self.BM.deleteBins(bids, force=True, freeBinnedRowIndices=False, saveBins=False)
         self.BM.bins = {}
 
@@ -1223,6 +1269,7 @@ class RefineEngine:
         self.PM.validBinIds = {}              # { bid : numMembers }
         self.PM.binnedRowIndices = {}         # dictionary of those indices which belong to some bin
         self.PM.restrictedRowIndices = {}     # dictionary of those indices which can not be binned yet
+        self.PM.isLikelyChimeric = {}
 
         # now we rebuild all the bins but with the new assignments
         for bid in new_assignments:
@@ -1232,6 +1279,11 @@ class RefineEngine:
             for row_index in row_indices:
                 self.PM.binIds[row_index] = bid
                 self.PM.binnedRowIndices[row_index] = True
+
+        # remove any reassigned contigs within chimeric bins
+        for bid in chimeric_bids:
+            if bid in self.BM.getBids():
+              self.PM.isLikelyChimeric[bid] = True
 
         return []
 
@@ -1386,7 +1438,11 @@ class RefineEngine:
         """Work out the easy cutoff for kmerVal distance"""
         mean_k_vals = []
         for bid in self.BM.getBids():
+            if self.PM.isLikelyChimeric[bid]: # ignore bins that are likely chimeric
+              continue
+
             bin = self.BM.bins[bid]
+
             bin_k_vals = self.PM.kmerPCs[bin.rowIndices]
             k_dist = pdist(bin_k_vals)
             if len(k_dist) > 0:
@@ -1399,7 +1455,11 @@ class RefineEngine:
         mean_angles = []
         max_in_bin = 100 # at most XXX contigs per bin
         for bid in self.BM.getBids():
+            if self.PM.isLikelyChimeric[bid]:
+              continue
+
             bin = self.BM.bins[bid]
+
             if bin.binSize < max_in_bin:
                 sample_size = bin.binSize
             else:
@@ -1890,6 +1950,7 @@ class RefineEngine:
     def recruitWrapper(self, timer, inclusivity=2, step=200, nukeAll=False, saveBins=False):
         """Recuit more contigs to the bins"""
         print "Recruiting unbinned contigs"
+
         # make a list of all the cov and kmer vals
         num_bins = len(self.BM.bins)
         num_expanded = 1
@@ -1950,6 +2011,7 @@ class RefineEngine:
                 self.BM.bins[bid].makeBinDist(self.PM.transformedCP,
                                            self.PM.averageCoverages,
                                            self.PM.kmerNormPC1,
+                                           self.PM.kmerPCs,
                                            self.PM.contigGCs,
                                            self.PM.contigLengths)
             affected_bids = []
@@ -2044,7 +2106,7 @@ class RefineEngine:
     def promptOnPlotterRefine(self, minimal=False):
         """Find out what the user wishes to do next when refining bins"""
         input_not_ok = True
-        valid_responses = ['R','P','B','V','M','S','E', 'G','C','Q']
+        valid_responses = ['R','P','B','V','M','S','E', 'G','C','Q','X']
         vrs = ",".join([str.lower(str(x)) for x in valid_responses])
         while(input_not_ok):
             if(minimal):
@@ -2060,7 +2122,8 @@ class RefineEngine:
                                    " m = merge two or more bins\n" \
                                    " s = split a bin into multiple pieces\n" \
                                    " c = change colormap\n" \
-                                   " e = toggle elipses\n" \
+                                   " e = toggle elipses (default = on)\n" \
+                                   " x = toggle chimeric bins (default = hidden)\n" \
                                    " q = quit\n" \
                                    "------------------------------------------------------------\n" \
                                    " What next? ("+vrs+") : ")
@@ -2229,10 +2292,13 @@ class GrubbsTester:
         # get Z score for the maxValue
         v = (maxVal - np_mean(compVals+[maxVal]))/np_std(compVals+[maxVal], ddof=1)
         idx = len(compVals) - 1
+
         if idx > 999:
             idx = 999
+
         if verbose:
             print np_mean(compVals+[maxVal]), np_std(compVals+[maxVal], ddof=1), maxVal, v, idx, self.critVs[idx], v > self.critVs[idx]
+
         return v > self.critVs[idx]
 
 ###############################################################################

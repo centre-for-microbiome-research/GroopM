@@ -46,7 +46,7 @@ __version__ = "0.3.1"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
-__current_GMDB_version__ = 3
+__current_GMDB_version__ = 4
 
 ###############################################################################
 
@@ -150,6 +150,7 @@ class GMDataManager:
     table = 'bins'
     'bid'        : tables.Int32Col(pos=0)
     'numMembers' : tables.Int32Col(pos=1)
+    'isLikelyChimeric' : tables.BoolCol(pos=2)
 
     """
     def __init__(self): pass
@@ -229,11 +230,13 @@ class GMDataManager:
                     # report the bad contigs to the user
                     # and strip them before writing to the DB
                     print "****************************************************************"
-                    print " IMPORTANT! - the following %d contigs have 0 coverage" % len(bad_indices)
-                    print " across all stoits. They will be ignored:"
+                    print " IMPORTANT! - there are %d contigs with 0 coverage" % len(bad_indices)
+                    print " across all stoits. They will be ignored. Example contigs:"
                     print "****************************************************************"
-                    for i in bad_indices:
-                        print con_names[i]
+                    for i in xrange(0, min(5, len(bad_indices))):
+                        print con_names[bad_indices[i]]
+                    if len(bad_indices) > 5:
+                      print '(+ %d additional contigs)' % (len(bad_indices)-5)
                     print "****************************************************************"
 
                     con_names = con_names[good_indices]
@@ -429,6 +432,7 @@ class GMDataManager:
         upgrade_tasks[(0,1)] = self.upgradeDB_0_to_1
         upgrade_tasks[(1,2)] = self.upgradeDB_1_to_2
         upgrade_tasks[(2,3)] = self.upgradeDB_2_to_3
+        upgrade_tasks[(3,4)] = self.upgradeDB_3_to_4
 
         # we need to apply upgrades in order!
         # keep applying the upgrades as long as we need to
@@ -485,7 +489,7 @@ class GMDataManager:
         print ""
         # the change in this version is that we'll be saving a variable number of kmerSig PCA's
         # and GC information for each contig
-        print "    Calculating and storing the kemr signature PCAs"
+        print "    Calculating and storing the kmer signature PCAs"
 
         # grab any data needed from database before opening if for modification
         bin_ids = self.getBins(dbFileName)
@@ -617,6 +621,68 @@ class GMDataManager:
         self.setGMDBFormat(dbFileName, 3)
         print "*******************************************************************************"
 
+
+    def upgradeDB_3_to_4(self, dbFileName):
+        """Upgrade a GM db from version 3 to version 4"""
+        print "*******************************************************************************\n"
+        print "              *** Upgrading GM DB from version 3 to version 4 ***"
+        print ""
+        print "                            please be patient..."
+        print ""
+        # the change in this version is that we'll be saving the variance for each kmerSig PCA
+        print "    Adding chimeric flag for each bin."
+        print "    !!! Groopm core must be run again for this flag to be properly set. !!!"
+
+        # read existing data in 'bins' table
+        try:
+            with tables.openFile(dbFileName, mode='r') as h5file:
+                ret_dict = {}
+                all_rows = h5file.root.meta.bins.read()
+                for row in all_rows:
+                    ret_dict[row[0]] = row[1]
+        except:
+            print "Error opening DB:", dbFileName, exc_info()[0]
+            raise
+
+        # write new table with chimeric flag set to False by default
+        db_desc = [('bid', int),
+                   ('numMembers', int),
+                   ('isLikelyChimeric', bool)]
+
+        data = []
+        for bid in ret_dict:
+          data.append((bid, ret_dict[bid], False))
+
+        bd = np.array(data, dtype=db_desc)
+
+        try:
+            with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+                mg = h5file.getNode('/', name='meta')
+
+                try:
+                    h5file.removeNode(mg, 'tmp_bins')
+                except:
+                    pass
+
+                try:
+                    h5file.createTable(mg,
+                                       'tmp_bins',
+                                       bd,
+                                       title="Bin information",
+                                       expectedrows=1)
+                except:
+                    print "Error creating META table:", exc_info()[0]
+                    raise
+
+                h5file.renameNode(mg, 'bins', 'tmp_bins', overwrite=True)
+        except:
+            print "Error opening DB:",dbFileName, exc_info()[0]
+            raise
+
+        # update the formatVersion field and we're done
+        self.setGMDBFormat(dbFileName, 4)
+        print "*******************************************************************************"
+
 #------------------------------------------------------------------------------
 # GET LINKS
 
@@ -687,10 +753,12 @@ class GMDataManager:
         """Set bins table
 
         updates is a list of tuples which looks like:
-        [ (bid, numMembers) ]
+        [ (bid, numMembers, isLikelyChimeric) ]
         """
+
         db_desc = [('bid', int),
-                   ('numMembers', int)]
+                   ('numMembers', int),
+                   ('isLikelyChimeric', bool)]
         bd = np.array(updates, dtype=db_desc)
 
         try:
@@ -727,14 +795,15 @@ class GMDataManager:
         """Load data from bins table
 
         Returns a dict of type:
-        { bid : numMembers }
+        { bid : [numMembers, isLikelyChimeric] }
         """
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
                 ret_dict = {}
                 all_rows = h5file.root.meta.bins.read()
                 for row in all_rows:
-                    ret_dict[row[0]] = row[1]
+                    ret_dict[row[0]] = [row[1], row[2]]
+
                 return ret_dict
         except:
             print "Error opening DB:",dbFileName, exc_info()[0]

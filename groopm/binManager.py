@@ -253,7 +253,7 @@ class BinManager:
                     invalid_bids.append(bid)
                 else:
                     self.bins[bid] = Bin(np_array(binMembers[bid]), bid, self.PM.scaleFactor-1)
-                    self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
+                    self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.kmerPCs, self.PM.contigGCs, self.PM.contigLengths)
         if len(invalid_bids) != 0:
             print "MT bins!"
             print invalid_bids
@@ -304,13 +304,14 @@ class BinManager:
 
         Note that this call effectively nukes the existing table
         """
+
         # create and array of tuples:
-        # [(bid, size)]
+        # [(bid, size, likelyChimeric)]
         bin_stats = []
         for bid in self.getBids():
             # no point in saving empty bins
             if np_size(self.bins[bid].rowIndices) > 0:
-                bin_stats.append((bid, np_size(self.bins[bid].rowIndices)))
+                bin_stats.append((bid, np_size(self.bins[bid].rowIndices), self.PM.isLikelyChimeric[bid]))
         self.PM.setBinStats(bin_stats)
 
 
@@ -497,7 +498,7 @@ class BinManager:
             ret_vecs = np_zeros((len(self.bins)))
             outer_index = 0
             for bid in self.getBids():
-                ret_vecs[outer_index] = self.bins[bid].kValMean
+                ret_vecs[outer_index] = self.bins[bid].kValMeanNormPC1
                 outer_index += 1
             return ret_vecs
         elif(mode == "cov"):
@@ -538,7 +539,7 @@ class BinManager:
         # we will need to confer with the user
         # plot some stuff
         # sort the bins by kmer val
-        bid_tuples = [(tbid, self.bins[tbid].kValMean) for tbid in bids[1:]]
+        bid_tuples = [(tbid, self.bins[tbid].kValMeanNormPC1) for tbid in bids[1:]]
         bid_tuples.sort(key=itemgetter(1))
         index = 1
         for pair in bid_tuples:
@@ -640,7 +641,7 @@ class BinManager:
 
                 for row_index in holding_array:
                     bin_assignment_update[row_index] = split_bin.id
-                split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
+                split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.kmerPCs, self.PM.contigGCs, self.PM.contigLengths)
                 bids.append(split_bin.id)
                 holding_array = np_array([])
                 current_group = idx[i]
@@ -652,7 +653,7 @@ class BinManager:
             split_bin = self.makeNewBin(holding_array)
             for row_index in holding_array:
                 bin_assignment_update[int(row_index)] = split_bin.id
-            split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
+            split_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.kmerPCs, self.PM.contigGCs, self.PM.contigLengths)
             bids.append(split_bin.id)
 
         return (bin_assignment_update, bids)
@@ -686,10 +687,10 @@ class BinManager:
                     return False
                 if merTol != 0:
                     # Tolerance based testing
-                    upper_k_val_cut = bin1.kValMean + merTol * bin1.kValStdev
-                    lower_k_val_cut = bin1.kValMean - merTol * bin1.kValStdev
+                    upper_k_val_cut = bin1.kValMeanNormPC1 + merTol * bin1.kValStdevNormPC1
+                    lower_k_val_cut = bin1.kValMeanNormPC1 - merTol * bin1.kValStdevNormPC1
 
-                    if bin2.kValMean >= lower_k_val_cut and bin2.kValMean <= upper_k_val_cut:
+                    if bin2.kValMeanNormPC1 >= lower_k_val_cut and bin2.kValMeanNormPC1 <= upper_k_val_cut:
                         mer_match = True
                     else:
                         mer_match = False
@@ -740,7 +741,7 @@ class BinManager:
             dead_bin = self.getBin(bids[0])
             for row_index in dead_bin.rowIndices:
                 self.PM.binIds[row_index] = parent_bin.id
-            parent_bin.consume(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths, dead_bin, verbose=verbose)
+            parent_bin.consume(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.kmerPCs, self.PM.contigGCs, self.PM.contigLengths, dead_bin, verbose=verbose)
             self.deleteBins([bids[0]], force=True)
         else:
             # just use the first given as the parent
@@ -757,7 +758,7 @@ class BinManager:
                 continue_merge = True
             else:
                 tmp_bin = self.makeNewBin(np_concatenate([parent_bin.rowIndices,dead_bin.rowIndices]))
-                tmp_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
+                tmp_bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.kmerPCs, self.PM.contigGCs, self.PM.contigLengths)
                 self.plotSideBySide([parent_bin.id,dead_bin.id,tmp_bin.id], use_elipses=use_elipses)
                 self.deleteBins([tmp_bin.id], force=True)
                 user_option = self.promptOnMerge(bids=[parent_bin.id,dead_bin.id])
@@ -779,6 +780,7 @@ class BinManager:
                 parent_bin.consume(self.PM.transformedCP,
                                    self.PM.averageCoverages,
                                    self.PM.kmerNormPC1,
+                                   self.PM.kmerPCs,
                                    self.PM.contigGCs,
                                    self.PM.contigLengths,
                                    dead_bin,
@@ -815,6 +817,22 @@ class BinManager:
         else:
             raise ge.BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
 
+    def getChimericBinIds(self):
+      bids = []
+      for bid in self.bins:
+          if self.PM.isLikelyChimeric[bid]:
+              bids.append(bid)
+
+      return bids
+
+    def getNonChimericBinIds(self):
+      bids = []
+      for bid in self.bins:
+          if not self.PM.isLikelyChimeric[bid]:
+              bids.append(bid)
+
+      return bids
+
     def deleteBins(self, bids, force=False, freeBinnedRowIndices=False, saveBins=False):
         """Purge a bin from our lists"""
         if(not force):
@@ -824,6 +842,7 @@ class BinManager:
         bin_assignment_update = {}
         for bid in bids:
             if bid in self.bins:
+                del self.PM.isLikelyChimeric[bid]
                 if(freeBinnedRowIndices):
                     for row_index in self.bins[bid].rowIndices:
                         try:
@@ -846,6 +865,8 @@ class BinManager:
         if bid is None:
             self.nextFreeBinId +=1
             bid = self.nextFreeBinId
+
+        self.PM.isLikelyChimeric[bid] = False
         self.bins[bid] = Bin(rowIndices, bid, self.PM.scaleFactor-1)
         return self.bins[bid]
 
@@ -983,7 +1004,7 @@ class BinManager:
 
 #------------------------------------------------------------------------------
 # BIN STATS
-    def findCoreCentres(self, gc_range=None, getKVals=False):
+    def findCoreCentres(self, gc_range=None, getKVals=False, processChimeric=False):
         """Find the point representing the centre of each core"""
         bin_centroid_points = np_array([])
         bin_centroid_colors = np_array([])
@@ -997,6 +1018,9 @@ class BinManager:
             gc_high = gc_range[1]
         num_added = 0
         for bid in self.getBids():
+            if not processChimeric and self.PM.isLikelyChimeric[bid]:
+              continue
+
             add_bin = True
             if gc_range is not None:
                 avg_gc = np_mean([self.PM.contigGCs[row_index] for row_index in self.bins[bid].rowIndices])
@@ -1159,11 +1183,11 @@ class BinManager:
         # handle the headers first
         separator = "\t"
         if(outFormat == 'summary'):
-            stream.write(separator.join(["#\"bid\"","\"totalBP\"","\"numCons\"","\"cMean\"","\"cStdev\"","\"GC Mean\"","\"GC Stdev\""])+"\n")
+            stream.write(separator.join(["#\"bid\"","\"Likely chimeric\"","\"totalBP\"","\"numCons\"","\"cMean\"","\"cStdev\"","\"GC Mean\"","\"GC Stdev\""])+"\n")
         elif(outFormat == 'minimal'):
             stream.write(separator.join(["#\"bid\"","\"cid\"","\"length\"","\"GC\""])+"\n")
         elif(outFormat == 'user'):
-          header = ["\"bin id\"","\"length (bp)\"","\"# seqs\"","\"GC mean\"","\"GC std\""]
+          header = ["\"bin id\"","\"Likely chimeric\"","\"length (bp)\"","\"# seqs\"","\"GC mean\"","\"GC std\""]
           for i in xrange(0, len(self.PM.covProfiles[0])):
             header.append("\"Coverage " + str(i+1) + " mean\"")
             header.append("\"Coverage " + str(i+1) + " std\"")
@@ -1175,8 +1199,11 @@ class BinManager:
             return
 
         for bid in self.getBids():
-            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
-            self.bins[bid].printBin(self.PM.contigNames, self.PM.covProfiles, self.PM.contigGCs, self.PM.contigLengths, outFormat=outFormat, separator=separator, stream=stream)
+            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1,
+                                        self.PM.kmerPCs, self.PM.contigGCs, self.PM.contigLengths)
+            self.bins[bid].printBin(self.PM.contigNames, self.PM.covProfiles, self.PM.contigGCs,
+                                    self.PM.contigLengths, self.PM.isLikelyChimeric,
+                                    outFormat=outFormat, separator=separator, stream=stream)
 
     def plotProfileDistributions(self):
         """Plot the coverage and kmer distributions for each bin"""
@@ -1202,6 +1229,7 @@ class BinManager:
                            self.PM.contigGCs,
                            self.PM.contigLengths,
                            self.PM.colorMapGC,
+                           self.PM.isLikelyChimeric,
                            ET=ET,
                            printID=True,
                            plotColorbar=(num_cols==1 and i==0)
@@ -1299,7 +1327,7 @@ class BinManager:
             ALL_BIDS = []
             for bids in bins:
                 for bid in bids:
-                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, ET=et, plotCentroid=pc)
+                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric, ET=et, plotCentroid=pc)
 
             plot_num += 1
             if semi_untransformed:
@@ -1311,7 +1339,7 @@ class BinManager:
                 ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
                 plot_num += 1
                 for bid in bids:
-                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, ET=et, plotCentroid=pc)
+                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric, ET=et, plotCentroid=pc)
 
         try:
             plt.show()
@@ -1332,7 +1360,8 @@ class BinManager:
             makeSurePathExists(folder)
 
         for bid in self.getBids():
-            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
+            self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.kmerPCs, self.PM.contigGCs, self.PM.contigLengths)
+
         if(sideBySide):
             print "Plotting side by side"
             self.plotSideBySide(self.bins.keys(), tag=FNPrefix)
@@ -1340,9 +1369,13 @@ class BinManager:
             print "Plotting bins"
             for bid in self.getBids():
                 if folder != '':
-                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.colorMapGC, fileName=osp_join(folder, FNPrefix+"_"+str(bid)), ET=ET)
+                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
+                                            self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric[bid],
+                                            fileName=osp_join(folder, FNPrefix+"_"+str(bid)), ET=ET)
                 else:
-                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.colorMapGC, FNPrefix+"_"+str(bid), ET=ET)
+                    self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
+                                              self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric[bid],
+                                              FNPrefix+"_"+str(bid), ET=ET)
 
     def plotSideBySide(self, bids, fileName="", tag="", use_elipses=True):
         """Plot two bins side by side in 3d"""
@@ -1381,8 +1414,9 @@ class BinManager:
         for plot_num, bid in enumerate(bids):
             title = self.bins[bid].plotOnFig(fig, plot_rows, plot_cols, plot_num+1,
                                               self.PM.transformedCP, self.PM.contigGCs, self.PM.contigLengths,
-                                              self.PM.colorMapGC, ET=ET, fileName=fileName,
+                                              self.PM.colorMapGC, self.PM.isLikelyChimeric[bid], ET=ET, fileName=fileName,
                                               plotColorbar=(plot_num == len(bids)-1), extents=[xMin, xMax, yMin, yMax, zMin, zMax])
+
             plt.title(title)
         if(fileName != ""):
             try:
@@ -1404,9 +1438,9 @@ class BinManager:
         """Plot stoit names on an existing axes"""
         self.PM.plotStoitNames(ax)
 
-    def plotBinIds(self, gc_range=None, ignoreRanges=False):
+    def plotBinIds(self, gc_range=None, ignoreRanges=False, showChimeric=False):
         """Render 3d image of core ids"""
-        (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bids) = self.findCoreCentres(gc_range=gc_range)
+        (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bids) = self.findCoreCentres(gc_range=gc_range,processChimeric=showChimeric)
         fig = plt.figure()
         ax = fig.gca(projection='3d')
         ax.set_xlabel('x coverage')
@@ -1442,9 +1476,9 @@ class BinManager:
             raise
         del fig
 
-    def plotBinPoints(self, ignoreRanges=False, plotColorbar=True):
+    def plotBinPoints(self, ignoreRanges=False, plotColorbar=True, showChimeric=False):
         """Render the image for validating cores"""
-        (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bids) = self.findCoreCentres()
+        (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bids) = self.findCoreCentres(processChimeric=showChimeric)
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         print bin_centroid_gc
