@@ -326,7 +326,8 @@ class ClusterEngine:
                             sub_counter += 10
                             print "\n%4d" % sub_counter,
 
-                        bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.contigColors, self.PM.colorMapGC, fileName="CORE_BIN_%d"%(bin.id)) #***slow plot!
+                        if(self.debugPlots):
+                            bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.colorMapGC, fileName="CORE_BIN_%d"%(bin.id))  #***slow plot!
 
                     except BinNotFoundException: pass
 
@@ -416,8 +417,6 @@ class ClusterEngine:
 
     def smartTwoWayContraction(self, rowIndices, positionInPlane):
       """Partition a collection of contigs into 'core' groups"""
-
-      print 'Starting two way contraction' #$$$
 
       debugPlots = False
 
@@ -601,30 +600,20 @@ class ClusterEngine:
         if len(row_indices) == 0:
           return None
 
-        if False:
-            print 'iter:' + str(iter)
-            print 'k_converged:' + str(k_converged)
-            print 'np_mean(k_deltas):' + str(np_mean(k_deltas))
-            print 'c_converged:' + str(c_converged)
-            print 'np_mean(c_deltas):' + str(np_mean(c_deltas))
-
         # check for convergence
         if np_mean(k_deltas) < k_converged and np_mean(c_deltas) < c_converged:
           break
 
-      print 'Ending two way contraction' #$$$
-      print 'Starting Hough Transform' #$$$
-
       # perform hough transform clustering
       self.HP.hc += 1
       
-      print "======================\n======================\n======================"
-      print "GRID %d " % self.HP.hc
       
       if debugPlots:
-          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
+          print "======================\n======================\n======================"
+          print "GRID %d " % self.HP.hc, "( Debug =", debugPlots,")"
+          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, scale=True, imgTag="MER")
       else:
-          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat)
+          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, scale=True)
 
       if(len(k_partitions) == 0):
         return None
@@ -740,9 +729,9 @@ class ClusterEngine:
 
                   # The PCA may reverse the ordering. So we just check here quickly
                   if debugPlots:
-                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV")
+                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV", scale=True)
                   else:
-                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data)
+                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, scale=True)
 
 
                   if debugPlots:
@@ -814,8 +803,6 @@ class ClusterEngine:
       ret_parts = []
       for p in partitions:
           ret_parts.append(np_array(row_indices[p]))
-
-      print 'Ending Hough Transform' #$$$
 
       return np_array(ret_parts)
 
@@ -1185,7 +1172,7 @@ class HoughPartitioner:
     def __init__(self):
         self.hc = 0
 
-    def houghPartition(self, dAta, lengths, imgTag=None):
+    def houghPartition(self, dAta, lengths, scale=False, imgTag=None):
         """Use the hough transform to find k clusters for some unknown value of K"""
         d_len_raw = int(len(dAta))
         if d_len_raw < 2:
@@ -1243,30 +1230,43 @@ class HoughPartitioner:
         data = np_array(spread_data)
         data -= np_min(data)    # shift to 0 but DO NOT scale to 1
         d_len = len(data)
+        if scale is False:
+            scale = d_len
+        else:
+            scale = np_max(dAta) - np_min(dAta)
 
-        # we want to know how much each value differs from it's neighbours
-        back_diffs = [float(data[i] - data[i-1]) for i in range(1,d_len)]
-        diffs = [back_diffs[0]]
-        for i in range(len(back_diffs)-1):
-            diffs.append((back_diffs[i] + back_diffs[i+1])/2)
-        diffs.append(back_diffs[-1])
-        diffs = np_array(diffs)**2  # square it! Makes things more betterrer
+        if True:
+            # we want to know how much each value differs from it's neighbours
+            back_diffs = [float(data[i] - data[i-1]) for i in range(1,d_len)]
+            diffs = [back_diffs[0]]
+            for i in range(len(back_diffs)-1):
+                diffs.append((back_diffs[i] + back_diffs[i+1])/2)
+            diffs.append(back_diffs[-1])
+            diffs = np_array(diffs)**2  # square it! Makes things more betterrer
+    
+            # replace the data array by the sum of it's diffs
+            for i in range(1, d_len):
+                diffs[i] += diffs[i-1]
+    
+            # scale to fit between 0 and len(diffs)
+            # HT works better on a square
+            diffs -= np_min(diffs)
+            try:
+                diffs /= np_max(diffs)
+            except FloatingPointError:
+                pass
+            diffs *= len(diffs)
 
-        # replace the data array by the sum of it's diffs
-        for i in range(1, d_len):
-            diffs[i] += diffs[i-1]
-
-        # scale to fit between 0 and len(diffs)
-        # HT works better on a square
-        diffs -= np_min(diffs)
-        try:
-            diffs /= np_max(diffs)
-        except FloatingPointError:
-            pass
-        diffs *= len(diffs)
-
-        # make it 2D
-        t_data = np_array(zip(diffs, np_arange(d_len)))
+            # make it 2D
+            t_data = np_array(zip(diffs, np_arange(d_len)))
+        else:
+            try:
+                data /= np_max(data)
+            except FloatingPointError:
+                pass
+            data *= scale 
+            t_data = np_array(zip(data, np_arange(d_len)))
+            
         im_shape = (int(np_max(t_data, axis=0)[0]+1), d_len)
 
         #----------------------------------------------------------------------
@@ -1289,70 +1289,74 @@ class HoughPartitioner:
         real2spread = {}
         j = 0
         flat_data = []
-        for i in range(len(dAta)):
-            real_index = sorted_indices_raw[i]
-            rep = scales_per[real_index]
-            for k in range(rep):
-                flat_data.append(dAta[real_index])
-                try:
-                    real2spread[real_index].append(j)
-                except KeyError:
-                    real2spread[real_index] = [j]
-                j += 1
-        data -= np_min(flat_data)
-        back_diffs = [float(data[i] - data[i-1]) for i in range(1,d_len)]
-        diffs = [back_diffs[0]]
-        for i in range(len(back_diffs)-1):
-            diffs.append((back_diffs[i] + back_diffs[i+1])/2)
-        diffs.append(back_diffs[-1])
-        diffs = np_array(diffs)**2
-        for i in range(1, d_len):
-            diffs[i] += diffs[i-1]
-        diffs -= np_min(diffs)
-        try:
-            diffs /= np_max(diffs)
-        except FloatingPointError:
-            pass
-        diffs *= len(diffs)
+        if len(rets) > 1:
+            for i in range(len(dAta)):
+                real_index = sorted_indices_raw[i]
+                rep = scales_per[real_index]
+                for k in range(rep):
+                    flat_data.append(dAta[real_index])
+                    try:
+                        real2spread[real_index].append(j)
+                    except KeyError:
+                        real2spread[real_index] = [j]
+                    j += 1
+            data -= np_min(flat_data)
+            back_diffs = [float(data[i] - data[i-1]) for i in range(1,d_len)]
+            diffs = [back_diffs[0]]
+            for i in range(len(back_diffs)-1):
+                diffs.append((back_diffs[i] + back_diffs[i+1])/2)
+            diffs.append(back_diffs[-1])
+            diffs = np_array(diffs)**2
+            for i in range(1, d_len):
+                diffs[i] += diffs[i-1]
+            diffs -= np_min(diffs)
+            try:
+                diffs /= np_max(diffs)
+            except FloatingPointError:
+                pass
+            diffs *= len(diffs)
+    
+            # diffs is now the same size as the gradiated data sent through
+            # to hough in level 0. We wish to find the gradients of the lines
+            # returned by recursive partitioning
+            gradients = []
+            for ret in rets:
+                sis = []
+                for ii in ret:
+                    for si in real2spread[ii]:
+                        sis.append(diffs[si])
+                l_sis = len(sis)
+                if l_sis == 1:
+                    gradients.append(-1)
+                else:
+                    sis = sorted(sis)
+                    gradients.append((sis[-1] - sis[0])/l_sis)
+    
+            gradients = np_array(gradients)
+    
+            # get all the -1 gradients and make them equal to the larger
+            # of their neighbours
+            last = 0.
+            for g in range(len(gradients)):
+                if gradients[g] == -1:
+                    h = g + 1
+                    next = 0.
+                    # find the next not -1 gradient
+                    while(h < len(gradients)):
+                        if gradients[h] != -1:
+                            # use this one
+                            next = gradients[h]
+                            break
+                        h += 1
+                    gradients[g] = np_max([last, next])
+                else:
+                    last = gradients[g]
 
-        # diffs is now the same size as the gradiated data sent through
-        # to hough in level 0. We wish to find the gradients of the lines
-        # returned by recursive partitioning
-        gradients = []
-        for ret in rets:
-            sis = []
-            for ii in ret:
-                for si in real2spread[ii]:
-                    sis.append(diffs[si])
-            l_sis = len(sis)
-            if l_sis == 1:
-                gradients.append(-1)
-            else:
-                sis = sorted(sis)
-                gradients.append((sis[-1] - sis[0])/l_sis)
-
-        gradients = np_array(gradients)
-
-        # get all the -1 gradients and make them equal to the larger
-        # of their neighbours
-        last = 0.
-        for g in range(len(gradients)):
-            if gradients[g] == -1:
-                h = g + 1
-                next = 0.
-                # find the next not -1 gradient
-                while(h < len(gradients)):
-                    if gradients[h] != -1:
-                        # use this one
-                        next = gradients[h]
-                        break
-                    h += 1
-                gradients[g] = np_max([last, next])
-            else:
-                last = gradients[g]
-
+        else:
+            gradients=np_array([0.])
+            
         keeps = np_where(gradients >= 1, False, True)
-
+        
         squished_rets = []
         squished_keeps = []
         last_squshed = []
@@ -1373,18 +1377,6 @@ class HoughPartitioner:
             squished_rets.append(np_array(last_squshed))
             squished_keeps.append(True)
 
-        if False:
-            print "=================="
-            print gradients
-            print keeps
-            print squished_keeps
-            for ii in rets:
-                print len(ii)
-            print "------------------"
-            for ii in squished_rets:
-                print len(ii)
-            
-            print "=================="
         return (np_array(squished_rets), np_array(squished_keeps))  
 
     def recursiveSelect(self,
@@ -1418,7 +1410,7 @@ class HoughPartitioner:
             accumulator /= np_max(accumulator)
             accumulator *= 255
 
-            #imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
+            imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
 
         # see which points lie on the line
         # we need to protect against the data line crossing
@@ -1461,7 +1453,7 @@ class HoughPartitioner:
                 tmp[real_index] = None
                 assigned[real_index] = None
         centre = np_array(tmp.keys())
-
+        
         rets = []
 
         # recursive call for leftmost indices
@@ -1475,7 +1467,9 @@ class HoughPartitioner:
                     if real_index not in assigned:
                         tmp[real_index] = None
                         assigned[real_index] = None
-                rets.append(np_array(tmp.keys()))
+
+                if len(tmp.keys()) > 0:
+                  rets.append(np_array(tmp.keys()))
 
             else:
                 # otherwise we keep working with ranges
@@ -1507,7 +1501,9 @@ class HoughPartitioner:
                     if real_index not in assigned:
                         tmp[real_index] = None
                         assigned[real_index] = None
-                rets.append(np_array(tmp.keys()))
+
+                if len(tmp.keys()) > 0:
+                  rets.append(np_array(tmp.keys()))
             else:
                 right_p = self.recursiveSelect(tData,
                                                imShape,
@@ -1522,11 +1518,9 @@ class HoughPartitioner:
                     if len(R) > 0:
                         rets.append(R)
         return rets
-
+    
     def points2Line(self, points, xIndexLim, yIndexLim, thickness):
         """Draw a thick line between a series of points"""
-
-        print "In points2Line" #$$$
 
         line_points = []
         num_points = len(points)
@@ -1555,17 +1549,12 @@ class HoughPartitioner:
                     for x in range(np_max([point[1]-thickness, 0]),np_min([point[1]+thickness+1,xIndexLim])):
                         thick_points[(y,x)] = 1
 
-        print "Exiting points2Line" #$$$
-
         return thick_points
 
     def houghTransform(self, data, imShape):
         """Calculate Hough transform
 
         Data is a 2D numpy array"""
-
-
-        print "In houghTransform" #$$$
 
         (rows, cols) = imShape
         d_len = len(data)
@@ -1577,8 +1566,6 @@ class HoughPartitioner:
         dr = rmax / (half_rows)
         dth = np_pi / cols
         accumulator = np_ones((rows * cols))*255
-
-        print "a" #$$$
 
         """
         For speed we numpify this loop. I just keep this here
@@ -1602,8 +1589,6 @@ class HoughPartitioner:
         Cs = np_array(range(cols)*d_len)
         flat_indices = Rs * cols + Cs
 
-        print "b" #$$$
-
         # update the accumulator with integer decrements
         decrements = np_bincount(flat_indices.astype('int'))
         index = 0
@@ -1618,8 +1603,6 @@ class HoughPartitioner:
         min_col = minindex - (min_row*cols)
         theta = float(min_col) * dth
         rad = float(min_row - half_rows)*dr
-
-        print "c" #$$$
 
         # now de hough!
         try:
@@ -1639,8 +1622,6 @@ class HoughPartitioner:
 
         if m < 0:
             m = 0.
-
-        print "Exiting houghTransform" #$$$
 
         return (m, c, accumulator.reshape((rows, cols)))
 
