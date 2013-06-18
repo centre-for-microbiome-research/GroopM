@@ -275,10 +275,10 @@ class RefineEngine:
             elif(user_option == 'X'):
                 if show_chimeric_bins:
                     show_chimeric_bins = False
-                    print "\nShowing likely chimeric bins."
+                    print "\nHiding likely chimeric bins."
                 else:
                     show_chimeric_bins = True
-                    print "\nHiding likely chimeric bins."
+                    print "\nShowing likely chimeric bins."
 
             elif(user_option == 'R'):
                 self.BM.plotBinIds(ignoreRanges=ignoreRanges, showChimeric=show_chimeric_bins)
@@ -582,7 +582,7 @@ class RefineEngine:
                            freeBinnedRowIndices=True,
                            saveBins=False)
 
-        print "    Identified %d likely chimeras, removed %d small chimeric bins" % (num_chimeric_bins, len(dead_bins))
+        print "    Identified %d likely chimeric bin(s), removed %d small chimeric bin(s)" % (num_chimeric_bins, len(dead_bins))
         return dead_bins
 
     def mergeSimilarBins(self, kCut, cCut, bids=[], verbose=False, graph=None, silent=False, loose=0.):
@@ -693,6 +693,10 @@ class RefineEngine:
         cp_cov_tdm = np_copy(cov_tdm)
         c_mean_tdm = np_mean(cp_cov_tdm, axis=0)
         c_std_tdm = np_std(cp_cov_tdm, axis=0)
+        print c_std_tdm #$$$
+        c_std_tdm += np_where(c_std_tdm == 0)[0] # make sure std dev is never zero
+        print c_std_tdm
+        raw_input('*')
         c_whiten_tdm = (cp_cov_tdm - c_mean_tdm) / c_std_tdm
 
         cov_search_tree = kdt(c_whiten_tdm)
@@ -2106,7 +2110,7 @@ class RefineEngine:
     def promptOnPlotterRefine(self, minimal=False):
         """Find out what the user wishes to do next when refining bins"""
         input_not_ok = True
-        valid_responses = ['R','P','B','V','M','S','E', 'G','C','Q','X']
+        valid_responses = ['R','P','G','B','V','M','S', 'C','E','X','Q']
         vrs = ",".join([str.lower(str(x)) for x in valid_responses])
         while(input_not_ok):
             if(minimal):

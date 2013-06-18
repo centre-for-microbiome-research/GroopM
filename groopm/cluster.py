@@ -444,14 +444,11 @@ class ClusterEngine:
       # calculate radius threshold in whitened transformed coverage space
       eps_neighbours = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
 
-      try:
-        # calculate mean and std in coverage space for whitening data
-        c_mean = np_mean(c_dat, axis=0)
-        c_std = np_std(c_dat, axis=0)
-        c_whiten_dat = (c_dat-c_mean) / c_std
-      except:
-        # data has zero standard deviation ?
-        return [np_array(row_indices)]
+      # calculate mean and std in coverage space for whitening data
+      c_mean = np_mean(c_dat, axis=0)
+      c_std = np_std(c_dat, axis=0)
+      c_std += np_where(c_std == 0)[0] # make sure std dev is never zero
+      c_whiten_dat = (c_dat-c_mean) / c_std
 
       c_whiten_dist = pdist(c_whiten_dat)
       c_dist_matrix = squareform(c_whiten_dist)

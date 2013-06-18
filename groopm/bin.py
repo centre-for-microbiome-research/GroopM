@@ -485,10 +485,10 @@ class Bin:
         del fig
 
 
-    def plotBin(self, transformedCP, contigGCs, kmerNormPC1, contigLengths, colorMapGC, bLikelyChimeric, fileName="", ET=None):
+    def plotBin(self, transformedCP, contigGCs, kmerNormPC1, contigLengths, colorMapGC, isLikelyChimeric, fileName="", ET=None):
         """Plot a single bin"""
         fig = plt.figure()
-        title = self.plotOnFig(fig, 1, 1, 1, transformedCP, contigGCs, contigLengths, colorMapGC, bLikelyChimeric, fileName=fileName, ET=ET)
+        title = self.plotOnFig(fig, 1, 1, 1, transformedCP, contigGCs, contigLengths, colorMapGC, isLikelyChimeric, fileName=fileName, ET=ET)
 
         plt.title(title)
         if(fileName != ""):
@@ -507,15 +507,16 @@ class Bin:
         plt.close(fig)
         del fig
 
-    def plotOnFig(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigGCs, contigLengths, colorMapGC, bLikelyChimeric, fileName="", ET=None, plotColorbar=True, extents=None):
+    def plotOnFig(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigGCs, contigLengths, colorMapGC, isLikelyChimeric, fileName="", ET=None, plotColorbar=True, extents=None):
         ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
-        return self.plotOnAx(ax, transformedCP, contigGCs, contigLengths, colorMapGC, bLikelyChimeric, fileName=fileName, ET=ET, plotColorbar=plotColorbar, extents=extents)
+        return self.plotOnAx(ax, transformedCP, contigGCs, contigLengths, colorMapGC, isLikelyChimeric, fileName=fileName, ET=ET, plotColorbar=plotColorbar, extents=extents)
 
-    def plotOnAx(self, ax, transformedCP, contigGCs, contigLengths, colorMapGC, bLikelyChimeric, fileName="", plotCentroid=True, ET=None, printID=False, plotColorbar=True, extents=None):
+    def plotOnAx(self, ax, transformedCP, contigGCs, contigLengths, colorMapGC, isLikelyChimeric, fileName="", plotCentroid=True, ET=None, printID=False, plotColorbar=True, extents=None):
         """Plot a bin in a given subplot
 
         If you pass through an EllipsoidTool then it will plot the minimum bounding ellipsoid as well!
         """
+
         disp_vals = np.array([])
         disp_lens = np.array([])
         num_points = 0
@@ -577,8 +578,8 @@ class Bin:
                                "GC: mean: %.4f stdev: %.4f\n" % (self.gcMean, self.gcStdev)]
                          )
 
-        if bLikelyChimeric:
-          title += "\nLikely Chimeric"
+        if isLikelyChimeric[self.id]:
+          title += "Likely Chimeric"
 
         return title
 

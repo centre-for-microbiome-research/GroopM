@@ -1242,6 +1242,9 @@ class BinManager:
                                                                         np_mean(self.PM.transformedCP[self.bins[bid].rowIndices,2]))
             title += "GC: mean: %.4f stdev: %.4f\n" % (np_mean(self.PM.contigGCs[self.bins[bid].rowIndices]), np_std(self.PM.contigGCs[self.bins[bid].rowIndices]))
 
+            if self.PM.isLikelyChimeric[bid]:
+                title += "Likely Chimeric"
+
             ax.set_title(title)
 
             ax = fig.add_subplot(1, 2, 2)
