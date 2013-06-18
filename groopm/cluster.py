@@ -274,7 +274,7 @@ class ClusterEngine:
 
                         if(self.debugPlots >= 2):
                             bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
-                                        self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric[bin.id],
+                                        self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric,
                                         fileName="FRESH_"+str(self.imageCounter))
 
                             self.imageCounter += 1
@@ -292,14 +292,15 @@ class ClusterEngine:
                     for row_indices in partitions:
                         self.restrictRowIndices(row_indices)
 
-                # try to merge these guys here...
-                if num_bids_made > 1:
-                    self.RE.mergeSimilarBins(None,
-                                        None,
-                                        bids=bids_made,
-                                        loose=2.,
-                                        verbose=False,
-                                        silent=True)
+                if False:
+                    # try to merge these guys here...
+                    if num_bids_made > 1:
+                        self.RE.mergeSimilarBins(None,
+                                            None,
+                                            bids=bids_made,
+                                            loose=2.,
+                                            verbose=False,
+                                            silent=True)
 
                 # do some post processing
                 for bid in bids_made:
@@ -324,7 +325,7 @@ class ClusterEngine:
 
                         if(self.debugPlots >= 1):
                             #***slow plot!
-                            bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric[bin.id], fileName="CORE_BIN_%d"%(bin.id))
+                            bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric, fileName="CORE_BIN_%d"%(bin.id))
 
                     except BinNotFoundException: pass
 
