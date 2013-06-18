@@ -49,14 +49,11 @@ __status__ = "Alpha"
 
 ###############################################################################
 
-import time
-
-from sys import exc_info, exit, stdout
+from sys import stdout
 
 from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import axes3d, Axes3D
-from pylab import plot,subplot,axis,stem,show,figure
+from pylab import show
 from numpy import (abs as np_abs,
                    allclose as np_allclose,
                    append as np_append,
@@ -98,18 +95,14 @@ from numpy import (abs as np_abs,
                    unravel_index as np_unravel_index,
                    where as np_where,
                    zeros as np_zeros)
-from numpy.random import randn as np_randn
 import scipy.ndimage as ndi
-from scipy.spatial.distance import cdist, pdist, squareform, euclidean
-from scipy.cluster.vq import kmeans,vq
+from scipy.spatial.distance import pdist, squareform, euclidean
 from scipy.misc import imsave
 
 # GroopM imports
 from profileManager import ProfileManager
-from binManager import BinManager, CenterFinder
-import groopmTimekeeper as gtime
+from binManager import BinManager
 from refine import GrubbsTester, RefineEngine
-import refine
 from PCA import PCA, Center
 from groopmExceptions import *
 

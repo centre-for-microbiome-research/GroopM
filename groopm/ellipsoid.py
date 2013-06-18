@@ -49,7 +49,6 @@ __status__ = "Alpha"
 
 ###############################################################################
 
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy import linalg
@@ -141,14 +140,14 @@ class EllipsoidTool:
                 radii = np.max(P,axis=0) - np.min(P, axis=0)
 
                 if len(P[0]) == 3:
-                  rotation = [[0,0,0],[0,0,0],[0,0,0]]
+                    rotation = [[0,0,0],[0,0,0],[0,0,0]]
                 else:
-                  rotation = [[0,0],[0,0]]
+                    rotation = [[0,0],[0,0]]
 
                 if retA:
-                  return (None, center, radii, rotation)
+                    return (None, center, radii, rotation)
                 else:
-                  return (center, radii, rotation)
+                    return (center, radii, rotation)
 
         # Get the values we'd like to return
         U, s, rotation = linalg.svd(A)
@@ -180,10 +179,10 @@ class EllipsoidTool:
         # degenerate ellipse.
         p_c = cB - cA
         if np.dot(p_c.T, np.dot(A, p_c)) <= 1:
-          return True
+            return True
 
         if A == None or B == None: # degenerate ellipse that can't be processed
-          return False
+            return False
 
         U, s, rotation = linalg.svd(B)
         try:
@@ -230,10 +229,10 @@ class EllipsoidTool:
         # degenerate ellipse.
         p_c = cB - cA
         if np.dot(p_c.T, np.dot(A, p_c)) <= 1:
-          return True
+            return True
 
         if A == None or B == None:  # degenerate ellipse that can't be processed
-          return False
+            return False
 
         U, s, rotation = linalg.svd(B)
         try:

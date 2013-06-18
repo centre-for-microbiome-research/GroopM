@@ -50,22 +50,11 @@ __status__ = "Alpha"
 ###############################################################################
 
 import sys
-import math
-import colorsys
-import random
 
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import axes3d, Axes3D
-from pylab import plot,subplot,axis,stem,show,figure
+from pylab import show
 
 import numpy as np
-#import scipy.ndimage as ndi
-import scipy.spatial.distance as ssdist
-from scipy.spatial.distance import cdist, pdist
-from scipy.stats import kstest
-
-import time
 
 from ellipsoid import EllipsoidTool
 

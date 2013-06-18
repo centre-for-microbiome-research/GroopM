@@ -49,20 +49,16 @@ __status__ = "Alpha"
 
 ###############################################################################
 
-import argparse
-import sys
-import os
-
 import matplotlib as mpl
 
 # GroopM imports
 import mstore
 import cluster
 import refine
-import bin
 import binManager
 import groopmUtils
 import groopmTimekeeper as gtime
+import groopmExceptions as ge
 from mstore import GMDataManager
 
 ###############################################################################
@@ -80,22 +76,21 @@ from mstore import GMDataManager
 
 class GroopMOptionsParser():
     def __init__(self):
-      # set default value for matplotlib
-      mpl.rcParams['lines.linewidth'] = 0.5
-
-      mpl.rcParams['xtick.labelsize'] = 8
-      mpl.rcParams['ytick.labelsize'] = 8
-      mpl.rcParams['legend.fontsize'] = 10
-      mpl.rcParams['axes.labelsize'] = 10
-      mpl.rcParams['axes.titlesize'] = 12
-
-      mpl.rcParams['savefig.dpi'] = 300
-
-      mpl.rcParams['figure.figsize'] = [6.5, 6.5]
-      mpl.rcParams['figure.facecolor'] = '1.0'
+        # set default value for matplotlib
+        mpl.rcParams['lines.linewidth'] = 0.5
+        
+        mpl.rcParams['xtick.labelsize'] = 8
+        mpl.rcParams['ytick.labelsize'] = 8
+        mpl.rcParams['legend.fontsize'] = 10
+        mpl.rcParams['axes.labelsize'] = 10
+        mpl.rcParams['axes.titlesize'] = 12
+        
+        mpl.rcParams['savefig.dpi'] = 300
+        
+        mpl.rcParams['figure.figsize'] = [6.5, 6.5]
+        mpl.rcParams['figure.facecolor'] = '1.0'
 
     def parseOptions(self, options ):
-
         timer = gtime.TimeKeeper()
         if(options.subparser_name == 'parse'):
             # parse raw input
