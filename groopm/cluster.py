@@ -272,7 +272,7 @@ class ClusterEngine:
                         bin = self.BM.makeNewBin(rowIndices=center_row_indices)
 
                         # work out the distribution in points in this bin
-                        bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.contigGCs, self.PM.contigLengths)
+                        bin.makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.kmerPCs, self.PM.contigGCs, self.PM.contigLengths)
 
                         # append this bins list of mapped rowIndices to the main list
                         bids_made.append(bin.id)
@@ -280,7 +280,10 @@ class ClusterEngine:
                         self.updatePostBin(bin)
 
                         if(self.debugPlots):
-                            bin.plotBin(self.PM.transformedCP, self.PM.kmerNormPC1, self.PM.contigLengths, fileName="FRESH_"+str(self.imageCounter))
+                            bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
+                                          self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric[bid],
+                                          fileName="FRESH_"+str(self.imageCounter))
+
                             self.imageCounter += 1
                             self.plotHeat("HM_%d.%d.png" % (self.roundNumber, sub_round_number), max=max_blur_value, x=max_x, y=max_y)
                             sub_round_number += 1
@@ -302,8 +305,8 @@ class ClusterEngine:
                                         None,
                                         bids=bids_made,
                                         loose=2.,
-                                        verbose=True,
-                                        silent=False)
+                                        verbose=False,
+                                        silent=True)
 
                 # do some post processing
                 for bid in bids_made:
@@ -606,8 +609,6 @@ class ClusterEngine:
 
       # perform hough transform clustering
       self.HP.hc += 1
-      
-      
       if debugPlots:
           print "======================\n======================\n======================"
           print "GRID %d " % self.HP.hc, "( Debug =", debugPlots,")"

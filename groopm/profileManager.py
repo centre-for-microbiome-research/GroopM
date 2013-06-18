@@ -119,6 +119,7 @@ class ProfileManager:
         self.dataManager = GMDataManager()  # most data is saved to hdf
         self.dbFileName = dbFileName        # db containing all the data we'd like to use
         self.condition = ""                 # condition will be supplied at loading time
+
         # --> NOTE: ALL of the arrays in this section are in sync
         # --> each one holds information for an individual contig
         self.indices = np_array([])        # indices into the data structure based on condition
@@ -142,8 +143,9 @@ class ProfileManager:
 
         # meta
         self.validBinIds = {}               # valid bin ids -> numMembers
-        self.binnedRowIndices = {}         # dictionary of those indices which belong to some bin
-        self.restrictedRowIndices = {}     # dictionary of those indices which can not be binned yet
+        self.isLikelyChimeric = {}          # indicates if a bin is likely to be chimeric
+        self.binnedRowIndices = {}          # dictionary of those indices which belong to some bin
+        self.restrictedRowIndices = {}      # dictionary of those indices which can not be binned yet
         self.numContigs = 0                 # this depends on the condition given
         self.numStoits = 0                  # this depends on the data which was parsed
 
@@ -252,19 +254,24 @@ class ProfileManager:
                     # use HSV to RGB to generate colors
                     S = 1       # SAT and VAL remain fixed at 1. Reduce to make
                     V = 1       # Pastels if that's your preference...
-                    self.colorMapGC = LinearSegmentedColormap.from_list('GC', [htr((1.0 + np_sin(np_pi * (val/1000.0) - np_pi/2))/2., S, V) for val in xrange(0, 1000)], N=1000)
-                    #self.colorMapGC = get_cmap('gist_rainbow')
+                    self.colorMapGC = self.createColorMapHSV()
 
             if(loadBins):
                 if(verbose):
                     print "    Loading bin assignments"
+
                 self.binIds = self.dataManager.getBins(self.dbFileName, indices=self.indices)
+
                 if len(bids) != 0: # need to make sure we're not restricted in terms of bins
-                    tmp_bids = self.getBinStats()
+                    bin_stats = self.getBinStats()
                     for bid in bids:
-                        self.validBinIds[bid] = tmp_bids[bid]
+                        self.validBinIds[bid] = bin_stats[bid][0]
+                        self.isLikelyChimeric[bid]= bin_stats[bid][1]
                 else:
-                    self.validBinIds = self.getBinStats()
+                    bin_stats = self.getBinStats()
+                    for bid in bin_stats:
+                        self.validBinIds[bid] = bin_stats[bid][0]
+                        self.isLikelyChimeric[bid] = bin_stats[bid][1]
 
                 # fix the binned indices
                 self.binnedRowIndices = {}
@@ -360,7 +367,7 @@ class ProfileManager:
         """Store the valid bin Ids and number of members
 
         binStats is a list of tuples which looks like:
-        [ (bid, numMembers) ]
+        [ (bid, numMembers, isLikelyChimeric) ]
         Note that this call effectively nukes the existing table
         """
         self.dataManager.setBinStats(self.dbFileName, binStats)
@@ -592,11 +599,16 @@ class ProfileManager:
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING
 
+    def createColorMapHSV(self):
+      S = 1.0
+      V = 1.0
+      return LinearSegmentedColormap.from_list('GC', [htr((1.0 + np_sin(np_pi * (val/1000.0) - np_pi/2))/2., S, V) for val in xrange(0, 1000)], N=1000)
+
     def setColorMap(self, colorMapStr):
         if colorMapStr == 'HSV':
             S = 1
             V = 1
-            self.colorMapGC = LinearSegmentedColormap.from_list('GC_HSV', [htr((1.0 + np_sin(np_pi * (val/512.0) - np_pi/2))/2., S, V) for val in xrange(0, 512)], N=512)
+            self.colorMapGC = self.createColorMapHSV()
         elif colorMapStr == 'Accent':
             self.colorMapGC = get_cmap('Accent')
         elif colorMapStr == 'Blues':
