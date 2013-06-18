@@ -51,47 +51,29 @@ __status__ = "Alpha"
 from os.path import join as osp_join
 from sys import exc_info, exit, stdout as sys_stdout
 from operator import itemgetter
-import readline
 
-from Queue import Queue
 
-from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import axes3d, Axes3D
-from pylab import plot,subplot,axis,stem,show,figure
+from pylab import show
 from numpy import (abs as np_abs,
-                   amax as np_amax,
-                   amin as np_amin,
                    append as np_append,
                    arange as np_arange,
-                   arange as numpy_arange,
                    arccos as np_arccos,
-                   arccos as np_cos,
                    argmax as np_argmax,
-                   argmin as np_argmin,
                    argsort as np_argsort,
                    around as np_around,
                    array as np_array,
                    bincount as np_bincount,
                    ceil as np_ceil,
                    concatenate as np_concatenate,
-                   copy as np_copy,
-                   cos as np_cos,
-                   delete as np_delete,
                    dot as np_dot,
-                   eye as np_eye,
                    log10 as np_log10,
                    max as np_max,
                    mean as np_mean,
                    median as np_median,
                    min as np_min,
-                   ones as np_ones,
-                   pi as np_pi,
-                   ravel as np_ravel,
                    reshape as np_reshape,
                    seterr as np_seterr,
-                   shape as np_shape,
-                   sin as np_sin,
                    size as np_size,
                    sort as np_sort,
                    sqrt as np_sqrt,
@@ -99,13 +81,10 @@ from numpy import (abs as np_abs,
                    sum as np_sum,
                    where as np_where,
                    zeros as np_zeros)
-from numpy.linalg import norm as np_norm
-from numpy.random import shuffle as shuffle
-#import scipy.ndimage as ndi
-from scipy.spatial import KDTree as kdt
+
 from scipy.stats import f_oneway, distributions
-from scipy.cluster.vq import kmeans,vq,whiten,kmeans2
-from scipy.spatial.distance import cdist, pdist, squareform
+from scipy.cluster.vq import kmeans,vq
+from scipy.spatial.distance import cdist
 
 # GroopM imports
 from profileManager import ProfileManager
@@ -113,7 +92,6 @@ from bin import Bin
 import groopmExceptions as ge
 from groopmUtils import makeSurePathExists
 from ellipsoid import EllipsoidTool
-from PCA import PCA, Center
 
 np_seterr(all='raise')
 
@@ -147,7 +125,7 @@ class BinManager:
 
 
     def setColorMap(self, colorMapStr):
-      self.PM.setColorMap(colorMapStr)
+        self.PM.setColorMap(colorMapStr)
 
 #------------------------------------------------------------------------------
 # LOADING / SAVING
@@ -378,7 +356,6 @@ class BinManager:
 
         # now make the network
         network = {}
-        outer_index = 0
         for i in range(num_bins):
             # make a structure to hold the info
             network[bids[i]] = [[bids[i]],[0.0]]
@@ -394,8 +371,6 @@ class BinManager:
 
     def getLinkingContigs(self, bid):
         """Get all contigs and their bin IDs which link to contigs in this bin"""
-        condition = ""
-        bin = self.getBin(bid)
         bin2count = {}
         for row_index in bin.rowIndices:
             try:
@@ -456,7 +431,6 @@ class BinManager:
 
     def getWithinBinLinkProfile(self, bid):
         """Determine the average number of links between contigs in a bin"""
-        bin = self.getBin(bid)
         links = []
         min_links = 1000000000
         for row_index in bin.rowIndices:
@@ -609,7 +583,6 @@ class BinManager:
 
     def getSplitties(self, bid, n, mode):
         """Return a set of split bins"""
-        bin = self.getBin(bid)
         obs = np_array([])
         if(mode=='kmer'):
             obs = np_array([self.PM.kmerNormPC1[i] for i in bin.rowIndices])
@@ -620,8 +593,6 @@ class BinManager:
         try:
             centroids,_ = kmeans(obs,n)
         except ValueError:
-            if(verbose):
-                print "Error splitting"
             return False
         idx,_ = vq(obs,centroids)
 
@@ -718,7 +689,7 @@ class BinManager:
         F_cutoff =  distributions.f.ppf(confidence, 2, len(dist1)+len(dist2)-2)
         F_value = f_oneway(dist1,dist2)[0]
         if tag != "":
-           print "%s [V: %f, C: %f]" % (tag, F_value, F_cutoff)
+            print "%s [V: %f, C: %f]" % (tag, F_value, F_cutoff)
         return F_value < F_cutoff
 
     def merge(self, bids, auto=False, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=True, use_elipses=True):
@@ -736,7 +707,8 @@ class BinManager:
 
         if(newBid):
             # we need to make this into a new bin
-            parent_bin = makeNewBin()
+            parent_bin = self.makeNewBin()
+            
             # now merge it with the first in the new list
             dead_bin = self.getBin(bids[0])
             for row_index in dead_bin.rowIndices:
@@ -818,20 +790,20 @@ class BinManager:
             raise ge.BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
 
     def getChimericBinIds(self):
-      bids = []
-      for bid in self.bins:
-          if self.PM.isLikelyChimeric[bid]:
-              bids.append(bid)
+        bids = []
+        for bid in self.bins:
+            if self.PM.isLikelyChimeric[bid]:
+                bids.append(bid)
 
-      return bids
+        return bids
 
     def getNonChimericBinIds(self):
-      bids = []
-      for bid in self.bins:
-          if not self.PM.isLikelyChimeric[bid]:
-              bids.append(bid)
-
-      return bids
+        bids = []
+        for bid in self.bins:
+            if not self.PM.isLikelyChimeric[bid]:
+                bids.append(bid)
+        
+        return bids
 
     def deleteBins(self, bids, force=False, freeBinnedRowIndices=False, saveBins=False):
         """Purge a bin from our lists"""
@@ -1019,7 +991,7 @@ class BinManager:
         num_added = 0
         for bid in self.getBids():
             if not processChimeric and self.PM.isLikelyChimeric[bid]:
-              continue
+                continue
 
             add_bin = True
             if gc_range is not None:
@@ -1187,11 +1159,11 @@ class BinManager:
         elif(outFormat == 'minimal'):
             stream.write(separator.join(["#\"bid\"","\"cid\"","\"length\"","\"GC\""])+"\n")
         elif(outFormat == 'user'):
-          header = ["\"bin id\"","\"Likely chimeric\"","\"length (bp)\"","\"# seqs\"","\"GC mean\"","\"GC std\""]
-          for i in xrange(0, len(self.PM.covProfiles[0])):
-            header.append("\"Coverage " + str(i+1) + " mean\"")
-            header.append("\"Coverage " + str(i+1) + " std\"")
-          stream.write(separator.join(header) + "\n")
+            header = ["\"bin id\"","\"Likely chimeric\"","\"length (bp)\"","\"# seqs\"","\"GC mean\"","\"GC std\""]
+            for i in xrange(0, len(self.PM.covProfiles[0])):
+                header.append("\"Coverage " + str(i+1) + " mean\"")
+                header.append("\"Coverage " + str(i+1) + " std\"")
+            stream.write(separator.join(header) + "\n")
         elif(outFormat == 'full'):
             pass
         else:
@@ -1327,7 +1299,6 @@ class BinManager:
             plot_num = 1
             ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
 
-            ALL_BIDS = []
             for bids in bins:
                 for bid in bids:
                     self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric, ET=et, plotCentroid=pc)
@@ -1489,12 +1460,12 @@ class BinManager:
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
         if plotColorbar:
-          cbar = plt.colorbar(sc, shrink=0.5)
-          cbar.ax.tick_params()
-          cbar.ax.set_title("% GC", size=10)
-          cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
-          cbar.ax.set_ylim([0.15, 0.85])
-          cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+            cbar = plt.colorbar(sc, shrink=0.5)
+            cbar.ax.tick_params()
+            cbar.ax.set_title("% GC", size=10)
+            cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+            cbar.ax.set_ylim([0.15, 0.85])
+            cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
 
         ax.set_xlabel('x coverage')
         ax.set_ylabel('y coverage')
@@ -1637,7 +1608,6 @@ class CenterFinder:
     def findArrayCentera(self, vals):
         """Find the center of the numpy array vals, return the index of the center"""
         # parameters
-        current_val_max = -1
         delta = 0
         bounce_amount = 0.1
         height = 0
@@ -1671,7 +1641,6 @@ class CenterFinder:
             # save the last val
             last_val = val
 
-        current_val_max = -1
         height = 0
         last_val = 0
 

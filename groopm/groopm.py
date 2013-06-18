@@ -58,7 +58,7 @@ import refine
 import binManager
 import groopmUtils
 import groopmTimekeeper as gtime
-import groopmExceptions as ge
+from groopmExceptions import ExtractModeNotAppropriateException
 from mstore import GMDataManager
 
 ###############################################################################
@@ -187,7 +187,7 @@ class GroopMOptionsParser():
             elif(options.mode=='reads'):
                 BX.extractReads(timer, bams=options.data)
             else:
-                raise ge.ExtractModeNotAppropriateException("mode: "+mode+" is unknown")
+                raise ExtractModeNotAppropriateException("mode: "+ options.mode + " is unknown")
 
         elif(options.subparser_name == 'merge'):
             # make bin cores

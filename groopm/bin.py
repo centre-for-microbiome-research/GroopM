@@ -57,6 +57,7 @@ from pylab import show
 import numpy as np
 
 from ellipsoid import EllipsoidTool
+from groopmExceptions import ModeNotAppropriateException
 
 np.seterr(all='raise')
 
@@ -292,8 +293,9 @@ class Bin:
             dists = [np.abs(self.gcMean - profile[i]) for i in self.rowIndices]
         else:
             raise ModeNotAppropriateException("Mode",mode,"unknown")
-        range = np.max(np.array(dists)) - np.min(np.array(dists))
-        return (np.mean(np.array(dists)), np.std(np.array(dists)), range)
+        
+        dist_range = np.max(np.array(dists)) - np.min(np.array(dists))
+        return (np.mean(np.array(dists)), np.std(np.array(dists)), dist_range)
 
     def getCDist(self, Csig, centroid=None):
         """Get the distance of this contig from the coverage centroid"""
@@ -368,7 +370,6 @@ class Bin:
                 inclusivity=2):
         """Recruit more contigs into the bin, used during coring only"""
         num_recruited = 0
-        inRange = lambda x,l,u : x >= l and x < u
 
         # make the distribution
         self.makeBinDist(PM.transformedCP, PM.averageCoverages, PM.kmerNormPC1, PM.kmerPCs, PM.contigGCs, PM.contigLengths)
@@ -520,7 +521,7 @@ class Bin:
             self.makeLimits()
             px = self.covMeans[0]
             py = self.covMeans[1]
-            pz = self.covMeans[2]
+            #pz = self.covMeans[2]
             #num_points += 1
             #disp_vals = np.append(disp_vals, [px,py,pz])
             #disp_lens = np.append(disp_lens, 100)
@@ -539,12 +540,12 @@ class Bin:
         ax.set_ylabel('y coverage')
         ax.set_zlabel('z coverage')
         if plotColorbar:
-          cbar = plt.colorbar(sc, shrink=0.5)
-          cbar.ax.tick_params()
-          cbar.ax.set_title("% GC", size=10)
-          cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
-          cbar.ax.set_ylim([0.15, 0.85])
-          cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+            cbar = plt.colorbar(sc, shrink=0.5)
+            cbar.ax.tick_params()
+            cbar.ax.set_title("% GC", size=10)
+            cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+            cbar.ax.set_ylim([0.15, 0.85])
+            cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
 
         if ET != None:
             (center, radii, rotation) = self.getBoundingEllipsoid(transformedCP, ET=ET)
@@ -556,9 +557,9 @@ class Bin:
                 ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color)
 
         if extents:
-          ax.set_xlim([extents[0], extents[1]])
-          ax.set_ylim([extents[2], extents[3]])
-          ax.set_zlim([extents[4], extents[5]])
+            ax.set_xlim([extents[0], extents[1]])
+            ax.set_ylim([extents[2], extents[3]])
+            ax.set_zlim([extents[4], extents[5]])
 
         from locale import format, setlocale, LC_ALL # purdy commas
         setlocale(LC_ALL, "")
@@ -568,7 +569,7 @@ class Bin:
                          )
 
         if isLikelyChimeric[self.id]:
-          title += "Likely Chimeric"
+            title += "Likely Chimeric"
 
         return title
 
@@ -589,12 +590,12 @@ class Bin:
         ax.set_xlabel('PC1')
         ax.set_ylabel('PC2')
         if plotColorbar:
-          cbar = plt.colorbar(sc, shrink=0.5)
-          cbar.ax.tick_params()
-          cbar.ax.set_title("% GC", size=10)
-          cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
-          cbar.ax.set_ylim([0.15, 0.85])
-          cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+            cbar = plt.colorbar(sc, shrink=0.5)
+            cbar.ax.tick_params()
+            cbar.ax.set_title("% GC", size=10)
+            cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+            cbar.ax.set_ylim([0.15, 0.85])
+            cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
 
         if ET != None:
             (center, radii, rotation) = ET.getMinVolEllipse(disp_vals)
@@ -637,8 +638,8 @@ class Bin:
             cov_mean = np.mean(covProfiles[self.rowIndices], axis=0)
             cov_std = np.std(covProfiles[self.rowIndices], axis=0)
             for i in xrange(0, len(cov_mean)):
-              data.append('%.4f' % cov_mean[i])
-              data.append('%.4f' % cov_std[i])
+                data.append('%.4f' % cov_mean[i])
+                data.append('%.4f' % cov_std[i])
             stream.write(separator.join(data)+"\n")
         else:
             stream.write("--------------------------------------\n")
