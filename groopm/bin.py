@@ -550,7 +550,7 @@ class Bin:
         ax.set_ylabel('y coverage')
         ax.set_zlabel('z coverage')
         if plotColorbar:
-          cbar = plt.colorbar(sc, shrink=0.7)
+          cbar = plt.colorbar(sc, shrink=0.5)
           cbar.ax.tick_params()
           cbar.ax.set_title("% GC", size=10)
           cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
@@ -600,7 +600,7 @@ class Bin:
         ax.set_xlabel('PC1')
         ax.set_ylabel('PC2')
         if plotColorbar:
-          cbar = plt.colorbar(sc, shrink=0.7)
+          cbar = plt.colorbar(sc, shrink=0.5)
           cbar.ax.tick_params()
           cbar.ax.set_title("% GC", size=10)
           cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])

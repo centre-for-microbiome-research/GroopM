@@ -1489,7 +1489,7 @@ class BinManager:
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
         if plotColorbar:
-          cbar = plt.colorbar(sc, shrink=0.7)
+          cbar = plt.colorbar(sc, shrink=0.5)
           cbar.ax.tick_params()
           cbar.ax.set_title("% GC", size=10)
           cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])

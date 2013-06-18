@@ -694,7 +694,8 @@ class ProfileManager:
 
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
-        ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
+        sc = ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
+        sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
         self.plotStoitNames(ax1)
 
         try:
@@ -719,7 +720,8 @@ class ProfileManager:
 
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
-        ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
+        sc = ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
+        sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
         self.plotStoitNames(ax1)
 
         try:
@@ -770,7 +772,8 @@ class ProfileManager:
             }
 
             ax = fig.add_subplot(131, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
+            sc = ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
+            sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
             ax.azim = 0
             ax.elev = 0
             ax.set_xlim3d(0,self.scaleFactor)
@@ -790,7 +793,8 @@ class ProfileManager:
             ax.w_zaxis._AXINFO = myAXINFO
 
             ax = fig.add_subplot(132, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
+            sc = ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
+            sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
             ax.azim = 90
             ax.elev = 0
             ax.set_xlim3d(0,self.scaleFactor)
@@ -810,7 +814,8 @@ class ProfileManager:
             ax.w_zaxis._AXINFO = myAXINFO
 
             ax = fig.add_subplot(133, projection='3d')
-            ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
+            sc = ax.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
+            sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
             ax.azim = 0
             ax.elev = 90
             ax.set_xlim3d(0,self.scaleFactor)
@@ -832,7 +837,7 @@ class ProfileManager:
             ax = fig.add_subplot(111, projection='3d')
             if len(restrictedBids) == 0:
                 if highlight is None:
-                    ax.scatter(self.transformedCP[:,0],
+                    sc = ax.scatter(self.transformedCP[:,0],
                                self.transformedCP[:,1],
                                self.transformedCP[:,2],
                                edgecolors='none',
@@ -842,9 +847,10 @@ class ProfileManager:
                                vmax=1.0,
                                s=2,
                                marker='.')
+                    sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
                 else:
                     #draw the opague guys first
-                    ax.scatter(self.transformedCP[:,0],
+                    sc = ax.scatter(self.transformedCP[:,0],
                                self.transformedCP[:,1],
                                self.transformedCP[:,2],
                                edgecolors='none',
@@ -855,6 +861,7 @@ class ProfileManager:
                                s=2,
                                marker='.',
                                alpha=alpha)
+                    sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
                     # now replot the highlighted guys
                     disp_vals = np_array([])
@@ -866,7 +873,7 @@ class ProfileManager:
 
                     # reshape
                     disp_vals = np_reshape(disp_vals, (num_points, 3))
-                    ax.scatter(disp_vals[:,0],
+                    sc = ax.scatter(disp_vals[:,0],
                                disp_vals[:,1],
                                disp_vals[:,2],
                                edgecolors='none',
@@ -874,6 +881,15 @@ class ProfileManager:
                                cmap=self.colorMapGc,
                                s=2,
                                marker='.')
+                    sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+
+                # render color bar
+                cbar = plt.colorbar(sc, shrink=0.5)
+                cbar.ax.tick_params()
+                cbar.ax.set_title("% GC", size=10)
+                cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+                cbar.ax.set_ylim([0.15, 0.85])
+                cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
             else:
                 r_trans = np_array([])
                 r_cols=np_array([])
@@ -885,7 +901,8 @@ class ProfileManager:
                         num_added += 1
                 r_trans = np_reshape(r_trans, (num_added,3))
                 r_cols = np_reshape(r_cols, (num_added,3))
-                ax.scatter(r_trans[:,0], r_trans[:,1], r_trans[:,2], edgecolors='none', c=r_cols, s=2, marker='.')
+                sc = ax.scatter(r_trans[:,0], r_trans[:,1], r_trans[:,2], edgecolors='none', c=r_cols, s=2, marker='.')
+                sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
             ax.azim = azim
             ax.elev = elev
             ax.set_xlim3d(0,self.scaleFactor)
