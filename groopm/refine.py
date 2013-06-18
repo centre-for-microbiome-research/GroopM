@@ -1238,9 +1238,9 @@ class RefineEngine:
                 except KeyError:
                     nones[old_bid] = 1
 
-        print "    ---------------------------------------------"
-        print "     BID    CONS    CHGE    SAME    NEWS    NONE"
-        print "    ---------------------------------------------"
+        print "    ------------------------------------------------------"
+        print "     BID    ORIG    CHGE    SAME    NEWS    NONE    TOTAL"
+        print "    ------------------------------------------------------"
         for bid in bids:
             print "   %4d    %5d   " % (bid, self.BM.bins[bid].binSize),
             if bid in wrongs:
@@ -1259,6 +1259,7 @@ class RefineEngine:
                 print "%04d   " % nones[bid]
             else:
                 print "0000   "
+            print "%04d   " % len(new_assignments[bid])
         print "\n    ---------------------------------------------"
 
         # now get ready for saving.
@@ -1277,12 +1278,13 @@ class RefineEngine:
 
         # now we rebuild all the bins but with the new assignments
         for bid in new_assignments:
-            row_indices = np_array(new_assignments[bid])
-            new_bin = self.BM.makeNewBin(rowIndices=row_indices, bid=bid)
-            self.PM.validBinIds[bid] = len(row_indices)
-            for row_index in row_indices:
-                self.PM.binIds[row_index] = bid
-                self.PM.binnedRowIndices[row_index] = True
+            if bid != 0:
+                row_indices = np_array(new_assignments[bid])
+                new_bin = self.BM.makeNewBin(rowIndices=row_indices, bid=bid)
+                self.PM.validBinIds[bid] = len(row_indices)
+                for row_index in row_indices:
+                    self.PM.binIds[row_index] = bid
+                    self.PM.binnedRowIndices[row_index] = True
 
         # remove any reassigned contigs within chimeric bins
         for bid in chimeric_bids:
