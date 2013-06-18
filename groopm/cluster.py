@@ -125,7 +125,7 @@ class ClusterEngine:
     def __init__(self,
                  dbFileName,
                  timer,
-                 plot=False,
+                 plot=0,
                  finalPlot=False,
                  force=False,
                  numImgMaps=1,
@@ -205,7 +205,7 @@ class ClusterEngine:
         print "Apply data transformations"
         self.PM.transformCP(self.timer)
         # plot the transformed space (if we've been asked to...)
-        if(self.debugPlots):
+        if(self.debugPlots >= 3):
             self.PM.renderTransCPData()
         print "    %s" % self.timer.getTimeStamp()
 
@@ -279,10 +279,10 @@ class ClusterEngine:
                         num_bins += 1
                         self.updatePostBin(bin)
 
-                        if(self.debugPlots):
+                        if(self.debugPlots >= 2):
                             bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
-                                          self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric[bid],
-                                          fileName="FRESH_"+str(self.imageCounter))
+                                        self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric[bin.id],
+                                        fileName="FRESH_"+str(self.imageCounter))
 
                             self.imageCounter += 1
                             self.plotHeat("HM_%d.%d.png" % (self.roundNumber, sub_round_number), max=max_blur_value, x=max_x, y=max_y)
@@ -329,8 +329,9 @@ class ClusterEngine:
                             sub_counter += 10
                             print "\n%4d" % sub_counter,
 
-                        if(self.debugPlots):
-                            bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.colorMapGC, fileName="CORE_BIN_%d"%(bin.id))  #***slow plot!
+                        if(self.debugPlots >= 1):
+                            #***slow plot!
+                            bin.plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1, self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric[bin.id], fileName="CORE_BIN_%d"%(bin.id))
 
                     except BinNotFoundException: pass
 
@@ -352,10 +353,6 @@ class ClusterEngine:
 
         start_span = int(1.5 * self.span)
         span_len = 2*start_span+1
-
-        if(self.debugPlots):
-            self.plotRegion(max_x,max_y,max_z, fileName="Image_"+str(self.imageCounter), tag="column", column=True)
-            self.imageCounter += 1
 
         # make a 3d grid to hold the values
         working_block = np_zeros((span_len, span_len, self.PM.scaleFactor))
@@ -421,8 +418,6 @@ class ClusterEngine:
     def smartTwoWayContraction(self, rowIndices, positionInPlane):
       """Partition a collection of contigs into 'core' groups"""
 
-      debugPlots = False
-
       # sanity check that there is enough data here to try a determine 'core' groups
       total_BP = np_sum(self.PM.contigLengths[rowIndices])
       if not self.BM.isGoodBin(total_BP, len(rowIndices), ms=5): # Can we trust very small bins?.
@@ -476,7 +471,7 @@ class ClusterEngine:
       while iter < max_iterations:
         iter += 1
 
-        if debugPlots:
+        if self.debugPlots >= 2:
           if iter == 1:
             try:
               self.cluster_num
@@ -609,9 +604,7 @@ class ClusterEngine:
 
       # perform hough transform clustering
       self.HP.hc += 1
-      if debugPlots:
-          print "======================\n======================\n======================"
-          print "GRID %d " % self.HP.hc, "( Debug =", debugPlots,")"
+      if self.debugPlots >= 3:
           (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, scale=True, imgTag="MER")
       else:
           (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, scale=True)
@@ -624,7 +617,7 @@ class ClusterEngine:
 
       #-----------------------
       # GRID
-      if debugPlots:
+      if self.debugPlots >= 2:
         c_max = np_max(c_dat[:,2]/10) * 1.1
         k_max = np_max(k_dat[:,0]) * 1.1
         c_min = np_min(c_dat[:,2]/10) * 0.9
@@ -729,13 +722,13 @@ class ClusterEngine:
                   l_data = np_copy(l_dat[k_part])
 
                   # The PCA may reverse the ordering. So we just check here quickly
-                  if debugPlots:
+                  if self.debugPlots >= 3:
                       (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV", scale=True)
                   else:
                       (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, scale=True)
 
 
-                  if debugPlots:
+                  if self.debugPlots >= 2:
                       #-----
                       # GRID
                       c_sorted_data = np_copy(c_dat[k_part,2])/10.
@@ -784,7 +777,6 @@ class ClusterEngine:
                           k_line_max = k_lines[pc-1]
 
                       for c in range(len(c_lines)):
-                          print c, [k_line_min,k_line_max], [c_lines[c], c_lines[c]]
                           plt.plot([k_line_min,k_line_max], [c_lines[c], c_lines[c]], c_line_cols[c], zorder=11)
 
                   for c in range(len(c_partitions)):
@@ -792,7 +784,7 @@ class ClusterEngine:
                           c_part = c_partitions[c]
                           partitions.append(np_array(k_part[c_part]))
 
-      if debugPlots:
+      if self.debugPlots >= 2:
           fig.set_size_inches(12,12)
           plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
           plt.close()

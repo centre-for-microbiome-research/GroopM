@@ -129,7 +129,7 @@ if __name__ == '__main__':
     core_builder.add_argument('-g', '--graphfile', help="output graph of micro bin mergers")
     core_builder.add_argument('-p', '--plot', action="store_true", default=False, help="create plots of bins after basic refinement")
     core_builder.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
-    core_builder.add_argument('--multiplot', action="store_true", default=False, help="create plots during core creation - MAKES MANY IMAGES!")
+    core_builder.add_argument('-m', '--multiplot', default=0, help="create plots during core creation - (0-3) MAKES MANY IMAGES!")
 
     #-------------------------------------------------
     # refine bins

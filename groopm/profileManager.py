@@ -836,7 +836,10 @@ class ProfileManager:
                                self.transformedCP[:,1],
                                self.transformedCP[:,2],
                                edgecolors='none',
-                               c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0,
+                               c=self.contigGCs,
+                               cmap=self.colorMapGC,
+                               vmin=0.0,
+                               vmax=1.0,
                                s=2,
                                marker='.')
                 else:
@@ -845,7 +848,10 @@ class ProfileManager:
                                self.transformedCP[:,1],
                                self.transformedCP[:,2],
                                edgecolors='none',
-                               c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0,
+                               c=self.contigGCs,
+                               cmap=self.colorMapGC,
+                               vmin=0.0,
+                               vmax=1.0,
                                s=2,
                                marker='.',
                                alpha=alpha)

@@ -1252,9 +1252,9 @@ class RefineEngine:
             else:
                 print "0000   ",
             if bid in nones:
-                print "%04d   " % nones[bid]
+                print "%04d   " % nones[bid],
             else:
-                print "0000   "
+                print "0000   ",
             print "%04d   " % len(new_assignments[bid])
         print "\n    ---------------------------------------------"
 
