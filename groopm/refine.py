@@ -693,10 +693,7 @@ class RefineEngine:
         cp_cov_tdm = np_copy(cov_tdm)
         c_mean_tdm = np_mean(cp_cov_tdm, axis=0)
         c_std_tdm = np_std(cp_cov_tdm, axis=0)
-        print c_std_tdm #$$$
-        c_std_tdm += np_where(c_std_tdm == 0)[0] # make sure std dev is never zero
-        print c_std_tdm
-        raw_input('*')
+        c_std_tdm += np_where(c_std_tdm == 0, 1, 0) # make sure std dev is never zero
         c_whiten_tdm = (cp_cov_tdm - c_mean_tdm) / c_std_tdm
 
         cov_search_tree = kdt(c_whiten_tdm)

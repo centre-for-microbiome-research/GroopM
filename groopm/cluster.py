@@ -448,7 +448,7 @@ class ClusterEngine:
       # calculate mean and std in coverage space for whitening data
       c_mean = np_mean(c_dat, axis=0)
       c_std = np_std(c_dat, axis=0)
-      c_std += np_where(c_std == 0)[0] # make sure std dev is never zero
+      c_std += np_where(c_std == 0, 1, 0) # make sure std dev is never zero
       c_whiten_dat = (c_dat-c_mean) / c_std
 
       c_whiten_dist = pdist(c_whiten_dat)
@@ -1241,11 +1241,11 @@ class HoughPartitioner:
                 diffs.append((back_diffs[i] + back_diffs[i+1])/2)
             diffs.append(back_diffs[-1])
             diffs = np_array(diffs)**2  # square it! Makes things more betterrer
-    
+
             # replace the data array by the sum of it's diffs
             for i in range(1, d_len):
                 diffs[i] += diffs[i-1]
-    
+
             # scale to fit between 0 and len(diffs)
             # HT works better on a square
             diffs -= np_min(diffs)
@@ -1262,9 +1262,9 @@ class HoughPartitioner:
                 data /= np_max(data)
             except FloatingPointError:
                 pass
-            data *= scale 
+            data *= scale
             t_data = np_array(zip(data, np_arange(d_len)))
-            
+
         im_shape = (int(np_max(t_data, axis=0)[0]+1), d_len)
 
         #----------------------------------------------------------------------
@@ -1313,7 +1313,7 @@ class HoughPartitioner:
             except FloatingPointError:
                 pass
             diffs *= len(diffs)
-    
+
             # diffs is now the same size as the gradiated data sent through
             # to hough in level 0. We wish to find the gradients of the lines
             # returned by recursive partitioning
@@ -1329,9 +1329,9 @@ class HoughPartitioner:
                 else:
                     sis = sorted(sis)
                     gradients.append((sis[-1] - sis[0])/l_sis)
-    
+
             gradients = np_array(gradients)
-    
+
             # get all the -1 gradients and make them equal to the larger
             # of their neighbours
             last = 0.
@@ -1352,9 +1352,9 @@ class HoughPartitioner:
 
         else:
             gradients=np_array([0.])
-            
+
         keeps = np_where(gradients >= 1, False, True)
-        
+
         squished_rets = []
         squished_keeps = []
         last_squshed = []
@@ -1375,7 +1375,7 @@ class HoughPartitioner:
             squished_rets.append(np_array(last_squshed))
             squished_keeps.append(True)
 
-        return (np_array(squished_rets), np_array(squished_keeps))  
+        return (np_array(squished_rets), np_array(squished_keeps))
 
     def recursiveSelect(self,
                         tData,
@@ -1451,7 +1451,7 @@ class HoughPartitioner:
                 tmp[real_index] = None
                 assigned[real_index] = None
         centre = np_array(tmp.keys())
-        
+
         rets = []
 
         # recursive call for leftmost indices
@@ -1516,7 +1516,7 @@ class HoughPartitioner:
                     if len(R) > 0:
                         rets.append(R)
         return rets
-    
+
     def points2Line(self, points, xIndexLim, yIndexLim, thickness):
         """Draw a thick line between a series of points"""
 
