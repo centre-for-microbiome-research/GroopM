@@ -212,7 +212,7 @@ class ClusterEngine:
 
         # cluster and bin!
         print "Create cores"
-        cum_contigs_used_good = self.initialiseCores()
+        self.initialiseCores()
         print "    %s" % self.timer.getTimeStamp()
 
         # condense cores
@@ -242,7 +242,6 @@ class ClusterEngine:
         new_line_counter = 0
         num_bins = 0
 
-        prev_putative_clusters = []
         while(num_below_cutoff < breakout_point):
             stdout.flush()
 
@@ -349,7 +348,6 @@ class ClusterEngine:
 
         max_x = int(max_index/self.PM.scaleFactor)
         max_y = max_index - self.PM.scaleFactor*max_x
-        max_z = -1
 
         ret_values = [max_value, max_x, max_y]
 
@@ -413,395 +411,387 @@ class ClusterEngine:
             else:
                 putative_clusters = self.smartTwoWayContraction(putative_center_row_indices, [max_x, max_y])
                 if putative_clusters == None:
-                  return None
+                    return None
 
                 return [putative_clusters, ret_values]
 
     def smartTwoWayContraction(self, rowIndices, positionInPlane):
-      """Partition a collection of contigs into 'core' groups"""
+        """Partition a collection of contigs into 'core' groups"""
+        
+        # sanity check that there is enough data here to try a determine 'core' groups
+        total_BP = np_sum(self.PM.contigLengths[rowIndices])
+        if not self.BM.isGoodBin(total_BP, len(rowIndices), ms=5): # Can we trust very small bins?.
+            # get out of here but keep trying
+            # the calling function should restrict these indices
+            return [np_array(rowIndices)]
+        
+        # make a copy of the data we'll be munging
+        k_dat = np_copy(self.PM.kmerPCs[rowIndices])
+        c_dat = np_copy(self.PM.transformedCP[rowIndices])
+        l_dat = np_copy(self.PM.contigLengths[rowIndices])
+        row_indices = np_copy(rowIndices)
+        
+        # calculate shortest distance to a corner (this isn't currently used)
+        min_dist_to_corner = 1e9
+        for corner in self.PM.corners:
+          dist = euclidean(corner[:,[0,1]], positionInPlane)
+          min_dist_to_corner = min(dist, min_dist_to_corner)
+        
+        # calculate radius threshold in whitened transformed coverage space
+        eps_neighbours = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
+        
+        # calculate mean and std in coverage space for whitening data
+        c_mean = np_mean(c_dat, axis=0)
+        c_std = np_std(c_dat, axis=0)
+        c_std += np_where(c_std == 0, 1, 0) # make sure std dev is never zero
+        c_whiten_dat = (c_dat-c_mean) / c_std
+        
+        c_whiten_dist = pdist(c_whiten_dat)
+        c_dist_matrix = squareform(c_whiten_dist)
+        c_radius = np_median(np_sort(c_dist_matrix)[:,eps_neighbours-1])
+        
+        # calculate radius threshold in kmer space
+        k_dist = pdist(k_dat)
+        k_dist_matrix = squareform(k_dist)
+        k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours-1])
+        
+        # calculate convergence criteria
+        k_converged = 5e-2 * np_mean(k_dist)
+        c_converged = 5e-2 * np_mean(c_whiten_dist)
+        max_iterations = 50
+        
+        k_move_perc = 0.15
+        c_move_perc = 0.15
 
-      # sanity check that there is enough data here to try a determine 'core' groups
-      total_BP = np_sum(self.PM.contigLengths[rowIndices])
-      if not self.BM.isGoodBin(total_BP, len(rowIndices), ms=5): # Can we trust very small bins?.
-          # get out of here but keep trying
-          # the calling function should restrict these indices
-          return [np_array(rowIndices)]
+        # perform two-way contraction of kmer and coverage space
+        iter = 0
+        while iter < max_iterations:
+            iter += 1
+            
+            if self.debugPlots >= 2:
+                if iter == 1:
+                    try:
+                        self.cluster_num
+                    except:
+                        self.cluster_num = 0
+                    
+                    self.cluster_num += 1
+            
+                fig = plt.figure()
+                ax = fig.add_subplot(111, projection='3d')
+                
+                ax.scatter(c_dat[:,0],
+                           c_dat[:,1],
+                           c_dat[:,2],
+                           edgecolors='k',
+                           c=self.PM.contigGCs[row_indices],
+                           cmap=self.PM.colorMapGC,
+                           vmin=0.0, vmax=1.0,
+                           marker='.')
+                
+                title = "Points: " + str(len(c_dat[:,0]))
+                plt.title(title)
+                
+                if iter == 1:
+                    xlim = [np_min(c_dat[:,0]) - 0.05*np_min(c_dat[:,0]), np_max(c_dat[:,0]) + 0.05*np_max(c_dat[:,0])]
+                    ylim = [np_min(c_dat[:,1]) - 0.05*np_min(c_dat[:,1]), np_max(c_dat[:,1]) + 0.05*np_max(c_dat[:,1])]
+                    zlim = [np_min(c_dat[:,2]) - 0.05*np_min(c_dat[:,2]), np_max(c_dat[:,2]) + 0.05*np_max(c_dat[:,2])]
+            
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
+                ax.set_zlim(zlim)
+                
+                fig.set_size_inches(6,6)
+                
+                fileName = "gh_%d_%d" % (self.cluster_num, iter)
+                plt.savefig(fileName + '.png',dpi=96)
+                
+                plt.close(fig)
+                del fig
+        
+            # calculate distance matrices
+            c_dist_matrix = squareform(pdist(c_whiten_dat))
+            k_dist_matrix = squareform(pdist(k_dat))
+    
+            # find nearest neighbours to each point in whitened coverage space,
+            # and use this to converage a point's kmer profile
+            new_k_dat = np_zeros(k_dat.shape)
+            k_putative_noise = set()
+            k_deltas = []
+            for index, row in enumerate(c_dist_matrix):
+                neigbhours = np_where(row <= c_radius)[0]
+                if len(neigbhours) > np_max([1, 0.1*eps_neighbours]):
+                    neigbhours = neigbhours[1:] # ignore self match
+                else:
+                    # extremely few neighbours so mark this as noise
+                    k_putative_noise.add(index)
+                    new_k_dat[index] = k_dat[index]
+                    continue
+            
+                # use distance between kmer profiles as weights for moving similar
+                # points towards each other; a minimum distance based on the kmer
+                # radius is used to avoid zeros and ensure all neighbours provide
+                # some weight
+                neighbour_dist = k_dist_matrix[index][neigbhours] + 0.1 * k_radius
+                
+                # move point towards neighbours using inverse distance weighting
+                inv_dist = 1.0 / neighbour_dist
+                sum_inv_dist = np_sum(inv_dist)
+                neighbour_weights = inv_dist / sum_inv_dist
+                new_k_dat[index] = (1-k_move_perc) * k_dat[index] + k_move_perc * np_sum( (k_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
+                
+                k_deltas.append(euclidean(k_dat[index], new_k_dat[index]))
+            
+            k_dat = new_k_dat
+            
+            # find nearest neighbours to each point in kmer space,
+            # and use this to converage a point's coverage profile
+            new_c_dat = np_zeros(c_dat.shape)
+            c_putative_noise = set()
+            c_deltas = []
+            for index, row in enumerate(k_dist_matrix):
+                neigbhours = np_where(row <= k_radius)[0]
+                if len(neigbhours) > np_max([1, 0.1*eps_neighbours]):
+                    neigbhours = neigbhours[1:] # ignore self match
+                else:
+                    # extremely few neighbours so mark this as nois
+                    c_putative_noise.add(index)
+                    new_c_dat[index] = c_dat[index]
+                    continue
+                
+                # use distance between whitened coverage profiles as weights for moving similar
+                # points towards each other; a minimum distance based of the coverage
+                # radius is used to avoid zeros and ensure all neighbours provide some weight
+                neighbour_dist = c_dist_matrix[index][neigbhours] + 0.1 * c_radius
+                
+                # move point towards neighbours using inverse distance weighting
+                inv_dist = 1.0 / neighbour_dist
+                sum_inv_dist = np_sum(inv_dist)
+                neighbour_weights = inv_dist / sum_inv_dist
+                new_c_dat[index] = (1-c_move_perc) * c_dat[index] + c_move_perc * np_sum( (c_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
+                new_c_whiten_dat = (1-c_move_perc) * c_whiten_dat[index] + c_move_perc * np_sum( (c_whiten_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
+                
+                c_deltas.append(euclidean(c_whiten_dat[index], new_c_whiten_dat))
+            
+            c_dat = new_c_dat
+            
+            # remove points that have no or few neighbours in both spaces,
+            # unless they are long enough to be of interest
+            noise = []
+            putative_noise = c_putative_noise.intersection(k_putative_noise)
+            for index in putative_noise:
+                if not self.BM.isGoodBin(l_dat[index], 1):
+                    noise.append(index)
+            
+            if len(noise) > 0:
+                c_dat = np_delete(c_dat, noise, axis = 0)
+                k_dat = np_delete(k_dat, noise, axis = 0)
+                l_dat = np_delete(l_dat, noise, axis = 0)
+                row_indices = np_delete(row_indices, noise, axis = 0)
+            
+            # get whitened version of modified coverage data (using original transformation)
+            c_whiten_dat = (c_dat-c_mean) / c_std
+            
+            if len(row_indices) == 0:
+                return None
+            
+            # check for convergence
+            if np_mean(k_deltas) < k_converged and np_mean(c_deltas) < c_converged:
+                break
 
-      # make a copy of the data we'll be munging
-      k_dat = np_copy(self.PM.kmerPCs[rowIndices])
-      c_dat = np_copy(self.PM.transformedCP[rowIndices])
-      l_dat = np_copy(self.PM.contigLengths[rowIndices])
-      row_indices = np_copy(rowIndices)
+        # perform hough transform clustering
+        self.HP.hc += 1
+        if self.debugPlots >= 3:
+            (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, scale=True, imgTag="MER")
+        else:
+            (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, scale=True)
+        
+        if(len(k_partitions) == 0):
+            return None
+        
+        partitions = []
+        k_sizes = [len(p) for p in k_partitions]
+        
+        #-----------------------
+        # GRID
+        if self.debugPlots >= 2:
+            c_max = np_max(c_dat[:,2]/10) * 1.1
+            k_max = np_max(k_dat[:,0]) * 1.1
+            c_min = np_min(c_dat[:,2]/10) * 0.9
+            k_min = np_min(k_dat[:,0]) * 0.9
+    
+            k_index_sort = np_argsort(k_dat[:,0])
+            start = 0
+            k_lines = []
+            for k in range(len(k_sizes)-1):
+                k_lines.append(k_dat[k_index_sort,0][k_sizes[k]+start])
+                start += k_sizes[k]
+    
+            fig = plt.figure()
+    
+            orig_k_dat = self.PM.kmerPCs[rowIndices,0]
+            orig_k2_dat = self.PM.kmerPCs[rowIndices,1]
+            orig_c_dat = self.PM.transformedCP[rowIndices][:,2]/10
+            orig_l_dat = np_sqrt(self.PM.contigLengths[rowIndices])
+    
+            ax = plt.subplot(221)
+            plt.xlabel("PCA1")
+            plt.ylabel("PCA2")
+    
+            from matplotlib.patches import Rectangle
+            alpha = 0.35
+            ax.scatter(orig_k_dat, orig_k2_dat, edgecolors='none', c=self.PM.contigGCs[rowIndices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=orig_l_dat, zorder=10, alpha=alpha)
+            XX = ax.get_xlim()
+            YY = ax.get_ylim()
+            ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+    
+            ax = plt.subplot(223)
+            plt.title("%s contigs" % len(rowIndices))
+            plt.xlabel("MER PARTS")
+            plt.ylabel("COV PARTS")
+            ax.scatter(orig_k_dat, orig_c_dat, edgecolors='none', c=self.PM.contigGCs[rowIndices], cmap=self.PM.colorMapGC, s=orig_l_dat, zorder=10, alpha=alpha)
+            XX = ax.get_xlim()
+            YY = ax.get_ylim()
+            ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+    
+            lens = np_sqrt(self.PM.contigLengths[row_indices])
+    
+            ax = plt.subplot(222)
+            plt.xlabel("PCA1")
+            plt.ylabel("PCA2")
+            ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors='none', c=self.PM.contigGCs[row_indices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=lens, zorder=10, alpha=alpha)
+            XX = ax.get_xlim()
+            YY = ax.get_ylim()
+            ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+    
+            ax = plt.subplot(224)
+            plt.title("%s contigs" % len(row_indices))
+            plt.xlabel("MER PARTS")
+            plt.ylabel("COV PARTS")
+            ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors='none', c=self.PM.contigGCs[row_indices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, zorder=10, alpha=alpha)
+    
+            ax.set_xlim(k_min, k_max)
+            ax.set_ylim(c_min, c_max)
+            XX = ax.get_xlim()
+            YY = ax.get_ylim()
+            ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
+    
+            k_line_cols = []
+            for k in range(len(k_sizes)):
+                if k == 0:
+                    if k_keeps[k]:
+                        k_line_cols = ['r-']
+                    else:
+                        k_line_cols = ['r--']
+                elif k == len(k_sizes) - 1:
+                    if k_keeps[k]:
+                        k_line_cols[-1] = 'r-'
+                    elif not k_keeps[k-1]:
+                        k_line_cols[-1] = 'r--'
+                else:
+                    if k_keeps[k]:
+                        k_line_cols[k-1] = 'r-'
+                        k_line_cols.append('r-')
+                    else:
+                        k_line_cols.append('r--')
+    
+            for k in range(len(k_lines)):
+                plt.plot([k_lines[k],k_lines[k]], [c_min, c_max], k_line_cols[k], zorder=11)
 
-      # calculate shortest distance to a corner (this isn't currently used)
-      min_dist_to_corner = 1e9
-      for corner in self.PM.corners:
-        dist = euclidean(corner[:,[0,1]], positionInPlane)
-        min_dist_to_corner = min(dist, min_dist_to_corner)
-
-      effect = np_min([0.3 * np_log(min_dist_to_corner+1), 1.])
-      k_move_perc = 0.15 * effect
-      c_move_perc = 0.15
-      
-      # calculate radius threshold in whitened transformed coverage space
-      eps_neighbours = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
-
-      # calculate mean and std in coverage space for whitening data
-      c_mean = np_mean(c_dat, axis=0)
-      c_std = np_std(c_dat, axis=0)
-      c_std += np_where(c_std == 0, 1, 0) # make sure std dev is never zero
-      c_whiten_dat = (c_dat-c_mean) / c_std
-
-      c_whiten_dist = pdist(c_whiten_dat)
-      c_dist_matrix = squareform(c_whiten_dist)
-      c_radius = np_median(np_sort(c_dist_matrix)[:,eps_neighbours-1])
-
-      # calculate radius threshold in kmer space
-      k_dist = pdist(k_dat)
-      k_dist_matrix = squareform(k_dist)
-      k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours-1])
-
-      # calculate convergence criteria
-      k_converged = 1e-2 * np_mean(k_dist)
-      c_converged = 1e-2 * np_mean(c_whiten_dist)
-      k_delta_mean = 0.
-      c_delta_mean = 0.
-      max_iterations = 50
-
-      # perform two-way contraction of kmer and coverage space
-      iter = 0
-      while iter < max_iterations:
-        iter += 1
+        pc = 0
+        for k in range(len(k_sizes)):
+            pc += 1
+            if k_keeps[k]:
+                k_part = k_partitions[k]
+                part_bp = np_sum(l_dat[k_part])
+                if self.BM.isGoodBin(part_bp, len(k_part), ms=5):
+        
+                    # select just the subset of covs for this kmer range
+                    data = np_copy(c_dat[k_part])
+                    Center(data,verbose=0)
+                    p = PCA(data)
+                    components = p.pc()
+                    data = np_array([float(i) for i in components[:,0]])
+        
+                    l_data = np_copy(l_dat[k_part])
+        
+                    # The PCA may reverse the ordering. So we just check here quickly
+                    if self.debugPlots >= 3:
+                        (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV", scale=True)
+                    else:
+                        (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, scale=True)
+        
+        
+                    if self.debugPlots >= 2:
+                        #-----
+                        # GRID
+                        c_sorted_data = np_copy(c_dat[k_part,2])/10.
+                        c_sorted_data = c_sorted_data[np_argsort(c_sorted_data)]
+        
+                        start = 0
+                        c_lines = []
+                        if k_part[c_partitions[0]][0] > k_part[c_partitions[-1]][0]:
+                            c_sizes = [len(p) for p in c_partitions][::-1]
+                            cc_keeps = c_keeps[::-1]
+                        else:
+                            c_sizes = [len(p) for p in c_partitions]
+                            cc_keeps = c_keeps
+        
+                        for c in range(len(c_sizes)-1):
+                            c_lines.append(c_sorted_data[c_sizes[c]+start])
+                            start += c_sizes[c]
+        
+                        c_line_cols = []
+                        for c in range(len(c_sizes)):
+                            if c == 0:
+                                if cc_keeps[c]:
+                                    c_line_cols = ['r-']
+                                else:
+                                    c_line_cols = ['r--']
+                            elif c == len(c_sizes) - 1:
+                                if cc_keeps[c]:
+                                    c_line_cols[-1] = 'r-'
+                                elif not cc_keeps[c-1]:
+                                    c_line_cols[-1] = 'r--'
+                            else:
+                                if cc_keeps[c]:
+                                    c_line_cols[c-1] = 'r-'
+                                    c_line_cols.append('r-')
+                                else:
+                                    c_line_cols.append('r--')
+        
+                        if pc == 1:
+                            k_line_min = k_min
+                        else:
+                            k_line_min = k_lines[pc-2]
+        
+                        if pc == len(k_partitions):
+                            k_line_max = k_max
+                        else:
+                            k_line_max = k_lines[pc-1]
+        
+                        for c in range(len(c_lines)):
+                            plt.plot([k_line_min,k_line_max], [c_lines[c], c_lines[c]], c_line_cols[c], zorder=11)
+        
+                    for c in range(len(c_partitions)):
+                        if c_keeps[c]:
+                            c_part = c_partitions[c]
+                            partitions.append(np_array(k_part[c_part]))
 
         if self.debugPlots >= 2:
-          if iter == 1:
-            try:
-              self.cluster_num
-            except:
-              self.cluster_num = 0
+            fig.set_size_inches(12,12)
+            plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
+            plt.close()
+            del fig
 
-            self.cluster_num += 1
-
-          fig = plt.figure()
-          ax = fig.add_subplot(111, projection='3d')
-
-          ax.scatter(c_dat[:,0],
-                     c_dat[:,1],
-                     c_dat[:,2],
-                     edgecolors='k',
-                     c=self.PM.contigGCs[row_indices],
-                     cmap=self.PM.colorMapGC,
-                     vmin=0.0, vmax=1.0,
-                     marker='.')
-
-          title = "Points: %s - kDelt: %f - cDelt: %f" %(str(len(c_dat[:,0])), k_delta_mean, c_delta_mean)
-          plt.title(title)
-
-          if iter == 1:
-            xlim = [np_min(c_dat[:,0]) - 0.05*np_min(c_dat[:,0]), np_max(c_dat[:,0]) + 0.05*np_max(c_dat[:,0])]
-            ylim = [np_min(c_dat[:,1]) - 0.05*np_min(c_dat[:,1]), np_max(c_dat[:,1]) + 0.05*np_max(c_dat[:,1])]
-            zlim = [np_min(c_dat[:,2]) - 0.05*np_min(c_dat[:,2]), np_max(c_dat[:,2]) + 0.05*np_max(c_dat[:,2])]
-
-          ax.set_xlim(xlim)
-          ax.set_ylim(ylim)
-          ax.set_zlim(zlim)
-
-          fig.set_size_inches(6,6)
-
-          fileName = "gh_%d_%d" % (self.cluster_num, iter)
-          plt.savefig(fileName + '.png',dpi=96)
-
-          plt.close(fig)
-          del fig
-
-        # calculate distance matrices
-        c_dist_matrix = squareform(pdist(c_whiten_dat))
-        k_dist_matrix = squareform(pdist(k_dat))
-
-        # find nearest neighbours to each point in whitened coverage space,
-        # and use this to converage a point's kmer profile
-        new_k_dat = np_zeros(k_dat.shape)
-        k_putative_noise = set()
-        k_deltas = []
-        for index, row in enumerate(c_dist_matrix):
-          neigbhours = np_where(row <= c_radius)[0]
-          if len(neigbhours) > np_max([1, 0.1*eps_neighbours]):
-            neigbhours = neigbhours[1:] # ignore self match
-          else:
-            # extremely few neighbours so mark this as noise
-            k_putative_noise.add(index)
-            new_k_dat[index] = k_dat[index]
-            continue
-
-          # use distance between kmer profiles as weights for moving similar
-          # points towards each other; a minimum distance based on the kmer
-          # radius is used to avoid zeros and ensure all neighbours provide
-          # some weight
-          neighbour_dist = k_dist_matrix[index][neigbhours] + 0.1 * k_radius
-
-          # move point towards neighbours using inverse distance weighting
-          inv_dist = 1.0 / neighbour_dist
-          sum_inv_dist = np_sum(inv_dist)
-          neighbour_weights = inv_dist / sum_inv_dist
-          new_k_dat[index] = (1-k_move_perc) * k_dat[index] + k_move_perc * np_sum( (k_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
-
-          k_deltas.append(euclidean(k_dat[index], new_k_dat[index]))
-
-        k_dat = new_k_dat
-
-        # find nearest neighbours to each point in kmer space,
-        # and use this to converage a point's coverage profile
-        new_c_dat = np_zeros(c_dat.shape)
-        c_putative_noise = set()
-        c_deltas = []
-        for index, row in enumerate(k_dist_matrix):
-          neigbhours = np_where(row <= k_radius)[0]
-          if len(neigbhours) > np_max([1, 0.1*eps_neighbours]):
-            neigbhours = neigbhours[1:] # ignore self match
-          else:
-            # extremely few neighbours so mark this as nois
-            c_putative_noise.add(index)
-            new_c_dat[index] = c_dat[index]
-            continue
-
-          # use distance between whitened coverage profiles as weights for moving similar
-          # points towards each other; a minimum distance based of the coverage
-          # radius is used to avoid zeros and ensure all neighbours provide some weight
-          neighbour_dist = c_dist_matrix[index][neigbhours] + 0.1 * c_radius
-
-          # move point towards neighbours using inverse distance weighting
-          inv_dist = 1.0 / neighbour_dist
-          sum_inv_dist = np_sum(inv_dist)
-          neighbour_weights = inv_dist / sum_inv_dist
-          new_c_dat[index] = (1-c_move_perc) * c_dat[index] + c_move_perc * np_sum( (c_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
-          new_c_whiten_dat = (1-c_move_perc) * c_whiten_dat[index] + c_move_perc * np_sum( (c_whiten_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
-
-          c_deltas.append(euclidean(c_whiten_dat[index], new_c_whiten_dat))
-
-        c_dat = new_c_dat
-
-        # remove points that have no or few neighbours in both spaces,
-        # unless they are long enough to be of interest
-        noise = []
-        putative_noise = c_putative_noise.intersection(k_putative_noise)
-        for index in putative_noise:
-          if not self.BM.isGoodBin(l_dat[index], 1):
-            noise.append(index)
-
-        if len(noise) > 0:
-          c_dat = np_delete(c_dat, noise, axis = 0)
-          k_dat = np_delete(k_dat, noise, axis = 0)
-          l_dat = np_delete(l_dat, noise, axis = 0)
-          row_indices = np_delete(row_indices, noise, axis = 0)
-
-        # get whitened version of modified coverage data (using original transformation)
-        c_whiten_dat = (c_dat-c_mean) / c_std
-
-        if len(row_indices) == 0:
-          return None
-
-        # check for convergence
-        k_delta_mean = np_mean(k_deltas)
-        c_delta_mean = np_mean(c_deltas)
-        if k_delta_mean < k_converged and c_delta_mean < c_converged:
-          break
-
-      # perform hough transform clustering
-      self.HP.hc += 1
-      if self.debugPlots >= 3:
-          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
-      else:
-          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat)
-
-      if(len(k_partitions) == 0):
-        return None
-
-      partitions = []
-      k_sizes = [len(p) for p in k_partitions]
-
-      #-----------------------
-      # GRID
-      if self.debugPlots >= 2:
-        c_max = np_max(c_dat[:,2]/10) * 1.1
-        k_max = np_max(k_dat[:,0]) * 1.1
-        c_min = np_min(c_dat[:,2]/10) * 0.9
-        k_min = np_min(k_dat[:,0]) * 0.9
-        k_eps = (k_max - k_min) / len(row_indices)
-        c_eps = (c_max - c_min) / len(row_indices)
-
-        k_index_sort = np_argsort(k_dat[:,0])
-        start = 0
-        k_lines = []
-        for k in range(len(k_sizes)-1):
-            k_lines.append(k_dat[k_index_sort,0][k_sizes[k]+start])
-            start += k_sizes[k]
-
-        fig = plt.figure()
-
-        orig_k_dat = self.PM.kmerPCs[rowIndices,0]
-        orig_k2_dat = self.PM.kmerPCs[rowIndices,1]
-        orig_c_dat = self.PM.transformedCP[rowIndices][:,2]/10
-        orig_l_dat = np_sqrt(self.PM.contigLengths[rowIndices])
-
-        ax = plt.subplot(221)
-        plt.xlabel("PCA1")
-        plt.ylabel("PCA2")
-
-        from matplotlib.patches import Rectangle
-        alpha = 0.35
-        ax.scatter(orig_k_dat, orig_k2_dat, edgecolors='none', c=self.PM.contigGCs[rowIndices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=orig_l_dat, zorder=10, alpha=alpha)
-        XX = ax.get_xlim()
-        YY = ax.get_ylim()
-        ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
-
-        ax = plt.subplot(223)
-        plt.title("%s contigs" % len(rowIndices))
-        plt.xlabel("MER PARTS")
-        plt.ylabel("COV PARTS")
-        ax.scatter(orig_k_dat, orig_c_dat, edgecolors='none', c=self.PM.contigGCs[rowIndices], cmap=self.PM.colorMapGC, s=orig_l_dat, zorder=10, alpha=alpha)
-        XX = ax.get_xlim()
-        YY = ax.get_ylim()
-        ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
-
-        lens = np_sqrt(self.PM.contigLengths[row_indices])
-
-        ax = plt.subplot(222)
-        plt.xlabel("PCA1")
-        plt.ylabel("PCA2")
-        ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors='none', c=self.PM.contigGCs[row_indices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=lens, zorder=10, alpha=alpha)
-        XX = ax.get_xlim()
-        YY = ax.get_ylim()
-        ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
-
-        ax = plt.subplot(224)
-        plt.title("%s contigs" % len(row_indices))
-        plt.xlabel("MER PARTS")
-        plt.ylabel("COV PARTS")
-        ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors='none', c=self.PM.contigGCs[row_indices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, zorder=10, alpha=alpha)
-
-        ax.set_xlim(k_min, k_max)
-        ax.set_ylim(c_min, c_max)
-        XX = ax.get_xlim()
-        YY = ax.get_ylim()
-        ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
-
-        k_line_cols = []
-        for k in range(len(k_sizes)):
-            if k == 0:
-                if k_keeps[k]:
-                    k_line_cols = ['r-']
-                else:
-                    k_line_cols = ['r--']
-            elif k == len(k_sizes) - 1:
-                if k_keeps[k]:
-                    k_line_cols[-1] = 'r-'
-                elif not k_keeps[k-1]:
-                    k_line_cols[-1] = 'r--'
-            else:
-                if k_keeps[k]:
-                    k_line_cols[k-1] = 'r-'
-                    k_line_cols.append('r-')
-                else:
-                    k_line_cols.append('r--')
-
-        for k in range(len(k_lines)):
-            plt.plot([k_lines[k],k_lines[k]], [c_min, c_max], k_line_cols[k], zorder=11)
-
-      pc = 0
-      for k in range(len(k_sizes)):
-          pc += 1
-          if k_keeps[k]:
-              k_part = k_partitions[k]
-              k_sep_indices = row_indices[k_part]
-              part_bp = np_sum(l_dat[k_part])
-              if self.BM.isGoodBin(part_bp, len(k_part), ms=5):
-
-                  # select just the subset of covs for this kmer range
-                  data = np_copy(c_dat[k_part])
-                  Center(data,verbose=0)
-                  p = PCA(data)
-                  components = p.pc()
-                  data = np_array([float(i) for i in components[:,0]])
-
-                  l_data = np_copy(l_dat[k_part])
-
-                  # The PCA may reverse the ordering. So we just check here quickly
-                  if self.debugPlots >= 3:
-                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV")
-                  else:
-                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data)
-
-
-                  if self.debugPlots >= 2:
-                      #-----
-                      # GRID
-                      c_sorted_data = np_copy(c_dat[k_part,2])/10.
-                      c_sorted_data = c_sorted_data[np_argsort(c_sorted_data)]
-
-                      start = 0
-                      c_lines = []
-                      if k_part[c_partitions[0]][0] > k_part[c_partitions[-1]][0]:
-                          c_sizes = [len(p) for p in c_partitions][::-1]
-                          cc_keeps = c_keeps[::-1]
-                      else:
-                          c_sizes = [len(p) for p in c_partitions]
-                          cc_keeps = c_keeps
-
-                      for c in range(len(c_sizes)-1):
-                          c_lines.append(c_sorted_data[c_sizes[c]+start])
-                          start += c_sizes[c]
-
-                      c_line_cols = []
-                      for c in range(len(c_sizes)):
-                          if c == 0:
-                              if cc_keeps[c]:
-                                  c_line_cols = ['r-']
-                              else:
-                                  c_line_cols = ['r--']
-                          elif c == len(c_sizes) - 1:
-                              if cc_keeps[c]:
-                                  c_line_cols[-1] = 'r-'
-                              elif not cc_keeps[c-1]:
-                                  c_line_cols[-1] = 'r--'
-                          else:
-                              if cc_keeps[c]:
-                                  c_line_cols[c-1] = 'r-'
-                                  c_line_cols.append('r-')
-                              else:
-                                  c_line_cols.append('r--')
-
-                      if pc == 1:
-                          k_line_min = k_min
-                      else:
-                          k_line_min = k_lines[pc-2]
-
-                      if pc == len(k_partitions):
-                          k_line_max = k_max
-                      else:
-                          k_line_max = k_lines[pc-1]
-
-                      for c in range(len(c_lines)):
-                          plt.plot([k_line_min,k_line_max], [c_lines[c], c_lines[c]], c_line_cols[c], zorder=11)
-
-                  for c in range(len(c_partitions)):
-                      if c_keeps[c]:
-                          c_part = c_partitions[c]
-                          partitions.append(np_array(k_part[c_part]))
-
-      if self.debugPlots >= 2:
-          fig.set_size_inches(12,12)
-          plt.savefig("%d_GRID" % self.HP.hc,dpi=300)
-          plt.close()
-          del fig
-
-      if len(partitions) == 0:
-          return None
-
-      ret_parts = []
-      for p in partitions:
-          ret_parts.append(np_array(row_indices[p]))
-
-      return np_array(ret_parts)
+        if len(partitions) == 0:
+            return None
+        
+        ret_parts = []
+        for p in partitions:
+            ret_parts.append(np_array(row_indices[p]))
+        
+        return np_array(ret_parts)
 
 #------------------------------------------------------------------------------
 # DATA MAP MANAGEMENT
@@ -1098,7 +1088,8 @@ class ClusterEngine:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         cm = mpl.colors.LinearSegmentedColormap('my_colormap', disp_cols, 1024)
-        result = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors=disp_cols, c=disp_cols, cmap=cm, marker='.')
+        sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors=disp_cols, c=disp_cols, cmap=cm, marker='.')
+        sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
         title = str.join(" ", ["Focus at: (",str(px), str(py), str(self.PM.scaleFactor - pz - 1),")\n",tag])
         plt.title(title)
 
@@ -1489,7 +1480,7 @@ class HoughPartitioner:
                         assigned[real_index] = None
 
                 if len(tmp.keys()) > 0:
-                  rets.append(np_array(tmp.keys()))
+                    rets.append(np_array(tmp.keys()))
 
             else:
                 # otherwise we keep working with ranges
@@ -1523,7 +1514,7 @@ class HoughPartitioner:
                         assigned[real_index] = None
 
                 if len(tmp.keys()) > 0:
-                  rets.append(np_array(tmp.keys()))
+                    rets.append(np_array(tmp.keys()))
             else:
                 right_p = self.recursiveSelect(tData,
                                                imShape,
@@ -1654,4 +1645,3 @@ class HoughPartitioner:
 ###############################################################################
 ###############################################################################
 ###############################################################################
-

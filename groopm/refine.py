@@ -49,55 +49,29 @@ __status__ = "Alpha"
 
 ###############################################################################
 
-from sys import exc_info, exit, stdout as sys_stdout
-from Queue import Queue
-from operator import itemgetter
-import readline
-
-from PIL import Image
-import rainbow
+import sys
+from sys import stdout as sys_stdout
 
 from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.cm import get_cmap
-from mpl_toolkits.mplot3d import axes3d, Axes3D
-from pylab import plot,subplot,axis,stem,show,figure
 from numpy import (abs as np_abs,
-                   amax as np_amax,
-                   amin as np_amin,
                    append as np_append,
                    arange as np_arange,
                    arccos as np_arccos,
-                   arccos as np_cos,
-                   argmax as np_argmax,
                    argmin as np_argmin,
                    argsort as np_argsort,
                    around as np_around,
                    array as np_array,
-                   bincount as np_bincount,
-                   ceil as np_ceil,
                    concatenate as np_concatenate,
                    copy as np_copy,
-                   cos as np_cos,
-                   delete as np_delete,
                    dot as np_dot,
-                   eye as np_eye,
-                   hstack as np_hstack,
                    max as np_max,
                    mean as np_mean,
                    median as np_median,
                    min as np_min,
                    ones as np_ones,
-                   ones_like as np_ones_like,
-                   pi as np_pi,
-                   ravel as np_ravel,
                    reshape as np_reshape,
                    seterr as np_seterr,
-                   shape as np_shape,
-                   sin as np_sin,
-                   size as np_size,
-                   sort as np_sort,
                    sqrt as np_sqrt,
                    std as np_std,
                    sum as np_sum,
@@ -105,19 +79,15 @@ from numpy import (abs as np_abs,
                    zeros as np_zeros)
 from numpy.linalg import norm as np_norm
 from numpy.random import (randint as randint,
-                          random as random,
                           shuffle as shuffle)
 
 from scipy.spatial import KDTree as kdt
-from scipy.cluster.vq import kmeans,vq,whiten,kmeans2
 from scipy.spatial.distance import cdist, squareform, pdist
 
 # GroopM imports
 from binManager import BinManager
-from bin import Bin
 from ellipsoid import EllipsoidTool
 from PCA import PCA, Center
-import groopmTimekeeper as gtime
 import groopmExceptions as ge
 from som import SOM
 np_seterr(all='raise')
@@ -239,28 +209,28 @@ class RefineEngine:
 
                 bValid = False
                 while(not bValid):
-                  try:
-                      colormap_id = int(raw_input(" Enter colormap number (e.g., 1): "))
-                      if colormap_id < 1 or colormap_id > 7:
-                        raise ValueError('Invalid colormap id.')
-                      bValid = True
-                  except ValueError:
+                    try:
+                        colormap_id = int(raw_input(" Enter colormap number (e.g., 1): "))
+                        if colormap_id < 1 or colormap_id > 7:
+                            raise ValueError('Invalid colormap id.')
+                        bValid = True
+                    except ValueError:
                         print "Colormap must be specified as a number between 1 and 7."
 
                 if colormap_id == 1:
-                  self.PM.setColorMap('HSV')
+                    self.PM.setColorMap('HSV')
                 elif colormap_id == 2:
-                  self.PM.setColorMap('Accent')
+                    self.PM.setColorMap('Accent')
                 elif colormap_id == 3:
-                  self.PM.setColorMap('Blues')
+                    self.PM.setColorMap('Blues')
                 elif colormap_id == 4:
-                  self.PM.setColorMap('Spectral')
+                    self.PM.setColorMap('Spectral')
                 elif colormap_id == 5:
-                  self.PM.setColorMap('Grayscale')
+                    self.PM.setColorMap('Grayscale')
                 elif colormap_id == 6:
-                  self.PM.setColorMap('Discrete')
+                    self.PM.setColorMap('Discrete')
                 elif colormap_id == 7:
-                  self.PM.setColorMap('DiscretePaired')
+                    self.PM.setColorMap('DiscretePaired')
 
             elif(user_option == 'E'):
                 if use_elipses:
@@ -302,18 +272,17 @@ class RefineEngine:
             elif(user_option == 'G'):
                 # display a subset only!
                 have_range = False
-                krange=0
                 while(not have_range):
                     try:
                         gc_range_str = raw_input(" Enter GC range to examine (e.g., 0.5-0.6): ")
 
                         if '-' not in gc_range_str:
-                          raise ValueError('Incorrectly formatted GC range.')
+                            raise ValueError('Incorrectly formatted GC range.')
                         else:
-                          values = gc_range_str.split('-')
-                          start = float(values[0])
-                          end = float(values[1])
-                          gc_range=[start,end]
+                            values = gc_range_str.split('-')
+                            start = float(values[0])
+                            end = float(values[1])
+                            gc_range=[start,end]
 
                         have_range = True
                     except ValueError:
@@ -654,7 +623,7 @@ class RefineEngine:
         index = 0
         for bid in bids:
             if self.PM.isLikelyChimeric[bid]: # ignore bins that are likely chimeric
-              continue
+                continue
 
             bin = self.BM.bins[bid]
 
@@ -700,7 +669,7 @@ class RefineEngine:
         kmer_search_tree = kdt(kmer_tdm)
         for bid in bids:
             if self.PM.isLikelyChimeric[bid]: # ignore bins that are likely chimeric
-              continue
+                continue
 
             # get the base bid and trace the chain up through mergers...
             merged_base_bid = bid
@@ -902,7 +871,6 @@ class RefineEngine:
 
             #if VVB:
             #    print bid1, bid2, k_diff,
-            mers_OK = False
             if k_diff <= kCut:
                 should_merge = True
             else:
@@ -1277,7 +1245,7 @@ class RefineEngine:
         for bid in new_assignments:
             if bid != 0:
                 row_indices = np_array(new_assignments[bid])
-                new_bin = self.BM.makeNewBin(rowIndices=row_indices, bid=bid)
+                self.BM.makeNewBin(rowIndices=row_indices, bid=bid)
                 self.PM.validBinIds[bid] = len(row_indices)
                 for row_index in row_indices:
                     self.PM.binIds[row_index] = bid
@@ -1286,7 +1254,7 @@ class RefineEngine:
         # remove any reassigned contigs within chimeric bins
         for bid in chimeric_bids:
             if bid in self.BM.getBids():
-              self.PM.isLikelyChimeric[bid] = True
+                self.PM.isLikelyChimeric[bid] = True
 
         return []
 
@@ -1295,7 +1263,7 @@ class RefineEngine:
         print "    Removing dud cores (min %d contigs or %d bp)" % (ms, mv)
         deleters = []
         for bid in self.BM.getBids():
-            bin = self.BM.bins[bid]
+            self.BM.bins[bid]
             if not self.BM.isGoodBin(bin.totalBP, bin.binSize, ms=ms, mv=mv):
                 # delete this chap!
                 deleters.append(bid)
@@ -1442,9 +1410,7 @@ class RefineEngine:
         mean_k_vals = []
         for bid in self.BM.getBids():
             if self.PM.isLikelyChimeric[bid]: # ignore bins that are likely chimeric
-              continue
-
-            bin = self.BM.bins[bid]
+                continue
 
             bin_k_vals = self.PM.kmerPCs[bin.rowIndices]
             k_dist = pdist(bin_k_vals)
@@ -1459,9 +1425,7 @@ class RefineEngine:
         max_in_bin = 100 # at most XXX contigs per bin
         for bid in self.BM.getBids():
             if self.PM.isLikelyChimeric[bid]:
-              continue
-
-            bin = self.BM.bins[bid]
+                continue
 
             if bin.binSize < max_in_bin:
                 sample_size = bin.binSize
@@ -1955,8 +1919,6 @@ class RefineEngine:
         print "Recruiting unbinned contigs"
 
         # make a list of all the cov and kmer vals
-        num_bins = len(self.BM.bins)
-        num_expanded = 1
         total_expanded = 0
         total_binned = 0
         total_unbinned = 0
