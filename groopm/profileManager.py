@@ -122,11 +122,12 @@ class ProfileManager:
 
         # --> NOTE: ALL of the arrays in this section are in sync
         # --> each one holds information for an individual contig
-        self.indices = np_array([])        # indices into the data structure based on condition
+        self.indices = np_array([])         # indices into the data structure based on condition
         self.covProfiles = np_array([])     # coverage based coordinates
         self.transformedCP = np_array([])   # the munged data points
         self.corners = np_array([])         # the corners of the tranformed space
-        self.averageCoverages = np_array([]) # average coverage across all stoits
+        self.TCentre = 0.                   # the centre of the coverage space
+        self.averageCoverages = np_array([])# average coverage across all stoits
         self.normCoverages = np_array([])   # norm of the raw coverage vectors
         self.kmerSigs = np_array([])        # raw kmer signatures
         self.kmerNormPC1 = np_array([])     # First PC of kmer sigs normalized to [0, 1]
@@ -580,20 +581,20 @@ class ProfileManager:
         self.corners[:,0] /= cmax[0]
         self.corners[:,1] /= cmax[1]
         for i in range(self.numStoits):
-            self.corners[i,2] = self.scaleFactor + 100
+            self.corners[i,2] = self.scaleFactor + 100 # only affect the z axis
 
+        self.TCentre = np_mean(self.corners, axis=0)
 
         if self.squish:
             # find the centre of the plot
-            centre_stick = np_mean(self.corners, axis=0)
-            centre_stick[2] = 0.
-            self.transformedCP -= centre_stick
+            self.TCentre[2] = 0.
+            self.transformedCP -= self.TCentre
             # squish up
             for i in range(len(self.transformedCP)):
                 shift = (self.transformedCP[i][2] / self.scaleFactor)
                 mult = np_array([shift, shift, 1.])
                 self.transformedCP[i] *= mult
-            self.transformedCP += centre_stick
+            self.transformedCP += self.TCentre
 
         return(min,max)
 
