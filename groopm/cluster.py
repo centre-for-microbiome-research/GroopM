@@ -72,6 +72,8 @@ from numpy import (abs as np_abs,
                    fill_diagonal as np_fill_diagonal,
                    finfo as np_finfo,
                    hypot as np_hypot,
+                   inf as np_inf,
+                   log as np_log,
                    log10 as np_log10,
                    max as np_max,
                    mean as np_mean,
@@ -95,6 +97,7 @@ from numpy import (abs as np_abs,
                    unravel_index as np_unravel_index,
                    where as np_where,
                    zeros as np_zeros)
+from numpy.linalg import norm as np_norm
 import scipy.ndimage as ndi
 from scipy.spatial.distance import pdist, squareform, euclidean
 from scipy.misc import imsave
@@ -153,6 +156,7 @@ class ClusterEngine:
         self.finalPlot = finalPlot
         self.imageCounter = 1           # when we print many images
         self.roundNumber = 0            # how many times have we tried to make a bin?
+        self.TSpan = 0.                 # dist from centre to the corner
 
     def promptOnOverwrite(self, minimal=False):
         """Check that the user is ok with possibly overwriting the DB"""
@@ -200,6 +204,10 @@ class ClusterEngine:
         # plot the transformed space (if we've been asked to...)
         if(self.debugPlots >= 3):
             self.PM.renderTransCPData()
+
+        # now we can make this guy
+        self.TSpan = np_mean([np_norm(self.PM.corners[i] - self.PM.TCentre) for i in range(self.PM.numStoits)])
+        
         print "    %s" % self.timer.getTimeStamp()
 
         # cluster and bin!
@@ -431,6 +439,10 @@ class ClusterEngine:
         dist = euclidean(corner[:,[0,1]], positionInPlane)
         min_dist_to_corner = min(dist, min_dist_to_corner)
 
+      effect = np_min([0.3 * np_log(min_dist_to_corner+1), 1.])
+      k_move_perc = 0.15 * effect
+      c_move_perc = 0.15
+      
       # calculate radius threshold in whitened transformed coverage space
       eps_neighbours = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
 
@@ -450,12 +462,11 @@ class ClusterEngine:
       k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours-1])
 
       # calculate convergence criteria
-      k_converged = 5e-2 * np_mean(k_dist)
-      c_converged = 5e-2 * np_mean(c_whiten_dist)
+      k_converged = 1e-2 * np_mean(k_dist)
+      c_converged = 1e-2 * np_mean(c_whiten_dist)
+      k_delta_mean = 0.
+      c_delta_mean = 0.
       max_iterations = 50
-
-      k_move_perc = 0.15
-      c_move_perc = 0.15
 
       # perform two-way contraction of kmer and coverage space
       iter = 0
@@ -483,7 +494,7 @@ class ClusterEngine:
                      vmin=0.0, vmax=1.0,
                      marker='.')
 
-          title = "Points: " + str(len(c_dat[:,0]))
+          title = "Points: %s - kDelt: %f - cDelt: %f" %(str(len(c_dat[:,0])), k_delta_mean, c_delta_mean)
           plt.title(title)
 
           if iter == 1:
@@ -590,15 +601,17 @@ class ClusterEngine:
           return None
 
         # check for convergence
-        if np_mean(k_deltas) < k_converged and np_mean(c_deltas) < c_converged:
+        k_delta_mean = np_mean(k_deltas)
+        c_delta_mean = np_mean(c_deltas)
+        if k_delta_mean < k_converged and c_delta_mean < c_converged:
           break
 
       # perform hough transform clustering
       self.HP.hc += 1
       if self.debugPlots >= 3:
-          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, scale=True, imgTag="MER")
+          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
       else:
-          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, scale=True)
+          (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat)
 
       if(len(k_partitions) == 0):
         return None
@@ -714,9 +727,9 @@ class ClusterEngine:
 
                   # The PCA may reverse the ordering. So we just check here quickly
                   if self.debugPlots >= 3:
-                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV", scale=True)
+                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV")
                   else:
-                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, scale=True)
+                      (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data)
 
 
                   if self.debugPlots >= 2:
@@ -1219,38 +1232,30 @@ class HoughPartitioner:
         else:
             scale = np_max(dAta) - np_min(dAta)
 
-        if True:
-            # we want to know how much each value differs from it's neighbours
-            back_diffs = [float(data[i] - data[i-1]) for i in range(1,d_len)]
-            diffs = [back_diffs[0]]
-            for i in range(len(back_diffs)-1):
-                diffs.append((back_diffs[i] + back_diffs[i+1])/2)
-            diffs.append(back_diffs[-1])
-            diffs = np_array(diffs)**2  # square it! Makes things more betterrer
+        # we want to know how much each value differs from it's neighbours
+        back_diffs = [float(data[i] - data[i-1]) for i in range(1,d_len)]
+        diffs = [back_diffs[0]]
+        for i in range(len(back_diffs)-1):
+            diffs.append((back_diffs[i] + back_diffs[i+1])/2)
+        diffs.append(back_diffs[-1])
+        diffs = np_array(diffs)**2  # square it! Makes things more betterrer
 
-            # replace the data array by the sum of it's diffs
-            for i in range(1, d_len):
-                diffs[i] += diffs[i-1]
+        # replace the data array by the sum of it's diffs
+        for i in range(1, d_len):
+            diffs[i] += diffs[i-1]
 
-            # scale to fit between 0 and len(diffs)
-            # HT works better on a square
-            diffs -= np_min(diffs)
-            try:
-                diffs /= np_max(diffs)
-            except FloatingPointError:
-                pass
-            diffs *= len(diffs)
+        # scale to fit between 0 and len(diffs)
+        # HT works better on a square
+        diffs -= np_min(diffs)
+        try:
+            diffs /= np_max(diffs)
+        except FloatingPointError:
+            pass
+        diffs *= len(diffs)
 
-            # make it 2D
-            t_data = np_array(zip(diffs, np_arange(d_len)))
-        else:
-            try:
-                data /= np_max(data)
-            except FloatingPointError:
-                pass
-            data *= scale
-            t_data = np_array(zip(data, np_arange(d_len)))
-
+        # make it 2D
+        t_data = np_array(zip(diffs, np_arange(d_len)))
+#        t_data = np_array(zip(data, np_arange(d_len)))
         im_shape = (int(np_max(t_data, axis=0)[0]+1), d_len)
 
         #----------------------------------------------------------------------
@@ -1375,11 +1380,33 @@ class HoughPartitioner:
                         imgTag=None):
         """Recursively select clusters from the data"""
         d_len = len(tData)
-        (m, c, accumulator) = self.houghTransform(tData.astype(float)[startRange:endRange,:], imShape)
+        (m, ret_point, accumulator) = self.houghTransform(tData.astype(float)[startRange:endRange,:], imShape)
+
+        if m == np_inf:
+            # this is a vertical line through ret_point
+            start_p = [0, ret_point[1]]
+            end_p = [imShape[0], ret_point[1]]
+        else:
+            # find out where the line crosses axes
+            y_int = ret_point[0] - m * ret_point[1]
+            if m == 0:
+                # line is flat
+                x_int = np_inf
+            else:
+                x_int = ret_point[1] - ret_point[0] / m
+
+            if np_abs(y_int) < np_abs(x_int):
+                # m line passes above (0,0)
+                start_p = [y_int, 0]
+                end_p = [imShape[1]*m + y_int, imShape[1]]
+            else:
+                # m line passes below (0,0)
+                start_p = [0, x_int]
+                end_p = [imShape[0], imShape[0]/m + x_int]
 
         # draw a nice thick line over the top of the data
         # found_line is a set of points
-        found_line = self.points2Line(np_array([[c,0],[m*imShape[1]+c,imShape[1]]]), imShape[1], imShape[0], 5)
+        found_line = self.points2Line(np_array([start_p,end_p]), imShape[1], imShape[0], 5)
 
         # make an image if we're that way inclined
         if imgTag is not None:
@@ -1419,7 +1446,17 @@ class HoughPartitioner:
 
         # check to see the line hit something
         if len(block_lens) == 0:
-            return np_array([np_arange(startRange, endRange)])
+            tmp = {}
+            for ii in np_arange(startRange, endRange):
+                real_index = spread2real[ii]
+                if real_index not in assigned:
+                    tmp[real_index] = None
+                    assigned[real_index] = None
+            centre = np_array(tmp.keys())
+            if len(centre) > 0:
+                return np_array([centre])
+            # nuffin
+            return np_array([])
 
         # get the start and end indices in the longest block found
         longest_block = np_argmax(block_lens)
@@ -1432,7 +1469,6 @@ class HoughPartitioner:
         tmp = {}
         for ii in np_arange(spread_start, spread_end):
             real_index = spread2real[ii]
-
             if real_index not in assigned:
                 tmp[real_index] = None
                 assigned[real_index] = None
@@ -1501,7 +1537,7 @@ class HoughPartitioner:
                 for R in right_p:
                     if len(R) > 0:
                         rets.append(R)
-        return rets
+        return np_array(rets)
 
     def points2Line(self, points, xIndexLim, yIndexLim, thickness):
         """Draw a thick line between a series of points"""
@@ -1589,25 +1625,30 @@ class HoughPartitioner:
         rad = float(min_row - half_rows)*dr
 
         # now de hough!
-        try:
+        # first get a point our found line passes through
+        Ps = []
+        for p in range(len(data)):
+            point = data[p]
+            th = dth * min_col
+            r = point[1]*np_cos(th) + point[0]*np_sin(th)
+            iry = half_rows + int(r/dr)
+            # this point does
+            if iry == min_row:
+                Ps.append(data[p])
+        # take the average of all of em'
+        ret_point = np_mean(Ps, axis=0)
+        
+        # get the gradient
+        if theta != 0:
             m = -1. * np_cos(theta) / np_sin(theta)
-            c = rad / np_sin(theta)
-        except FloatingPointError:
-            # when we are trying to do a perfectly
-            # straight line
-            m = 0.
-            c = rad
+        else:
+            m = np_inf
 
         # rounding errors suck
         if np_allclose([m], [0.]):
             m = 0.
-        if np_allclose([c], [0.]):
-            c = 0.
 
-        if m < 0:
-            m = 0.
-
-        return (m, c, accumulator.reshape((rows, cols)))
+        return (m, ret_point, accumulator.reshape((rows, cols)))
 
 ###############################################################################
 ###############################################################################
