@@ -52,15 +52,11 @@ import os
 import sys
 import errno
 
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import axes3d, Axes3D
-from pylab import plot,subplot,axis,stem,show,figure
 
 import numpy as np
 
 # GroopM imports
-import profileManager
 import binManager
 import mstore
 
@@ -117,9 +113,9 @@ class GMExtractor:
         print "Writing files"
         for bid in self.BM.getBids():
             if self.BM.PM.isLikelyChimeric[bid]:
-              file_name = os.path.join(self.outDir, "BIN_%d.chimeric.fa" % bid)
+                file_name = os.path.join(self.outDir, "BIN_%d.chimeric.fa" % bid)
             else:
-              file_name = os.path.join(self.outDir, "BIN_%d.fa" % bid)
+                file_name = os.path.join(self.outDir, "BIN_%d.fa" % bid)
             try:
                 with open(file_name, 'w') as f:
                     for row_index in self.BM.getBin(bid).rowIndices:

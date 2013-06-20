@@ -164,7 +164,7 @@ class ProfileManager:
                  verbose=True,              # many to some output messages
                  silent=False,              # some to no output messages
                  loadCovProfiles=True,
-                 loadKmerSigs=True,
+                 loadKmerPCs=True,
                  loadKmerVarPC=True,
                  loadRawKmers=False,
                  makeColors=True,
@@ -217,7 +217,7 @@ class ProfileManager:
                     print "    Loading RAW kmer sigs"
                 self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indices=self.indices)
 
-            if(loadKmerSigs):
+            if(loadKmerPCs):
                 self.kmerPCs = self.dataManager.getKmerPCAs(self.dbFileName, indices=self.indices)
 
                 if(verbose):
@@ -247,14 +247,15 @@ class ProfileManager:
                 self.contigGCs = self.dataManager.getContigGCs(self.dbFileName, indices=self.indices)
                 if(verbose):
                     print "    Loading contig GC ratios (Average GC: %0.3f)" % ( np_mean(self.contigGCs) )
-                if(makeColors):
-                    if(verbose):
-                        print "    Creating color profiles"
+                    
+            if(makeColors):
+                if(verbose):
+                    print "    Creating color map"
 
-                    # use HSV to RGB to generate colors
-                    S = 1       # SAT and VAL remain fixed at 1. Reduce to make
-                    V = 1       # Pastels if that's your preference...
-                    self.colorMapGC = self.createColorMapHSV()
+                # use HSV to RGB to generate colors
+                S = 1       # SAT and VAL remain fixed at 1. Reduce to make
+                V = 1       # Pastels if that's your preference...
+                self.colorMapGC = self.createColorMapHSV()
 
             if(loadBins):
                 if(verbose):
@@ -720,9 +721,16 @@ class ProfileManager:
 
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
-        sc = ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
+        sc = ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.', s = 100)
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
         self.plotStoitNames(ax1)
+        
+        cbar = plt.colorbar(sc, shrink=0.5)
+        cbar.ax.tick_params()
+        cbar.ax.set_title("% GC", size=10)
+        cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+        cbar.ax.set_ylim([0.15, 0.85])
+        cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
 
         try:
             plt.show()

@@ -59,17 +59,14 @@ from numpy import (abs as np_abs,
                    append as np_append,
                    arange as np_arange,
                    argmax as np_argmax,
-                   argmin as np_argmin,
                    argsort as np_argsort,
                    around as np_around,
                    array as np_array,
                    bincount as np_bincount,
-                   column_stack as np_col_stack,
                    concatenate as np_concatenate,
                    copy as np_copy,
                    cos as np_cos,
                    delete as np_delete,
-                   fill_diagonal as np_fill_diagonal,
                    finfo as np_finfo,
                    hypot as np_hypot,
                    log10 as np_log10,
@@ -77,21 +74,17 @@ from numpy import (abs as np_abs,
                    mean as np_mean,
                    median as np_median,
                    min as np_min,
-                   newaxis as np_newaxis,
                    ones as np_ones,
                    pi as np_pi,
                    reshape as np_reshape,
-                   seterr as np_seterr,
                    seterr as np_seterr,
                    shape as np_shape,
                    sin as np_sin,
                    size as np_size,
                    sort as np_sort,
-                   square as np_square,
                    std as np_std,
                    sum as np_sum,
                    sqrt as np_sqrt,
-                   tile as np_tile,
                    unravel_index as np_unravel_index,
                    where as np_where,
                    zeros as np_zeros)
@@ -104,7 +97,7 @@ from profileManager import ProfileManager
 from binManager import BinManager
 from refine import GrubbsTester, RefineEngine
 from PCA import PCA, Center
-from groopmExceptions import *
+from groopmExceptions import BinNotFoundException
 
 np_seterr(all='raise')
 
@@ -191,7 +184,7 @@ class ClusterEngine:
             return False
 
         # get some data
-        self.PM.loadData(self.timer, loadRawKmers=True, condition="length >= "+str(coreCut))
+        self.PM.loadData(self.timer, condition="length >= "+str(coreCut))
         print "    %s" % self.timer.getTimeStamp()
 
         # transform the data
@@ -291,15 +284,12 @@ class ClusterEngine:
                     for row_indices in partitions:
                         self.restrictRowIndices(row_indices)
 
-                if False:
-                    # try to merge these guys here...
-                    if num_bids_made > 1:
-                        self.RE.mergeSimilarBins(None,
-                                            None,
-                                            bids=bids_made,
-                                            loose=2.,
-                                            verbose=False,
-                                            silent=True)
+                # try to merge these guys here...
+#                 if num_bids_made > 1:
+#                     self.RE.mergeSimilarBins(bids=bids_made,
+#                                         loose=2.,
+#                                         verbose=False,
+#                                         silent=True)
 
                 # do some post processing
                 for bid in bids_made:
@@ -426,8 +416,8 @@ class ClusterEngine:
         # calculate shortest distance to a corner (this isn't currently used)
         min_dist_to_corner = 1e9
         for corner in self.PM.corners:
-          dist = euclidean(corner[:,[0,1]], positionInPlane)
-          min_dist_to_corner = min(dist, min_dist_to_corner)
+            dist = euclidean(corner[:,[0,1]], positionInPlane)
+            min_dist_to_corner = min(dist, min_dist_to_corner)
         
         # calculate radius threshold in whitened transformed coverage space
         eps_neighbours = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
@@ -1389,7 +1379,7 @@ class HoughPartitioner:
             accumulator /= np_max(accumulator)
             accumulator *= 255
 
-            imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
+            #imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
 
         # see which points lie on the line
         # we need to protect against the data line crossing

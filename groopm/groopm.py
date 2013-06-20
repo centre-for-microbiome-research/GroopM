@@ -77,13 +77,16 @@ from mstore import GMDataManager
 class GroopMOptionsParser():
     def __init__(self):
         # set default value for matplotlib
-        mpl.rcParams['lines.linewidth'] = 0.5
+        mpl.rcParams['lines.linewidth'] = 1
         
         mpl.rcParams['xtick.labelsize'] = 8
         mpl.rcParams['ytick.labelsize'] = 8
         mpl.rcParams['legend.fontsize'] = 10
         mpl.rcParams['axes.labelsize'] = 10
         mpl.rcParams['axes.titlesize'] = 12
+        mpl.rcParams['axes.linewidth'] = 0.25
+        
+        mpl.rcParams['axes3d.grid'] = True
         
         mpl.rcParams['savefig.dpi'] = 300
         

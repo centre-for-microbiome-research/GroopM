@@ -49,17 +49,8 @@ __status__ = "Alpha"
 
 ###############################################################################
 
-import sys
-from random import *
-import math
-import sys
-import numpy as np
-import os
-from PIL import Image, ImageDraw
-import string
 
-# GroopM imports
-from torusMesh import TorusMesh as tm
+import math
 
 
 ###############################################################################

@@ -55,6 +55,11 @@ import matplotlib.pyplot as plt
 from pylab import show
 
 import numpy as np
+from numpy import (around as np_around,
+                   array as np_array,
+                   mean as np_mean,
+                   median as np_median,
+                   std as np_std)
 
 from ellipsoid import EllipsoidTool
 from groopmExceptions import ModeNotAppropriateException
@@ -82,32 +87,30 @@ class Bin:
 
         self.covTolerance = covtol
         self.kValTolerance = mertol
-        self.gcTolernace = gctol
+        self.gcTolerance = gctol
 
         # COVERAGE (3D COVERAGE VALUES)
-        self.covMeans = np.zeros((3))
+        self.covMedians = np.zeros((3))
         self.covStdevs = np.zeros((3))
         self.covLowerLimits = np.zeros((3)) # lower and upper limits based on tolerance
         self.covUpperLimits = np.zeros((3))
 
         # AVERAGE COVERAGE
-        self.cValMean = 0.0
+        self.cValMedian = 0.0
         self.cValStdev = 0.0
         self.cValUpperLimit = 0.0
         self.cValLowerLimit = 0.0
 
         # KMER VALUES for ALL PCs
-        self.kMeans = None
+        self.kMedian = None
         self.kStdev = None
 
         # NORMALIZED PC1 KMER VALUES
         self.kValMeanNormPC1 = 0.0
         self.kValStdevNormPC1  = 0.0
-        self.kValUpperLimitNormPC1  = 0.0
-        self.kValLowerLimitNormPC1  = 0.0
 
         # GC VALUES
-        self.gcMean = 0.0
+        self.gcMedian = 0.0
         self.gcStdev = 0.0
         self.gcUpperLimit = 0.0
         self.gcLowerLimit = 0.0
@@ -148,7 +151,7 @@ class Bin:
         This is the norm of the vector containing z distances for both profiles
         """
         #print self.covStdevs, self.binSize
-        covZ = np.abs(np.mean(np.abs(transformedCP - self.covMeans)/self.covStdevs))
+        covZ = np.abs(np.mean(np.abs(transformedCP - self.covMedians)/self.covStdevs))
         merZ = np.abs(kmerVal - self.kValMeanNormPC1)/self.kValStdevNormPC1
         return (covZ,merZ)
 
@@ -170,25 +173,23 @@ class Bin:
         """Clear any set distribution statistics"""
         self.totalBP = 0
 
-        self.covMeans = np.zeros((3))
+        self.covMedians = np.zeros((3))
         self.covStdevs = np.zeros((3))
         self.covLowerLimits = np.zeros((3)) # lower and upper limits based on tolerance
         self.covUpperLimits = np.zeros((3))
 
-        self.kMeans = None
+        self.kMedian = None
         self.kStdevs = None
 
         self.kValMeanNormPC1 = 0.0
         self.kValStdevNormPC1 = 0.0
-        self.kValUpperLimitNormPC1 = 0.0
-        self.kValLowerLimitNormPC1 = 0.0
 
-        self.gcMean = 0.0
+        self.gcMedian = 0.0
         self.gcStdev = 0.0
         self.gcUpperLimit = 0.0
         self.gcLowerLimit = 0.0
 
-    def makeBinDist(self, transformedCP, averageCoverages, kmerNormPC1, kmerPCs, contigGCs, contigLengths, covTol=-1, merTol=-1):
+    def makeBinDist(self, transformedCP, averageCoverages, kmerNormPC1, kmerPCs, contigGCs, contigLengths):
         """Determine the distribution of the points in this bin
 
         The distribution is largely normal, except at the boundaries.
@@ -199,73 +200,65 @@ class Bin:
             return
 
         # get the centroids
-        (self.covMeans, self.covStdevs) = self.getCentroidStats(transformedCP)
+        (self.covMedians, self.covStdevs) = self.getCentroidStats(transformedCP)
         (self.lengthMean, self.lengthStd) = self.getCentroidStats(contigLengths)
 
-        self.kValMeanNormPC1 = np.mean(kmerPCs[self.rowIndices])
-        self.kValStdevNormPC1 = np.std(kmerPCs[self.rowIndices])
+        self.kValMeanNormPC1 = np_median(kmerPCs[self.rowIndices])
+        self.kValStdevNormPC1 = np_std(kmerPCs[self.rowIndices])
 
-        self.kMeans = np.mean(kmerPCs[self.rowIndices], axis=0)
-        self.kStdevs = np.mean(kmerPCs[self.rowIndices], axis=0)
+        self.kMedian = np_median(kmerPCs[self.rowIndices], axis=0)
+        self.kStdevs = np_std(kmerPCs[self.rowIndices], axis=0)
 
         cvals = self.getAverageCoverageDist(averageCoverages)
-        self.cValMean = np.around(np.mean(cvals), decimals=3)
-        self.cValStdev = np.around(np.std(cvals), decimals=3)
+        self.cValMedian = np_around(np_median(cvals), decimals=3)
+        self.cValStdev = np_around(np_std(cvals), decimals=3)
 
-        self.gcMean = np.mean(contigGCs[self.rowIndices])
-        self.gcStdev = np.std(contigGCs[self.rowIndices])
+        self.gcMedian = np_median(contigGCs[self.rowIndices])
+        self.gcStdev = np_std(contigGCs[self.rowIndices])
 
         # work out the total size
         self.totalBP = sum([contigLengths[i] for i in self.rowIndices])
 
         # set the acceptance ranges
-        self.makeLimits(covTol=covTol, merTol=merTol)
+        self.makeLimits()
 
-    def makeLimits(self, covTol=-1, merTol=-1, gcTol=-1):
+    def makeLimits(self):
         """Set inclusion limits based on mean, variance and tolerance settings"""
-        if(-1 == covTol):
-            covTol=self.covTolerance
-        if(-1 == merTol):
-            merTol=self.kValTolerance
-        if(-1 == gcTol):
-            gcTol=self.gcTolernace
+        covTol=self.covTolerance
+        gcTol=self.gcTolerance
 
         for i in range(0,3):
-            self.covLowerLimits[i] = int(self.covMeans[i] - covTol * self.covStdevs[i])
+            self.covLowerLimits[i] = int(self.covMedians[i] - covTol * self.covStdevs[i])
             if(self.covLowerLimits[i] < 0):
                 self.covLowerLimits[i] = 0.0
-            self.covUpperLimits[i] = int(self.covMeans[i] + covTol * self.covStdevs[i])
+            self.covUpperLimits[i] = int(self.covMedians[i] + covTol * self.covStdevs[i])
             if(self.covUpperLimits[i] > self.upperCov):
                 self.covUpperLimits[i] = self.upperCov
 
-        self.kValLowerLimitNormPC1 = self.kValMeanNormPC1 - merTol * self.kValStdevNormPC1
-        if(self.kValLowerLimitNormPC1 < 0):
-            self.kValLowerLimitNormPC1 = 0
-        self.kValUpperLimitNormPC1 = self.kValMeanNormPC1 + merTol * self.kValStdevNormPC1
-
-        self.gcLowerLimit = self.gcMean - gcTol * self.gcStdev
+        self.gcLowerLimit = self.gcMedian - gcTol * self.gcStdev
         if(self.gcLowerLimit < 0):
             self.gcLowerLimit = 0
-        self.gcUpperLimit = self.gcMean + gcTol * self.gcStdev
+        self.gcUpperLimit = self.gcMedian + gcTol * self.gcStdev
 
-        self.cValLowerLimit = self.cValMean - covTol * self.cValStdev
+        self.cValLowerLimit = self.cValMedian - covTol * self.cValStdev
         if(self.cValLowerLimit < 0):
             self.cValLowerLimit = 0
-        self.cValUpperLimit = self.cValMean + covTol * self.cValStdev
+        self.cValUpperLimit = self.cValMedian + covTol * self.cValStdev
 
     def getCentroidStats(self, profile):
         """Calculate the centroids of the profile"""
-        working_list = np.array([profile[i] for i in self.rowIndices])
+        working_list = profile[self.rowIndices]
+        
         # return the mean and stdev
         # we divide by std so we need to make sure it's never 0
-        tmp_stds = np.std(working_list,axis=0)
-        mean_std = np.mean(tmp_stds)
+        tmp_stds = np_std(working_list, axis=0)
+        mean_std = np_mean(tmp_stds)
         try:
-            std = np.array([x if x != 0 else mean_std for x in tmp_stds])
+            std = np_array([x if x != 0 else mean_std for x in tmp_stds])
         except:
             std = mean_std
-        return (np.median(working_list,axis=0), std)
-
+        return (np_median(working_list,axis=0), std)
+    
     def getkmerValDist(self, kmerNormPC1):
         """Return an array of kmer vals for this bin"""
         return np.array([kmerNormPC1[i] for i in self.rowIndices])
@@ -290,7 +283,7 @@ class Bin:
         elif(mode =="cov"):
             dists = [self.getCDist(profile[i]) for i in self.rowIndices]
         elif(mode =="gc"):
-            dists = [np.abs(self.gcMean - profile[i]) for i in self.rowIndices]
+            dists = [np.abs(self.gcMedian - profile[i]) for i in self.rowIndices]
         else:
             raise ModeNotAppropriateException("Mode",mode,"unknown")
         
@@ -301,7 +294,7 @@ class Bin:
         """Get the distance of this contig from the coverage centroid"""
         # z-norm and then distance!
         if centroid is None:
-            centroid = self.covMeans
+            centroid = self.covMedians
         return np.linalg.norm(Csig-centroid)
 
     def getBoundingEllipsoid(self, transformedCP, ET=None, retA=False):
@@ -328,7 +321,7 @@ class Bin:
         """Return the volume of the minimum bounding coverage ellipsoid"""
         if ET is None:
             ET = EllipsoidTool()
-        (A, center, radii, rotation) = self.getBoundingEllipsoid(transformedCP, ET=ET, retA=True)
+        (A, center, radii, _rotation) = self.getBoundingEllipsoid(transformedCP, ET=ET, retA=True)
         if retA:
             return ((A, center), ET.getEllipsoidVolume(radii))
         else:
@@ -339,7 +332,7 @@ class Bin:
         if len(KPCAs) > 1:
             if ET is None:
                 ET = EllipsoidTool()
-            (A, center, radii, rotation) = ET.getMinVolEllipse(KPCAs, retA=True)
+            (A, center, radii, _rotation) = ET.getMinVolEllipse(KPCAs, retA=True)
             if retA:
                 return ((A, center), ET.getEllipsoidVolume(radii))
             else:
@@ -375,9 +368,9 @@ class Bin:
         self.makeBinDist(PM.transformedCP, PM.averageCoverages, PM.kmerNormPC1, PM.kmerPCs, PM.contigGCs, PM.contigLengths)
         c_lens = PM.contigLengths[self.rowIndices]
 
-        for x in self.makeRanges(self.covMeans[0], inclusivity*self.covStdevs[0], PM.scaleFactor):
-            for y in self.makeRanges(self.covMeans[1], inclusivity*self.covStdevs[1], PM.scaleFactor):
-                for z in self.makeRanges(self.covMeans[2], inclusivity*self.covStdevs[2], PM.scaleFactor):
+        for x in self.makeRanges(self.covMedians[0], inclusivity*self.covStdevs[0], PM.scaleFactor):
+            for y in self.makeRanges(self.covMedians[1], inclusivity*self.covStdevs[1], PM.scaleFactor):
+                for z in self.makeRanges(self.covMedians[2], inclusivity*self.covStdevs[2], PM.scaleFactor):
                     # make sure it's a legit point
                     try:
                         for row_index in im2RowIndices[(x,y,z)]:
@@ -519,9 +512,9 @@ class Bin:
         cc_string = ""
         if plotCentroid and printID == False:
             self.makeLimits()
-            px = self.covMeans[0]
-            py = self.covMeans[1]
-            #pz = self.covMeans[2]
+            px = self.covMedians[0]
+            py = self.covMedians[1]
+            #pz = self.covMedians[2]
             #num_points += 1
             #disp_vals = np.append(disp_vals, [px,py,pz])
             #disp_lens = np.append(disp_lens, 100)
@@ -565,7 +558,7 @@ class Bin:
         setlocale(LC_ALL, "")
         title = str.join(" ", ["Bin: %d : %d contigs : %s BP\n" %(self.id,self.binSize,format('%d', self.totalBP, True)),
                                cc_string,
-                               "GC: mean: %.4f stdev: %.4f\n" % (self.gcMean, self.gcStdev)]
+                               "GC: median: %.4f stdev: %.4f\n" % (self.gcMedian, self.gcStdev)]
                          )
 
         if isLikelyChimeric[self.id]:
@@ -610,9 +603,9 @@ class Bin:
         """print this bin info in csvformat"""
         kvm_str = "%.4f" % self.kValMeanNormPC1
         kvs_str = "%.4f" % self.kValStdevNormPC1
-        cvm_str = "%.4f" % self.cValMean
+        cvm_str = "%.4f" % self.cValMedian
         cvs_str = "%.4f" % self.cValStdev
-        gcm_str = "%.4f" % self.gcMean
+        gcm_str = "%.4f" % self.gcMedian
         gcs_str = "%.4f" % self.gcStdev
 
         if(outFormat == 'summary'):

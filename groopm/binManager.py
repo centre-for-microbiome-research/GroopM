@@ -136,7 +136,7 @@ class BinManager:
                  bids=[],
                  makeBins=False,
                  silent=True,
-                 loadKmerSigs=False,
+                 loadKmerPCs=False,
                  loadRawKmers=False,
                  loadCovProfiles=True,
                  loadContigLengths=True,
@@ -163,7 +163,7 @@ class BinManager:
 
         # if we're going to make bins then we'll need kmer sigs
         if(makeBins):
-            loadKmerSigs=True
+            loadKmerPCs=True
             loadCovProfiles=True
 
         self.PM.loadData(timer,
@@ -171,7 +171,7 @@ class BinManager:
                          condition=condition,
                          silent=silent,
                          loadCovProfiles=loadCovProfiles,
-                         loadKmerSigs=loadKmerSigs,
+                         loadKmerPCs=loadKmerPCs,
                          loadRawKmers=loadRawKmers,
                          makeColors=True,
                          loadContigNames=loadContigNames,
@@ -346,7 +346,7 @@ class BinManager:
         """Construct a network of all bins and their closest neighbours"""
         num_bins = len(self.bins)
         bids = self.getBids()
-        cov_centres = np_reshape([self.bins[bid].covMeans for bid in bids], (num_bins,3))
+        cov_centres = np_reshape([self.bins[bid].covMedians for bid in bids], (num_bins,3))
 
         # get an all vs all distance matrix
         c_dists = cdist(cov_centres, cov_centres)
@@ -479,7 +479,7 @@ class BinManager:
             ret_vecs = np_zeros((len(self.bins), len(self.PM.transformedCP[0])))
             outer_index = 0
             for bid in self.getBids():
-                ret_vecs[outer_index] = self.bins[bid].covMeans
+                ret_vecs[outer_index] = self.bins[bid].covMedians
                 outer_index += 1
             return ret_vecs
         else:
@@ -718,6 +718,11 @@ class BinManager:
         else:
             # just use the first given as the parent
             parent_bin = self.getBin(bids[0])
+            
+        # a merged bin specified by the user should not be considered chimeric since 
+        # they are indicating both original bins were reasonable
+        if manual:
+            self.PM.isLikelyChimeric[parent_bin.id] = False
 
         # let this guy consume all the other guys
         ret_val = 0
@@ -995,20 +1000,20 @@ class BinManager:
 
             add_bin = True
             if gc_range is not None:
-                avg_gc = np_mean([self.PM.contigGCs[row_index] for row_index in self.bins[bid].rowIndices])
+                avg_gc = np_median([self.PM.contigGCs[row_index] for row_index in self.bins[bid].rowIndices])
                 if avg_gc < gc_low or avg_gc > gc_high:
                     add_bin = False
             if add_bin:
                 bin_centroid_points = np_append(bin_centroid_points,
-                                                self.bins[bid].covMeans)
+                                                self.bins[bid].covMedians)
 
-                bin_centroid_colors = np_append(bin_centroid_colors, self.PM.colorMapGC(np_mean(self.PM.contigGCs[self.bins[bid].rowIndices])))
+                bin_centroid_colors = np_append(bin_centroid_colors, self.PM.colorMapGC(np_median(self.PM.contigGCs[self.bins[bid].rowIndices])))
 
-                bin_centroid_gc = np_append(bin_centroid_gc, np_mean(self.PM.contigGCs[self.bins[bid].rowIndices]))
+                bin_centroid_gc = np_append(bin_centroid_gc, np_median(self.PM.contigGCs[self.bins[bid].rowIndices]))
 
                 if getKVals:
                     bin_centroid_kvals = np_append(bin_centroid_kvals,
-                                                   np_mean([
+                                                   np_median([
                                                             self.PM.kmerNormPC1[row_index] for row_index in
                                                             self.bins[bid].rowIndices
                                                             ],
@@ -1209,10 +1214,10 @@ class BinManager:
         if plotMers:
 
             title = "Bin: %d : %d contigs : %s BP\n" % (bid, len(self.bins[bid].rowIndices), np_sum(self.PM.contigLengths[self.bins[bid].rowIndices]))
-            title += "Coverage centroid: %d %d %d\n" % (np_mean(self.PM.transformedCP[self.bins[bid].rowIndices,0]),
-                                                                        np_mean(self.PM.transformedCP[self.bins[bid].rowIndices,1]),
-                                                                        np_mean(self.PM.transformedCP[self.bins[bid].rowIndices,2]))
-            title += "GC: mean: %.4f stdev: %.4f\n" % (np_mean(self.PM.contigGCs[self.bins[bid].rowIndices]), np_std(self.PM.contigGCs[self.bins[bid].rowIndices]))
+            title += "Coverage centroid: %d %d %d\n" % (np_median(self.PM.transformedCP[self.bins[bid].rowIndices,0]),
+                                                                        np_median(self.PM.transformedCP[self.bins[bid].rowIndices,1]),
+                                                                        np_median(self.PM.transformedCP[self.bins[bid].rowIndices,2]))
+            title += "GC: median: %.4f stdev: %.4f\n" % (np_median(self.PM.contigGCs[self.bins[bid].rowIndices]), np_std(self.PM.contigGCs[self.bins[bid].rowIndices]))
 
             if self.PM.isLikelyChimeric[bid]:
                 title += "Likely Chimeric"
@@ -1273,23 +1278,33 @@ class BinManager:
             plot_cols = np_ceil(float(num_plots)/plot_rows)
             plot_num = 1
             for bids in bins:
+                print bins
                 ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
                 disp_vals = np_array([])
                 disp_lens = np_array([])
+                gcs = np_array([])
                 num_points = 0
                 for bid in bids:
                     for row_index in self.bins[bid].rowIndices:
                         num_points += 1
                         disp_vals = np_append(disp_vals, coords[row_index])
                         disp_lens = np_append(disp_lens, np_sqrt(self.PM.contigLengths[row_index]))
+                        gcs = np_append(gcs, self.PM.contigGCs[row_index])
 
                 # reshape
                 disp_vals = np_reshape(disp_vals, (num_points, 3))
 
-                sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', c=self.PM.contigGCs[self.bins[bid].rowIndices], cmap=self.PM.colorMapGC, s=disp_lens, marker='.')
+                sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', c=gcs, cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens, marker='.')
                 sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
                 plot_num += 1
+                
+            cbar = plt.colorbar(sc, shrink=0.5)
+            cbar.ax.tick_params()
+            cbar.ax.set_title("% GC", size=10)
+            cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+            cbar.ax.set_ylim([0.15, 0.85])
+            cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
         else:
             # plot all separately
             # we need to work out how to shape the plots
@@ -1344,11 +1359,11 @@ class BinManager:
             for bid in self.getBids():
                 if folder != '':
                     self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
-                                            self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric[bid],
+                                            self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric,
                                             fileName=osp_join(folder, FNPrefix+"_"+str(bid)), ET=ET)
                 else:
                     self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
-                                              self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric[bid],
+                                              self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric,
                                               FNPrefix+"_"+str(bid), ET=ET)
 
     def plotSideBySide(self, bids, fileName="", tag="", use_elipses=True):
@@ -1388,7 +1403,7 @@ class BinManager:
         for plot_num, bid in enumerate(bids):
             title = self.bins[bid].plotOnFig(fig, plot_rows, plot_cols, plot_num+1,
                                               self.PM.transformedCP, self.PM.contigGCs, self.PM.contigLengths,
-                                              self.PM.colorMapGC, self.PM.isLikelyChimeric[bid], ET=ET, fileName=fileName,
+                                              self.PM.colorMapGC, self.PM.isLikelyChimeric, ET=ET, fileName=fileName,
                                               plotColorbar=(plot_num == len(bids)-1), extents=[xMin, xMax, yMin, yMax, zMin, zMax])
 
             plt.title(title)
@@ -1414,7 +1429,7 @@ class BinManager:
 
     def plotBinIds(self, gc_range=None, ignoreRanges=False, showChimeric=False):
         """Render 3d image of core ids"""
-        (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bids) = self.findCoreCentres(gc_range=gc_range,processChimeric=showChimeric)
+        (bin_centroid_points, bin_centroid_colors, _bin_centroid_gc, bids) = self.findCoreCentres(gc_range=gc_range,processChimeric=showChimeric)
         fig = plt.figure()
         ax = fig.gca(projection='3d')
         ax.set_xlabel('x coverage')
@@ -1452,7 +1467,7 @@ class BinManager:
 
     def plotBinPoints(self, ignoreRanges=False, plotColorbar=True, showChimeric=False):
         """Render the image for validating cores"""
-        (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bids) = self.findCoreCentres(processChimeric=showChimeric)
+        (bin_centroid_points, _bin_centroid_colors, bin_centroid_gc, _bids) = self.findCoreCentres(processChimeric=showChimeric)
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         print bin_centroid_gc
