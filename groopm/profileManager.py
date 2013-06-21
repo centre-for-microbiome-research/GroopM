@@ -433,6 +433,7 @@ class ProfileManager:
 
         # now that we have a subset, calculate the distance between each of the untransformed vectors
         num_sc = len(sub_cons)
+        
         # log shift the coverages towards the origin
         sub_covs = np_transpose([self.covProfiles[i]*(np_log10(self.normCoverages[i])/self.normCoverages[i]) for i in sub_cons])
         sq_dists = cdist(sub_covs,sub_covs,'cityblock')

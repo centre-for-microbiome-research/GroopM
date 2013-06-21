@@ -92,7 +92,7 @@ from numpy import (abs as np_abs,
                    zeros as np_zeros)
 from numpy.linalg import norm as np_norm
 import scipy.ndimage as ndi
-from scipy.spatial.distance import pdist, squareform, euclidean
+from scipy.spatial.distance import pdist, squareform, cityblock
 from scipy.misc import imsave
 
 # GroopM imports
@@ -424,7 +424,7 @@ class ClusterEngine:
         # calculate shortest distance to a corner (this isn't currently used)
         min_dist_to_corner = 1e9
         for corner in self.PM.corners:
-            dist = euclidean(corner[:,[0,1]], positionInPlane)
+            dist = cityblock(corner[:,[0,1]], positionInPlane)
             min_dist_to_corner = min(dist, min_dist_to_corner)
         
         # calculate radius threshold in whitened transformed coverage space
@@ -436,12 +436,12 @@ class ClusterEngine:
         c_std += np_where(c_std == 0, 1, 0) # make sure std dev is never zero
         c_whiten_dat = (c_dat-c_mean) / c_std
         
-        c_whiten_dist = pdist(c_whiten_dat)
+        c_whiten_dist = pdist(c_whiten_dat, 'cityblock')
         c_dist_matrix = squareform(c_whiten_dist)
         c_radius = np_median(np_sort(c_dist_matrix)[:,eps_neighbours-1])
         
         # calculate radius threshold in kmer space
-        k_dist = pdist(k_dat)
+        k_dist = pdist(k_dat, 'cityblock')
         k_dist_matrix = squareform(k_dist)
         k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours-1])
         
@@ -450,8 +450,8 @@ class ClusterEngine:
         c_converged = 5e-2 * np_mean(c_whiten_dist)
         max_iterations = 50
         
-        k_move_perc = 0.15
-        c_move_perc = 0.15
+        k_move_perc = 0.1
+        c_move_perc = 0.1
 
         # perform two-way contraction of kmer and coverage space
         iter = 0
@@ -500,8 +500,8 @@ class ClusterEngine:
                 del fig
         
             # calculate distance matrices
-            c_dist_matrix = squareform(pdist(c_whiten_dat))
-            k_dist_matrix = squareform(pdist(k_dat))
+            c_dist_matrix = squareform(pdist(c_whiten_dat, 'cityblock'))
+            k_dist_matrix = squareform(pdist(k_dat, 'cityblock'))
     
             # find nearest neighbours to each point in whitened coverage space,
             # and use this to converage a point's kmer profile
@@ -530,7 +530,7 @@ class ClusterEngine:
                 neighbour_weights = inv_dist / sum_inv_dist
                 new_k_dat[index] = (1-k_move_perc) * k_dat[index] + k_move_perc * np_sum( (k_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
                 
-                k_deltas.append(euclidean(k_dat[index], new_k_dat[index]))
+                k_deltas.append(cityblock(k_dat[index], new_k_dat[index]))
             
             k_dat = new_k_dat
             
@@ -561,7 +561,7 @@ class ClusterEngine:
                 new_c_dat[index] = (1-c_move_perc) * c_dat[index] + c_move_perc * np_sum( (c_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
                 new_c_whiten_dat = (1-c_move_perc) * c_whiten_dat[index] + c_move_perc * np_sum( (c_whiten_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
                 
-                c_deltas.append(euclidean(c_whiten_dat[index], new_c_whiten_dat))
+                c_deltas.append(cityblock(c_whiten_dat[index], new_c_whiten_dat))
             
             c_dat = new_c_dat
             

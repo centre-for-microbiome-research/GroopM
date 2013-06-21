@@ -84,7 +84,6 @@ from numpy import (abs as np_abs,
 
 from scipy.stats import f_oneway, distributions
 from scipy.cluster.vq import kmeans,vq
-from scipy.spatial.distance import cdist
 
 # GroopM imports
 from profileManager import ProfileManager
@@ -339,32 +338,6 @@ class BinManager:
                 old_list_index += 1
         return new_list
 
-#------------------------------------------------------------------------------
-# NEIGHBOURS AND DISTANCES
-
-    def findBinNeighbours(self, thresholdDist=50.0):
-        """Construct a network of all bins and their closest neighbours"""
-        num_bins = len(self.bins)
-        bids = self.getBids()
-        cov_centres = np_reshape([self.bins[bid].covMedians for bid in bids], (num_bins,3))
-
-        # get an all vs all distance matrix
-        c_dists = cdist(cov_centres, cov_centres)
-
-        # reduce this to only close neighbours
-        neigbour_dists = np_where(c_dists < thresholdDist, c_dists, 0.0)
-
-        # now make the network
-        network = {}
-        for i in range(num_bins):
-            # make a structure to hold the info
-            network[bids[i]] = [[bids[i]],[0.0]]
-            for j in range(num_bins):
-                if(neigbour_dists[i,j] != 0.0):
-                    # this is a legit guy!
-                    network[bids[i]][0].append(bids[j])
-                    network[bids[i]][1].append(neigbour_dists[i,j])
-        return network
 
 #------------------------------------------------------------------------------
 # LINKS
@@ -1365,7 +1338,80 @@ class BinManager:
                     self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
                                               self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric,
                                               FNPrefix+"_"+str(bid), ET=ET)
+                    
+    def plotBinCoverage(self, plotEllipses=False, plotContigLengs=False, printID=False):
+        """Make plots of all the bins"""
 
+        print "Plotting first 3 stoits in untransformed coverage space"
+         
+        # plot contigs in coverage space
+        fig = plt.figure()
+  
+        if plotContigLengs:
+            disp_lens = np_sqrt(self.PM.contigLengths)
+        else:
+            disp_lens = 30
+            
+        # plot contigs in kmer space
+        ax = fig.add_subplot(121, projection='3d')
+        ax.set_xlabel('kmer PC1')
+        ax.set_ylabel('kmer PC2')
+        ax.set_zlabel('kmer PC3')
+        ax.set_title('kmer space')
+        
+        sc = ax.scatter(self.PM.kmerPCs[:,0], self.PM.kmerPCs[:,1], self.PM.kmerPCs[:,2], edgecolors='k', c=self.PM.contigGCs, cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens)
+        sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+        
+        if plotEllipses:
+            ET = EllipsoidTool()
+            for bid in self.getBids():
+                row_indices = self.bins[bid].rowIndices
+                (center, radii, rotation) = self.bins[bid].getBoundingEllipsoid(self.PM.kmerPCs[:, 0:3], ET=ET)
+                centroid_gc = np_mean(self.PM.contigGCs[row_indices])
+                centroid_color = self.PM.colorMapGC(centroid_gc)
+                if printID:
+                    ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color, label=self.id)
+                else:
+                    ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color)
+        
+        # plot contigs in untransformed coverage space
+        ax = fig.add_subplot(122, projection='3d')
+        ax.set_xlabel('coverage 1')
+        ax.set_ylabel('coverage 2')
+        ax.set_zlabel('coverage 3')
+        ax.set_title('coverage space')
+        
+        sc = ax.scatter(self.PM.covProfiles[:,0], self.PM.covProfiles[:,1], self.PM.covProfiles[:,2], edgecolors='k', c=self.PM.contigGCs, cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens)
+        sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+        
+        cbar = plt.colorbar(sc, shrink=0.5)
+        cbar.ax.tick_params()
+        cbar.ax.set_title("% GC", size=10)
+        cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+        cbar.ax.set_ylim([0.15, 0.85])
+        cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+
+        if plotEllipses:
+            ET = EllipsoidTool()
+            for bid in self.getBids():
+                row_indices = self.bins[bid].rowIndices
+                (center, radii, rotation) = self.bins[bid].getBoundingEllipsoid(self.PM.covProfiles[:, 0:3], ET=ET)
+                centroid_gc = np_mean(self.PM.contigGCs[row_indices])
+                centroid_color = self.PM.colorMapGC(centroid_gc)
+                if printID:
+                    ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color, label=self.id)
+                else:
+                    ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color)
+
+        try:
+            plt.show()
+            plt.close(fig)
+        except:
+            print "Error showing image", exc_info()[0]
+            raise
+        
+        del fig
+            
     def plotSideBySide(self, bids, fileName="", tag="", use_elipses=True):
         """Plot two bins side by side in 3d"""
         if use_elipses:

@@ -256,7 +256,8 @@ class RefineEngine:
 
             elif(user_option == 'P'):
                 self.BM.plotBinPoints(ignoreRanges=ignoreRanges, showChimeric=show_chimeric_bins)
-
+            elif(user_option == 'U'):
+                self.BM.plotBinCoverage(plotEllipses = use_elipses)
             elif(user_option == 'M'):
                 # merge bins
                 merge_bids = self.BM.getPlotterMergeIds()
@@ -910,7 +911,7 @@ class RefineEngine:
         # PCA kmers to find out who is most similar to whom
         (bin_mer_PCAs, mer_con_PCAs) = self.rePCA(bidList, doBoth=True)
         side = len(bidList)
-        sq_dists = cdist(bin_mer_PCAs, bin_mer_PCAs)
+        sq_dists = cdist(bin_mer_PCAs, bin_mer_PCAs, 'cityblock')
         dists = squareform(sq_dists)
 
         # raw coverage averages for each bin
@@ -928,7 +929,7 @@ class RefineEngine:
 
             # test if the mer dist is teensy tiny.
             # this is a time saver...
-            k_diff = np_median(cdist(self.PM.kmerPCs[self.BM.bins[bid1].rowIndices], self.PM.kmerPCs[self.BM.bins[bid2].rowIndices]))
+            k_diff = np_median(cdist(self.PM.kmerPCs[self.BM.bins[bid1].rowIndices], self.PM.kmerPCs[self.BM.bins[bid2].rowIndices, 'cityblock']))
 
             #if VVB:
             #    print bid1, bid2, k_diff,
@@ -989,7 +990,7 @@ class RefineEngine:
                 raw_coverage_centroids[bid1] = (raw_coverage_centroids[bid1] * b1_size + raw_coverage_centroids[bid2] * b2_size) / (b1_size + b2_size)
 
                 # re-calc the distances
-                new_dists = cdist([bin_mer_PCAs[i]], bin_mer_PCAs)
+                new_dists = cdist([bin_mer_PCAs[i]], bin_mer_PCAs, 'cityblock')
 
                 # we need to fix the distance matrix
                 sq_dists[j,:] = too_big
@@ -1471,7 +1472,7 @@ class RefineEngine:
     
     def kDist(self, row_indices):
         bin_k_vals = self.PM.kmerPCs[row_indices]
-        k_dist = pdist(bin_k_vals)
+        k_dist = pdist(bin_k_vals, 'cityblock')
         if len(k_dist) > 0:
             return np_median(k_dist)
         
@@ -1482,7 +1483,7 @@ class RefineEngine:
         return self.kDist(merged_indices)
     
     def kDistBetweenBins(self, bin1, bin2):
-        return np_median(cdist(self.PM.kmerPCs[bin1.rowIndices], self.PM.kmerPCs[bin2.rowIndices]))
+        return np_median(cdist(self.PM.kmerPCs[bin1.rowIndices], self.PM.kmerPCs[bin2.rowIndices], 'cityblock'))
     
     def getEvenlySpacedPtsZ(self, row_indices, sample_size):
         # select samples evenly along Z-axis of coverage space
@@ -1501,8 +1502,8 @@ class RefineEngine:
         """Work out the easy cutoff for coverage angle difference"""
         median_angles = []
         for bid in self.BM.getNonChimericBinIds():
-            cdist = self.cDist(self.BM.getBin(bid).rowIndices)
-            median_angles.append(cdist)
+            cdistance = self.cDist(self.BM.getBin(bid).rowIndices)
+            median_angles.append(cdistance)
 
         return np_median(median_angles), np_std(median_angles)
     
@@ -2187,7 +2188,7 @@ class RefineEngine:
     def promptOnPlotterRefine(self, minimal=False):
         """Find out what the user wishes to do next when refining bins"""
         input_not_ok = True
-        valid_responses = ['R','P','G','B','V','M','S', 'C','E','X','Q']
+        valid_responses = ['R','P','G','U','B','V','M','S', 'C','E','X','Q']
         vrs = ",".join([str.lower(str(x)) for x in valid_responses])
         while(input_not_ok):
             if(minimal):
@@ -2195,9 +2196,10 @@ class RefineEngine:
             else:
                 option = raw_input("\n Please choose from the following options:\n" \
                                    "------------------------------------------------------------\n" \
-                                   " r = replot entire space using bin ids\n" \
-                                   " p = replot entire space with bins as points\n" \
-                                   " g = replot entire space for bins within a specific GC range\n" \
+                                   " r = plot entire space using bin ids\n" \
+                                   " p = plot entire space with bins as points\n" \
+                                   " g = plot entire space for bins within a specific GC range\n" \
+                                   " u = plot all contigs in untransformed coverage space (first 3 stoits only)\n"
                                    " b = plot one or more bins\n" \
                                    " v = plot all contigs in vincinity of bin\n" \
                                    " m = merge two or more bins\n" \
