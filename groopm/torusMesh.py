@@ -50,7 +50,6 @@ __status__ = "Development"
 ###############################################################################
 import sys
 import numpy as np
-from random import random
 from PIL import Image, ImageDraw
 from scipy.spatial.distance import cdist
 from colorsys import hsv_to_rgb as htr

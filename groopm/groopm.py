@@ -127,7 +127,9 @@ class GroopMOptionsParser():
             else:
                 gf=options.graphfile
             CE.makeCores(coreCut=options.cutoff,
-                         gf=gf)
+                         gf=gf,                          
+                         kmerThreshold=options.kmer,
+                         coverageThreshold=options.coverage)
 
         elif(options.subparser_name == 'refine'):
             # refine bin cores
@@ -146,6 +148,7 @@ class GroopMOptionsParser():
                                      bids=bids,
                                      loadContigNames=True,
                                      squish=options.squish)
+            
             if options.plot:
                 pfx="REFINED"
             else:
