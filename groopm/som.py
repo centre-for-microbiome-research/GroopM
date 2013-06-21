@@ -72,22 +72,17 @@ __status__ = "Development"
 ###############################################################################
 
 import sys
-import time
-from random import *
-from math import *
-import sys
+from random import randrange, randint, random
+from math import log, exp
 import numpy as np
-import os
 from scipy.spatial.distance import cdist
 from PIL import Image, ImageDraw
-import string
-from numpy.random import random, randint
-from random import randrange
 np.seterr(all='raise')
 
 # GroopM imports
 from torusMesh import TorusMesh as TM
-import rainbow
+from rainbow import Rainbow
+import groopmExceptions as ge
 
 ###############################################################################
 ###############################################################################
@@ -655,7 +650,7 @@ class SOM:
                 if(max < resolution):
                     resolution = max - 1
                 max = self.transColour(max)
-                rainbow = Rainbow.rainbow(0, max, resolution, "gbr")
+                rainbow = Rainbow(0, max, resolution, "gbr")
                 for point in self.bestMatchCoords:
                     img.putpixel((point[1],point[0]), rainbow.getColour(self.transColour(img_points[point[0],point[1]])))
             else: # make all best match points white

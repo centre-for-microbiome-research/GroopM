@@ -50,7 +50,7 @@ __current_GMDB_version__ = 4
 
 ###############################################################################
 
-from sys import exc_info, exit
+from sys import exc_info
 from os.path import splitext as op_splitext, basename as op_basename
 from string import maketrans as s_maketrans
 
@@ -59,8 +59,6 @@ import numpy as np
 import pysam
 
 # GroopM imports
-import groopmExceptions as ge
-import groopmTimekeeper as gtime
 from PCA import PCA, Center
 
 np.seterr(all='raise')

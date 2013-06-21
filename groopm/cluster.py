@@ -181,7 +181,7 @@ class ClusterEngine:
 #------------------------------------------------------------------------------
 # CORE CONSTRUCTION AND MANAGEMENT
 
-    def makeCores(self, coreCut, gf=""):
+    def makeCores(self, coreCut, gf="", kmerThreshold=0., coverageThreshold=0.):
         """Cluster the contigs to make bin cores"""
         # check that the user is OK with nuking stuff...
         if(not self.promptOnOverwrite()):
@@ -205,7 +205,7 @@ class ClusterEngine:
 
         # cluster and bin!
         print "Create cores"
-        self.initialiseCores()
+        self.initialiseCores(kmerThreshold=kmerThreshold, coverageThreshold=coverageThreshold)
         print "    %s" % self.timer.getTimeStamp()
 
         # condense cores
@@ -221,7 +221,7 @@ class ClusterEngine:
         self.BM.saveBins(nuke=True)
         print "    %s" % self.timer.getTimeStamp()
 
-    def initialiseCores(self):
+    def initialiseCores(self, kmerThreshold=0., coverageThreshold=0.):
         """Process contigs and form CORE bins"""
         num_below_cutoff = 0            # how many consecutive attempts have produced small bins
         breakout_point = 30            # how many will we allow before we stop this loop
@@ -244,7 +244,7 @@ class ClusterEngine:
 
             # now search for the "hottest" spots on the blurred map
             # and check for possible bin centroids
-            putative_clusters = self.findNewClusterCenters()
+            putative_clusters = self.findNewClusterCenters(kmerThreshold=kmerThreshold, coverageThreshold=coverageThreshold)
 
 
             if(putative_clusters is None):
@@ -328,7 +328,7 @@ class ClusterEngine:
 
         print "\n     .... .... .... .... .... .... .... .... .... ...."
 
-    def findNewClusterCenters(self):
+    def findNewClusterCenters(self, kmerThreshold=0., coverageThreshold=0.):
         """Find a putative cluster"""
         inRange = lambda x,l,u : x >= l and x < u
 
@@ -399,13 +399,16 @@ class ClusterEngine:
                 # the calling function should restrict these indices
                 return [[np_array(putative_center_row_indices)], ret_values]
             else:
-                putative_clusters = self.smartTwoWayContraction(putative_center_row_indices, [max_x, max_y])
+                putative_clusters = self.twoWayContraction(putative_center_row_indices, 
+                                                           [max_x, max_y],
+                                                           kmerThreshold=kmerThreshold, 
+                                                           coverageThreshold=coverageThreshold)
                 if putative_clusters == None:
                     return None
 
                 return [putative_clusters, ret_values]
 
-    def smartTwoWayContraction(self, rowIndices, positionInPlane):
+    def twoWayContraction(self, rowIndices, positionInPlane, kmerThreshold=0., coverageThreshold=0.):
         """Partition a collection of contigs into 'core' groups"""
         
         # sanity check that there is enough data here to try a determine 'core' groups
@@ -447,8 +450,8 @@ class ClusterEngine:
         k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours-1])
         
         # calculate convergence criteria
-        k_converged = 5e-2 * np_mean(k_dist)
-        c_converged = 5e-2 * np_mean(c_whiten_dist)
+        k_converged = kmerThreshold * 30.0 #5e-2 * np_mean(k_dist)
+        c_converged = coverageThreshold * 3.4  # 5e-2 * np_mean(c_whiten_dist)
         k_delt = 0.
         c_delt = 0.
         max_iterations = 50
@@ -591,9 +594,8 @@ class ClusterEngine:
             # check for convergence
             k_delt = np_mean(k_deltas)
             c_delt = np_mean(c_deltas)
-            if k_delt < k_converged and c_delt < c_converged:
-#            if np_mean(k_deltas) < 0.2 or np_mean(c_deltas) < 0.05:
-                
+            if k_delt < k_converged or c_delt < c_converged:
+#            if np_mean(k_deltas) < 0.2 or np_mean(c_deltas) < 0.05:      
                 break
 
         # perform hough transform clustering
