@@ -50,7 +50,6 @@ __status__ = "Development"
 ###############################################################################
 import sys
 import numpy as np
-from random import random
 from PIL import Image, ImageDraw
 from scipy.spatial.distance import cdist
 from colorsys import hsv_to_rgb as htr
@@ -238,14 +237,17 @@ class TorusMesh:
         """make an image of the weights in the som"""
         if nodes is None:
             nodes = self.nodes
+        ns = np.shape(nodes)
+        rows = ns[0]
+        columns = ns[1]
         try:
-            img = Image.new("RGB", (self.columns, self.rows))
-            for r in range(self.rows):
+            img = Image.new("RGB", (columns, rows))
+            for r in range(rows):
                 # build a color value for a vector value
-                for c in range(self.columns):
+                for c in range(columns):
                     col = self.getColor(nodes[r,c])
                     img.putpixel((c,r), (col[0], col[1], col[2]))
-            img = img.resize((self.columns*10, self.rows*10),Image.NEAREST)
+            img = img.resize((columns*10, rows*10),Image.NEAREST)
             img.save(fileName)
         except:
             print sys.exc_info()[0]

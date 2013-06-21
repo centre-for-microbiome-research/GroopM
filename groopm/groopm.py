@@ -49,18 +49,16 @@ __status__ = "Alpha"
 
 ###############################################################################
 
-import argparse
-import sys
-import os 
+import matplotlib as mpl
 
 # GroopM imports
 import mstore
 import cluster
 import refine
-import bin
 import binManager
 import groopmUtils
 import groopmTimekeeper as gtime
+from groopmExceptions import ExtractModeNotAppropriateException
 from mstore import GMDataManager
 
 ###############################################################################
@@ -77,10 +75,25 @@ from mstore import GMDataManager
 ###############################################################################
 
 class GroopMOptionsParser():
-    def __init__(self): pass
-    
-    def parseOptions(self, options ):
+    def __init__(self):
+        # set default value for matplotlib
+        mpl.rcParams['lines.linewidth'] = 1
+        
+        mpl.rcParams['xtick.labelsize'] = 8
+        mpl.rcParams['ytick.labelsize'] = 8
+        mpl.rcParams['legend.fontsize'] = 10
+        mpl.rcParams['axes.labelsize'] = 10
+        mpl.rcParams['axes.titlesize'] = 12
+        mpl.rcParams['axes.linewidth'] = 0.25
+        
+        mpl.rcParams['axes3d.grid'] = True
+        
+        mpl.rcParams['savefig.dpi'] = 300
+        
+        mpl.rcParams['figure.figsize'] = [6.5, 6.5]
+        mpl.rcParams['figure.facecolor'] = '1.0'
 
+    def parseOptions(self, options ):
         timer = gtime.TimeKeeper()
         if(options.subparser_name == 'parse'):
             # parse raw input
@@ -94,14 +107,15 @@ class GroopMOptionsParser():
                                       timer,
                                       force=options.force)
             if not success:
-                print options.dbname,"not updated" 
-                            
+                print options.dbname,"not updated"
+
         elif(options.subparser_name == 'core'):
             # make bin cores
             print "*******************************************************************************"
             print " [[GroopM]] Running in core creation mode..."
             print "*******************************************************************************"
             CE = cluster.ClusterEngine(options.dbname,
+                                       timer,
                                        force=options.force,
                                        finalPlot=options.plot,
                                        plot=options.multiplot,
@@ -112,9 +126,10 @@ class GroopMOptionsParser():
                 gf = ""
             else:
                 gf=options.graphfile
-            CE.makeCores(timer,
-                         coreCut=options.cutoff,
-                         gf=gf)
+            CE.makeCores(coreCut=options.cutoff,
+                         gf=gf,                          
+                         kmerThreshold=options.kmer,
+                         coverageThreshold=options.coverage)
 
         elif(options.subparser_name == 'refine'):
             # refine bin cores
@@ -123,22 +138,23 @@ class GroopMOptionsParser():
             print "*******************************************************************************"
             bids = []
             if options.bids is not None:
-                bids = options.bids            
+                bids = options.bids
             auto = options.auto
             transform=True^options.no_transform
-            
+
             RE = refine.RefineEngine(timer,
                                      dbFileName=options.dbname,
                                      transform=transform,
                                      bids=bids,
                                      loadContigNames=True,
                                      squish=options.squish)
+            
             if options.plot:
                 pfx="REFINED"
             else:
                 pfx=""
             print "Refine bins"
-            
+
             RE.refineBins(timer,
                           auto=auto,
                           saveBins=True,
@@ -159,11 +175,11 @@ class GroopMOptionsParser():
                               inclusivity=options.inclusivity,
                               step=options.step,
                               saveBins=True)
-        
+
         elif(options.subparser_name == 'extract'):
             # Extract data
             print "*******************************************************************************"
-            print " [[GroopM]] Running in '%s' extraction mode..." % options.mode 
+            print " [[GroopM]] Running in '%s' extraction mode..." % options.mode
             print "*******************************************************************************"
             bids = []
             if options.bids is not None:
@@ -177,7 +193,7 @@ class GroopMOptionsParser():
             elif(options.mode=='reads'):
                 BX.extractReads(timer, bams=options.data)
             else:
-                raise ge.ExtractModeNotAppropriateException("mode: "+mode+" is unknown")
+                raise ExtractModeNotAppropriateException("mode: "+ options.mode + " is unknown")
 
         elif(options.subparser_name == 'merge'):
             # make bin cores
@@ -252,7 +268,7 @@ class GroopMOptionsParser():
                               options.alpha,
                               options.invert,
                               options.show)
-            
+
         elif(options.subparser_name == 'print'):
             BM = binManager.BinManager(dbFileName=options.dbname)
             bids = []
@@ -266,11 +282,14 @@ class GroopMOptionsParser():
             print " [[GroopM]] Running in bin plotting mode..."
             print "*******************************************************************************"
             BM = binManager.BinManager(dbFileName=options.dbname)
+
             if options.bids is None:
                 bids = []
-            else:    
+            else:
                 bids = options.bids
             BM.loadBins(timer, makeBins=True, silent=False, bids=bids, loadContigNames=False)
+
+            BM.setColorMap(options.cm)
 
             if options.bids is None:
                 bids = BM.getBids()
@@ -289,8 +308,8 @@ class GroopMOptionsParser():
             print "*******************************************************************************"
             print " [[GroopM]] Running in data dumping mode..."
             print "*******************************************************************************"
-        
-            # prep fields. Do this first cause users are mot likely to 
+
+            # prep fields. Do this first cause users are mot likely to
             # mess this part up!
             allowable_fields = ['names', 'mers', 'coverage', 'lengths', 'bins', 'all']
             fields = options.fields.split(',')
@@ -303,16 +322,16 @@ class GroopMOptionsParser():
                 separator = '\t'
             else:
                 separator = options.separator
-                
+
             DM = GMDataManager()
             DM.dumpData(options.dbname,
                         fields,
                         options.outfile,
                         separator,
                         not options.no_headers)
-        
+
         return 0
-    
+
 
 ###############################################################################
 ###############################################################################
