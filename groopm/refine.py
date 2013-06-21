@@ -929,7 +929,7 @@ class RefineEngine:
 
             # test if the mer dist is teensy tiny.
             # this is a time saver...
-            k_diff = np_median(cdist(self.PM.kmerPCs[self.BM.bins[bid1].rowIndices], self.PM.kmerPCs[self.BM.bins[bid2].rowIndices, 'cityblock']))
+            k_diff = np_median(cdist(self.PM.kmerPCs[self.BM.bins[bid1].rowIndices], self.PM.kmerPCs[self.BM.bins[bid2].rowIndices], 'cityblock'))
 
             #if VVB:
             #    print bid1, bid2, k_diff,

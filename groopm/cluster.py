@@ -362,7 +362,7 @@ class ClusterEngine:
                         super_putative_row_indices.append(row_index)
 
         # blur and find the highest value
-        bwb = ndi.gaussian_filter(working_block, 8)#self.blurRadius)
+        bwb = ndi.gaussian_filter(working_block, 4)#self.blurRadius)
         densest_index = np_unravel_index(np_argmax(bwb), (np_shape(bwb)))
         max_x = densest_index[0] + x_lower
         max_y = densest_index[1] + y_lower
