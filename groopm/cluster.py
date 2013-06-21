@@ -428,7 +428,8 @@ class ClusterEngine:
             min_dist_to_corner = min(dist, min_dist_to_corner)
         
         # calculate radius threshold in whitened transformed coverage space
-        eps_neighbours = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
+        #eps_neighbours = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
+        eps_neighbours = np_min([10, int(len(rowIndices)/2)])
         
         # calculate mean and std in coverage space for whitening data
         c_mean = np_mean(c_dat, axis=0)
@@ -448,10 +449,12 @@ class ClusterEngine:
         # calculate convergence criteria
         k_converged = 5e-2 * np_mean(k_dist)
         c_converged = 5e-2 * np_mean(c_whiten_dist)
+        k_delt = 0.
+        c_delt = 0.
         max_iterations = 50
         
-        k_move_perc = 0.15
-        c_move_perc = 0.15
+        k_move_perc = 0.1
+        c_move_perc = 0.1
 
         # perform two-way contraction of kmer and coverage space
         iter = 0
@@ -479,7 +482,7 @@ class ClusterEngine:
                            vmin=0.0, vmax=1.0,
                            marker='.')
                 
-                title = "Points: " + str(len(c_dat[:,0]))
+                title = "Points: %s Cd: %f Kd: %f" % (str(len(c_dat[:,0])), c_delt, k_delt)
                 plt.title(title)
                 
                 if iter == 1:
@@ -586,7 +589,11 @@ class ClusterEngine:
                 return None
             
             # check for convergence
-            if np_mean(k_deltas) < k_converged and np_mean(c_deltas) < c_converged:
+            k_delt = np_mean(k_deltas)
+            c_delt = np_mean(c_deltas)
+            if k_delt < k_converged and c_delt < c_converged:
+#            if np_mean(k_deltas) < 0.2 or np_mean(c_deltas) < 0.05:
+                
                 break
 
         # perform hough transform clustering
@@ -1175,10 +1182,10 @@ class HoughPartitioner:
         j = 0
 
         # all points get at least one point, but long ones get more
-        # let's say 1 point per 10,000bp
+        # let's say 1 point per 2000bp
         for i in range(len(dAta)):
             real_index = sorted_indices_raw[i]
-            rep = int((lengths[real_index] - 1.)/10000.) + 1
+            rep = int((lengths[real_index] - 1.)/5000.) + 1
             scales_per[real_index] = rep
             if rep == 1:
                 spread_data.append(dAta[real_index])
@@ -1236,7 +1243,6 @@ class HoughPartitioner:
 
         # make it 2D
         t_data = np_array(zip(diffs, np_arange(d_len)))
-#        t_data = np_array(zip(data, np_arange(d_len)))
         im_shape = (int(np_max(t_data, axis=0)[0]+1), d_len)
 
         #----------------------------------------------------------------------
@@ -1402,7 +1408,7 @@ class HoughPartitioner:
             accumulator /= np_max(accumulator)
             accumulator *= 255
 
-            #imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
+            imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
 
         # see which points lie on the line
         # we need to protect against the data line crossing

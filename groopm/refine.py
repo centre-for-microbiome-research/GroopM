@@ -1463,9 +1463,10 @@ class RefineEngine:
         """Work out the easy cutoff for kmerVal distance"""
         median_k_vals = []
         for bid in self.BM.getNonChimericBinIds():
-            kdist = self.kDist(self.BM.getBin(bid).rowIndices)
-            if kdist != None:
-                median_k_vals.append(kdist)
+            if len(self.BM.getBin(bid).rowIndices) > 1:
+                kdist = self.kDist(self.BM.getBin(bid).rowIndices)
+                if kdist != None:
+                    median_k_vals.append(kdist)
 
         return np_median(median_k_vals), np_std(median_k_vals)
     
@@ -1501,8 +1502,9 @@ class RefineEngine:
         """Work out the easy cutoff for coverage angle difference"""
         median_angles = []
         for bid in self.BM.getNonChimericBinIds():
-            cdist = self.cDist(self.BM.getBin(bid).rowIndices)
-            median_angles.append(cdist)
+            if len(self.BM.getBin(bid).rowIndices) > 1:
+                cdist = self.cDist(self.BM.getBin(bid).rowIndices)
+                median_angles.append(cdist)
 
         return np_median(median_angles), np_std(median_angles)
     
@@ -1528,7 +1530,7 @@ class RefineEngine:
                     angles.append(ang)
                 except FloatingPointError:
                     pass
-                     
+
         return np_median(angles)
     
     def cDistMergedBins(self, bin1, bin2):
