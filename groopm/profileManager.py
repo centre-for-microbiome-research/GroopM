@@ -424,13 +424,13 @@ class ProfileManager:
         while len(sub_cons) > ideal_contig_num:
             # select every second contig when sorted by norm cov
             cov_sorted = np_argsort(self.normCoverages[sub_cons])
-            sub_cons = np_array([sub_cons[cov_sorted[i*2]] for i in range(int(len(sub_cons)/2))])
-
+            sub_cons = np_array([sub_cons[cov_sorted[i*2]] for i in np_arange(int(len(sub_cons)/2))])
+            
             if len(sub_cons) > ideal_contig_num:
                 # select every second contig when sorted by mer PC1
-                mer_sorted = np_argsort(self.kmerPCs[sub_cons])
-                sub_cons = np_array([sub_cons[mer_sorted[i*2]] for i in range(int(len(sub_cons)/2))])
-
+                mer_sorted = np_argsort(self.kmerNormPC1[sub_cons])
+                sub_cons = np_array([sub_cons[mer_sorted[i*2]] for i in np_arange(int(len(sub_cons)/2))])
+                
         # now that we have a subset, calculate the distance between each of the untransformed vectors
         num_sc = len(sub_cons)
         
