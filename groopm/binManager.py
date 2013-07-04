@@ -1228,7 +1228,7 @@ class BinManager:
         plt.close(fig)
         del fig
 
-    def plotMultipleBins(self, bins, untransformed=False, semi_untransformed=False, squash=False):
+    def plotMultipleBins(self, bins, useLens=True, untransformed=False, semi_untransformed=False, squash=False):
         """plot a bunch of bins, used mainly for debugging"""
         ET = EllipsoidTool()
         fig = plt.figure()
@@ -1287,9 +1287,14 @@ class BinManager:
             plot_num = 1
             ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
 
+            if useLens:
+                lens = self.PM.contigLengths
+            else:
+                lens = np_ones(len(self.PM.indices))
+
             for bids in bins:
                 for bid in bids:
-                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric, ET=et, plotCentroid=pc)
+                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, lens, self.PM.colorMapGC, self.PM.isLikelyChimeric, ET=et, plotCentroid=pc)
 
             plot_num += 1
             if semi_untransformed:
@@ -1301,7 +1306,7 @@ class BinManager:
                 ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
                 plot_num += 1
                 for bid in bids:
-                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric, ET=et, plotCentroid=pc)
+                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, lens, self.PM.colorMapGC, self.PM.isLikelyChimeric, ET=et, plotCentroid=pc)
 
         try:
             plt.show()

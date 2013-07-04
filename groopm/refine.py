@@ -1265,29 +1265,31 @@ class RefineEngine:
                 except KeyError:
                     nones[old_bid] = 1
 
-        print "    ------------------------------------------------------"
-        print "     BID    ORIG    CHGE    SAME    NEWS    NONE    TOTAL"
-        print "    ------------------------------------------------------"
-        for bid in bids:
-            print "   %4d    %5d   " % (bid, self.BM.bins[bid].binSize),
-            if bid in wrongs:
-                print "%04d   " % wrongs[bid],
-            else:
-                print "0000   ",
-            if bid in rights:
-                print "%04d   " % rights[bid],
-            else:
-                print "0000   ",
-            if bid in news:
-                print "%04d   " % news[bid],
-            else:
-                print "0000   ",
-            if bid in nones:
-                print "%04d   " % nones[bid],
-            else:
-                print "0000   ",
-            print "%04d   " % len(new_assignments[bid])
-        print "\n    ---------------------------------------------"
+
+	if False:
+            print "    ------------------------------------------------------"
+            print "     BID    ORIG    CHGE    SAME    NEWS    NONE    TOTAL"
+            print "    ------------------------------------------------------"
+            for bid in bids:
+                print "   %4d    %5d   " % (bid, self.BM.bins[bid].binSize),
+                if bid in wrongs:
+                    print "%04d   " % wrongs[bid],
+                else:
+                    print "0000   ",
+                if bid in rights:
+                    print "%04d   " % rights[bid],
+                else:
+                    print "0000   ",
+                if bid in news:
+                    print "%04d   " % news[bid],
+                else:
+                    print "0000   ",
+                if bid in nones:
+                    print "%04d   " % nones[bid],
+                else:
+                    print "0000   ",
+                print "%04d   " % len(new_assignments[bid])
+            print "\n    ---------------------------------------------"
 
         # now get ready for saving.
         # first, we nuke all non-chimeric bins

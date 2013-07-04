@@ -181,7 +181,7 @@ class ClusterEngine:
 #------------------------------------------------------------------------------
 # CORE CONSTRUCTION AND MANAGEMENT
 
-    def makeCores(self, coreCut, gf="", kmerThreshold=0., coverageThreshold=0.):
+    def makeCores(self, coreCut, gf="", kmerThreshold=0.2, coverageThreshold=0.05):
         """Cluster the contigs to make bin cores"""
         # check that the user is OK with nuking stuff...
         if(not self.promptOnOverwrite()):
