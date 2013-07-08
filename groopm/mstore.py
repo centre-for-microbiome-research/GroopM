@@ -63,6 +63,10 @@ from PCA import PCA, Center
 
 np.seterr(all='raise')
 
+# shut up pytables!
+import warnings
+warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
+
 ###############################################################################
 ###############################################################################
 ###############################################################################

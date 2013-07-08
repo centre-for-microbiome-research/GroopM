@@ -234,6 +234,7 @@ class GroopMOptionsParser():
             BE = groopmUtils.BinExplorer(options.dbname,
                                          bids=bids,
                                          transform=transform,
+                                         cmstring=options.cm,
                                          squish=options.squish)
             if(options.mode == 'binpoints'):
                 BE.plotPoints(timer)

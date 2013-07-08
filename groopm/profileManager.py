@@ -485,7 +485,6 @@ class ProfileManager:
 
         # reshuffle the contig order!
         # yay for bubble sort!
-        ordering = np_arange(self.numStoits)
         working = np_arange(self.numStoits)
         for i in range(1, self.numStoits):
             # where is this guy in the list
@@ -723,9 +722,19 @@ class ProfileManager:
 
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
-        sc = ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='none', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.', s = 2)
+        sc = ax1.scatter(self.transformedCP[:,0],
+                         self.transformedCP[:,1],
+                         self.transformedCP[:,2],
+                         edgecolors='k',
+                         c=self.contigGCs,
+                         cmap=self.colorMapGC,
+                         vmin=0.0,
+                         vmax=1.0,
+                         marker='.',
+                         s=np_sqrt(self.contigLengths)
+                         )
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
-        self.plotStoitNames(ax1)
+        #self.plotStoitNames(ax1)
         
         cbar = plt.colorbar(sc, shrink=0.5)
         cbar.ax.tick_params()

@@ -176,8 +176,10 @@ class BinExplorer:
                  dbFileName,
                  bids=[],
                  transform=True,
+                 cmstring="HSV",
                  squish=False):
         self.transform = transform
+        self.cmString = cmstring
         self.BM = binManager.BinManager(dbFileName=dbFileName,
                                         squish=squish)   # bins
         self.PM = self.BM.PM
@@ -199,6 +201,7 @@ class BinExplorer:
             print "Sorry, no bins to plot"
         else:
             print "Plotting image"
+            self.BM.setColorMap(self.cmString)
             fig = plt.figure()
             bins=[]
             if bids is not None:
@@ -244,6 +247,7 @@ class BinExplorer:
             print "Sorry, no bins to plot"
         else:
             print "Plotting flyover"
+            self.BM.setColorMap(self.cmString)
             all_bids = self.BM.getBids()
 
             # control image form and output
@@ -298,6 +302,7 @@ class BinExplorer:
             print "Sorry, no bins to plot"
         else:
             print "Plotting bin profiles"
+            self.BM.setColorMap(self.cmString)
             self.BM.plotProfileDistributions()
 
     def plotContigs(self, timer, coreCut, all=False):
@@ -315,6 +320,7 @@ class BinExplorer:
                 print "Sorry, no bins to plot"
             else:
                 print "Plotting binned contigs"
+                self.BM.setColorMap(self.cmString)
                 if self.bids == []:
                     self.bids = self.BM.getBids()
                 self.BM.plotMultipleBins([self.bids], squash=True)
@@ -330,6 +336,7 @@ class BinExplorer:
             print "Sorry, no bins to plot"
         else:
             print "Plotting bin points"
+            self.BM.setColorMap(self.cmString)
             self.BM.plotBinPoints()
 
     def plotSideBySide(self, timer, coreCut):
@@ -355,11 +362,15 @@ class BinExplorer:
                          min=min,
                          max=max,
                          transform=self.transform)
+
+        self.PM2.setColorMap(self.cmString)
+        self.BM.setColorMap(self.cmString)
+        
         if len(self.BM.bins) == 0:
             print "Sorry, no bins to plot"
         else:
             print "Plotting side by side graphs"
-            (bin_centroid_points, bin_centroid_colors, bin_ids) = self.BM.findCoreCentres()
+            (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bin_ids) = self.BM.findCoreCentres()
             self.plotCoresVsContigs(bin_centroid_points, bin_centroid_colors)
 
     def plotIds(self, timer):
@@ -376,6 +387,7 @@ class BinExplorer:
             print "Sorry, no bins to plot"
         else:
             print "Plotting bin IDs"
+            self.BM.setColorMap(self.cmString)
             self.BM.plotBinIds()
 
     def plotUnbinned(self, timer, coreCut):
@@ -388,14 +400,22 @@ class BinExplorer:
 
     def plotCoresVsContigs(self, binCentroidPoints, binCentroidColors, azim=0, elev=0, fileName='', dpi=300, format='png'):
         """Render the image for validating cores"""
-        disp_lens = np.array([np.sqrt(self.PM2.contigLengths[i]) for i in range(len(self.PM2.indices))])
         if(fileName==""):
             # plot on screen for user
             fig = plt.figure()
             ax1 = fig.add_subplot(121, projection='3d')
-            ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors='k', c=self.PM2.contigGCs, cmap=self.PM2.colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens, marker='.')
+            sc = ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors='k', c=self.PM2.contigGCs, cmap=self.PM2.colorMapGC, vmin=0.0, vmax=1.0, s=np.sqrt(self.PM2.contigLengths), marker='.')
+            sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+
             ax2 = fig.add_subplot(122, projection='3d')
-            ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColors, c=binCentroidColors)
+            sc = ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColors, c=binCentroidColors)
+            sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+
+            ax2.set_xlim(ax1.get_xlim())
+            ax2.set_ylim(ax1.get_ylim())
+            ax2.set_zlim(ax1.get_zlim())
+
+
             self.BM.plotStoitNames(ax1)
             self.BM.plotStoitNames(ax2)
             try:
