@@ -42,10 +42,10 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
-__status__ = "Alpha"
+__status__ = "Beta"
 
 ###############################################################################
 from os.path import join as osp_join
