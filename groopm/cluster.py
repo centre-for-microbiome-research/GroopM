@@ -205,7 +205,7 @@ class ClusterEngine:
 
         # cluster and bin!
         print "Create cores"
-        self.initialiseCores(kmerThreshold=kmerThreshold, coverageThreshold=coverageThreshold)
+        self.initialiseCores(kmerThreshold, coverageThreshold)
         print "    %s" % self.timer.getTimeStamp()
 
         # condense cores
@@ -221,7 +221,7 @@ class ClusterEngine:
         self.BM.saveBins(nuke=True)
         print "    %s" % self.timer.getTimeStamp()
 
-    def initialiseCores(self, kmerThreshold=0., coverageThreshold=0.):
+    def initialiseCores(self, kmerThreshold, coverageThreshold):
         """Process contigs and form CORE bins"""
         num_below_cutoff = 0            # how many consecutive attempts have produced small bins
         breakout_point = 30            # how many will we allow before we stop this loop
@@ -244,8 +244,7 @@ class ClusterEngine:
 
             # now search for the "hottest" spots on the blurred map
             # and check for possible bin centroids
-            putative_clusters = self.findNewClusterCenters(kmerThreshold=kmerThreshold, coverageThreshold=coverageThreshold)
-
+            putative_clusters = self.findNewClusterCenters(kmerThreshold, coverageThreshold)
 
             if(putative_clusters is None):
                 break
@@ -328,7 +327,7 @@ class ClusterEngine:
 
         print "\n     .... .... .... .... .... .... .... .... .... ...."
 
-    def findNewClusterCenters(self, kmerThreshold=0., coverageThreshold=0.):
+    def findNewClusterCenters(self, kmerThreshold, coverageThreshold):
         """Find a putative cluster"""
         inRange = lambda x,l,u : x >= l and x < u
 
@@ -401,14 +400,14 @@ class ClusterEngine:
             else:
                 putative_clusters = self.twoWayContraction(putative_center_row_indices, 
                                                            [max_x, max_y],
-                                                           kmerThreshold=kmerThreshold, 
-                                                           coverageThreshold=coverageThreshold)
+                                                           kmerThreshold, 
+                                                           coverageThreshold)
                 if putative_clusters == None:
                     return None
 
                 return [putative_clusters, ret_values]
 
-    def twoWayContraction(self, rowIndices, positionInPlane, kmerThreshold=0., coverageThreshold=0.):
+    def twoWayContraction(self, rowIndices, positionInPlane, kmerThreshold, coverageThreshold):
         """Partition a collection of contigs into 'core' groups"""
         
         # sanity check that there is enough data here to try a determine 'core' groups

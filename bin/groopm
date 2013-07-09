@@ -134,8 +134,8 @@ if __name__ == '__main__':
     core_builder.add_argument('-p', '--plot', action="store_true", default=False, help="create plots of bins after basic refinement")
     core_builder.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
     core_builder.add_argument('-m', '--multiplot', default=0, help="create plots during core creation - (0-3) MAKES MANY IMAGES!")
-    core_builder.add_argument('-x', '--kmer', type=float, default=0.2, help="kmer convergence threshold")
-    core_builder.add_argument('-y', '--coverage', type=float, default=0.05, help="coverage convergence threshold")
+    core_builder.add_argument('-x', '--kmer', type=float, default=0.1, help="kmer convergence threshold")
+    core_builder.add_argument('-y', '--coverage', type=float, default=0.07, help="coverage convergence threshold")
 
     #-------------------------------------------------
     # refine bins
