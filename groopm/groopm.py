@@ -219,7 +219,7 @@ class GroopMOptionsParser():
             print " [[GroopM]] Running in bin deleting mode..."
             print "*******************************************************************************"
             BM = binManager.BinManager(dbFileName=options.dbname)
-            BM.loadBins(timer, makeBins=True, silent=True, bids=options.bids)
+            BM.loadBins(timer, makeBins=True, silent=True)#, bids=options.bids)
             BM.deleteBins(options.bids, force=options.force, saveBins=True, freeBinnedRowIndices=True)
 
         elif(options.subparser_name == 'explore'):

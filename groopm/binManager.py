@@ -792,7 +792,6 @@ class BinManager:
         bin_assignment_update = {}
         for bid in bids:
             if bid in self.bins:
-                del self.PM.isLikelyChimeric[bid]
                 if(freeBinnedRowIndices):
                     for row_index in self.bins[bid].rowIndices:
                         try:
@@ -803,6 +802,7 @@ class BinManager:
 
                         bin_assignment_update[row_index] = 0
                 del self.bins[bid]
+                del self.PM.isLikelyChimeric[bid]
             else:
                 raise ge.BinNotFoundException("Cannot find: "+str(bid)+" in bins dicts")
 
