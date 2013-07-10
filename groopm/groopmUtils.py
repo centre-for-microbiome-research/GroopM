@@ -128,11 +128,11 @@ class GMExtractor:
                 print "Could not open file for writing:",file_name,sys.exc_info()[0]
                 raise
 
-    def  extractReads(self, bams=[]):
+    def  extractReads(self, timer, bams=[]):
         """Extract reads from sam files and write to file"""
         # load data
         self.BM = binManager.BinManager(dbFileName=self.dbFileName)   # bins
-        self.BM.loadBins(makeBins=True,silent=False,bids=self.bids)
+        self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
         self.PM = self.BM.PM
 
         print "Extracting reads"
