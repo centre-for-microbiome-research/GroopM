@@ -370,8 +370,8 @@ class ClusterEngine:
         # now get the basic color of this dense point
         putative_center_row_indices = []
 
-        (x_lower, x_upper) = self.makeCoordRanges(max_x, self.span)
-        (y_lower, y_upper) = self.makeCoordRanges(max_y, self.span)
+        (x_lower, x_upper) = self.makeCoordRanges(max_x, 1.5*self.span)
+        (y_lower, y_upper) = self.makeCoordRanges(max_y, 1.5*self.span)
         (z_lower, z_upper) = self.makeCoordRanges(max_z, 2*self.span)
 
         for row_index in super_putative_row_indices:
@@ -421,6 +421,9 @@ class ClusterEngine:
         k_dat = np_copy(self.PM.kmerPCs[rowIndices])
         c_dat = np_copy(self.PM.transformedCP[rowIndices])
         l_dat = np_copy(self.PM.contigLengths[rowIndices])
+        if self.debugPlots >= 2:
+            n_dat = np_copy(self.PM.contigNames[rowIndices])
+            
         row_indices = np_copy(rowIndices)
         
         # calculate shortest distance to a corner (this isn't currently used)
@@ -474,7 +477,6 @@ class ClusterEngine:
             
                 fig = plt.figure()
                 ax = fig.add_subplot(111, projection='3d')
-                
                 ax.scatter(c_dat[:,0],
                            c_dat[:,1],
                            c_dat[:,2],
@@ -482,6 +484,7 @@ class ClusterEngine:
                            c=self.PM.contigGCs[row_indices],
                            cmap=self.PM.colorMapGC,
                            vmin=0.0, vmax=1.0,
+                           s=np_sqrt(l_dat),
                            marker='.')
                 
                 title = "Points: %s Cd: %f Kd: %f" % (str(len(c_dat[:,0])), c_delt, k_delt)
@@ -582,6 +585,9 @@ class ClusterEngine:
                 c_dat = np_delete(c_dat, noise, axis = 0)
                 k_dat = np_delete(k_dat, noise, axis = 0)
                 l_dat = np_delete(l_dat, noise, axis = 0)
+                if self.debugPlots >= 2:
+                    print "Noise deleting_%d_%d:\n" % (self.cluster_num, iter), n_dat[noise]
+                    n_dat = np_delete(n_dat, noise, axis = 0)
                 row_indices = np_delete(row_indices, noise, axis = 0)
             
             # get whitened version of modified coverage data (using original transformation)
@@ -596,6 +602,43 @@ class ClusterEngine:
             if k_delt < k_converged or c_delt < c_converged:
 #            if np_mean(k_deltas) < 0.2 or np_mean(c_deltas) < 0.05:      
                 break
+
+
+        if self.debugPlots >= 2:
+        
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+            ax.scatter(c_dat[:,0],
+                       c_dat[:,1],
+                       c_dat[:,2],
+                       edgecolors='k',
+                       c=self.PM.contigGCs[row_indices],
+                       cmap=self.PM.colorMapGC,
+                       vmin=0.0, vmax=1.0,
+                       s=np_sqrt(l_dat),
+                       marker='.')
+            
+            title = "Points: %s Cd: %f Kd: %f" % (str(len(c_dat[:,0])), c_delt, k_delt)
+            plt.title(title)
+            
+            if iter == 1:
+                xlim = [np_min(c_dat[:,0]) - 0.05*np_min(c_dat[:,0]), np_max(c_dat[:,0]) + 0.05*np_max(c_dat[:,0])]
+                ylim = [np_min(c_dat[:,1]) - 0.05*np_min(c_dat[:,1]), np_max(c_dat[:,1]) + 0.05*np_max(c_dat[:,1])]
+                zlim = [np_min(c_dat[:,2]) - 0.05*np_min(c_dat[:,2]), np_max(c_dat[:,2]) + 0.05*np_max(c_dat[:,2])]
+        
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
+            ax.set_zlim(zlim)
+            
+            fig.set_size_inches(6,6)
+            
+            fileName = "gh_%d_final" % (self.cluster_num)
+            plt.savefig(fileName + '.png',dpi=96)
+            
+            plt.close(fig)
+            del fig
+
+
 
         # perform hough transform clustering
         self.HP.hc += 1

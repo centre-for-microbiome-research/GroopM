@@ -39,7 +39,7 @@
 ###############################################################################
 
 __author__ = "Michael Imelfort"
-__copyright__ = "Copyright 2012"
+__copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
 __version__ = "0.2.3"
@@ -285,7 +285,10 @@ if __name__ == '__main__':
     #-------------------------------------------------
     # get and check options
     args = None
-    if(len(sys.argv) == 1 or sys.argv[1] == '-h' or sys.argv == '--help'):
+    if(sys.argv[1] == '-v' or sys.argv[1] == '--version'):
+        print "GroopM: version %s %s %s" % (__version__, __copyright__, __author__)
+        sys.exit(0)
+    elif(len(sys.argv) == 1 or sys.argv[1] == '-h' or sys.argv[1] == '--help'):
         printHelp()
         sys.exit(0)
     else:

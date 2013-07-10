@@ -558,9 +558,9 @@ class BinManager:
         """Return a set of split bins"""
         obs = np_array([])
         if(mode=='kmer'):
-            obs = np_array([self.PM.kmerNormPC1[i] for i in bin.rowIndices])
+            obs = np_array([self.PM.kmerNormPC1[i] for i in self.getBin(bid).rowIndices])
         elif(mode=='cov'):
-            obs = np_array([self.PM.covProfiles[i] for i in bin.rowIndices])
+            obs = np_array([self.PM.covProfiles[i] for i in self.getBin(bid).rowIndices])
 
         # do the clustering
         try:
@@ -589,7 +589,7 @@ class BinManager:
                 bids.append(split_bin.id)
                 holding_array = np_array([])
                 current_group = idx[i]
-            holding_array = np_append(holding_array, int(bin.rowIndices[i]))
+            holding_array = np_append(holding_array, int(self.getBin(bid).rowIndices[i]))
 
         # do the last one
         if(np_size(holding_array) != 0):
@@ -1480,7 +1480,8 @@ class BinManager:
 
     def plotBinIds(self, gc_range=None, ignoreRanges=False, showChimeric=False):
         """Render 3d image of core ids"""
-        (bin_centroid_points, bin_centroid_colors, _bin_centroid_gc, bids) = self.findCoreCentres(gc_range=gc_range,processChimeric=showChimeric)
+        (bin_centroid_points, bin_centroid_colors, _bin_centroid_gc, bids) = self.findCoreCentres(gc_range=gc_range,
+                                                                                                  processChimeric=showChimeric)
         fig = plt.figure()
         ax = fig.gca(projection='3d')
         ax.set_xlabel('x coverage')
