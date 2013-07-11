@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Release"
@@ -312,7 +312,7 @@ class GroopMOptionsParser():
 
             # prep fields. Do this first cause users are mot likely to
             # mess this part up!
-            allowable_fields = ['names', 'mers', 'coverage', 'lengths', 'bins', 'all']
+            allowable_fields = ['names', 'mers', 'gc', 'coverage', 'lengths', 'bins', 'all']
             fields = options.fields.split(',')
             for field in fields:
                 if field not in allowable_fields:

@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Release"
@@ -1192,7 +1192,7 @@ class GMDataManager:
         data_arrays = []
 
         if fields == ['all']:
-            fields = ['names', 'lengths', 'GCs', 'bins', 'coverage', 'mers']
+            fields = ['names', 'lengths', 'gc', 'bins', 'coverage', 'mers']
 
         num_fields = len(fields)
         data_converters = []
@@ -1208,7 +1208,7 @@ class GMDataManager:
                 data_arrays.append(self.getContigLengths(dbFileName))
                 data_converters.append(lambda x : str(x))
 
-            elif field == 'GCs':
+            elif field == 'gc':
                 header_strings.append('GCs')
                 data_arrays.append(self.getContigGCs(dbFileName))
                 data_converters.append(lambda x : str(x))

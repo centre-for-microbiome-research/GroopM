@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ###############################################################################
 #                                                                             #
-#    profileManager.py                                                          #
+#    profileManager.py                                                        #
 #                                                                             #
 #    GroopM - High level data management                                      #
 #                                                                             #

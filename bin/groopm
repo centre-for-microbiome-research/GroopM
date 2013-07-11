@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.4"
+__version__ = "0.2.6"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -262,7 +262,7 @@ if __name__ == '__main__':
                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                         help='write database to text file')
     data_dumper.add_argument('dbname', help="name of the database to open")
-    data_dumper.add_argument('-f', '--fields', default="names,bins", help="fields to extract: Build a comma separated list from [names, mers, coverage, lengths, bins] or just use 'all']")
+    data_dumper.add_argument('-f', '--fields', default="names,bins", help="fields to extract: Build a comma separated list from [names, mers, gc, coverage, lengths, bins] or just use 'all']")
     data_dumper.add_argument('-o', '--outfile', default="GMdump.csv", help="write data to this file")
     data_dumper.add_argument('-s', '--separator', default=",", help="data separator")
     data_dumper.add_argument('--no_headers', action="store_true", default=False, help="don't add headers")
