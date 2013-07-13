@@ -53,6 +53,7 @@ import sys
 import errno
 
 import matplotlib.pyplot as plt
+from colorsys import hsv_to_rgb as htr
 
 import numpy as np
 
@@ -177,7 +178,10 @@ class BinExplorer:
                  bids=[],
                  transform=True,
                  cmstring="HSV",
-                 squish=False):
+                 squish=False,
+                 ignoreContigLengths=False):
+        
+        self.ignoreContigLengths = ignoreContigLengths 
         self.transform = transform
         self.cmString = cmstring
         self.BM = binManager.BinManager(dbFileName=dbFileName,
@@ -309,7 +313,7 @@ class BinExplorer:
         """plot contigs"""
         if all:
             print "Plotting all contigs"
-            self.PM.plotAll(timer, coreCut, transform=self.transform)
+            self.PM.plotAll(timer, coreCut, transform=self.transform, ignoreContigLengths=self.ignoreContigLengths)
         else:
             self.BM.loadBins(timer,
                              makeBins=True,
@@ -323,7 +327,161 @@ class BinExplorer:
                 self.BM.setColorMap(self.cmString)
                 if self.bids == []:
                     self.bids = self.BM.getBids()
-                self.BM.plotMultipleBins([self.bids], squash=True)
+                self.BM.plotMultipleBins([self.bids], squash=True, ignoreContigLengths=self.ignoreContigLengths)
+
+    def plotBinAssignents(self, timer, coreCut):
+        """visualise bin assignments"""
+        self.BM.loadBins(timer,
+                         makeBins=True,
+                         getUnbinned=True,
+                         silent=False,
+                         bids=self.bids,
+                         transform=self.transform)
+        if len(self.BM.bins) == 0:
+            print "Sorry, no bins to plot"
+        else:
+            print "Plotting binned contigs by bin"
+            if self.bids == []:
+                self.bids = self.BM.getBids()
+
+            # work out colors per bin
+            S = 1.0
+            V = 1.0
+            num_bins = len(self.bids)
+            offset = 0.5
+            step = 1. /(num_bins-1 + 2. * offset)
+            Hs = np.array([step*(i + offset) for i in range(num_bins)])
+            cols = [htr(H, S, V) for H in Hs]
+            np.random.shuffle(cols)
+            unbinned_col = (0.2,0.2,0.2)
+            bin_cols = {0:(0.2,0.2,0.2)}    # unassigned color
+            i = 0
+            for bid in self.bids:
+                bin_cols[bid] = cols[i]
+                i += 1
+
+            # for binned contigs
+            b_disp_vals = []
+            b_disp_cols = []
+            b_disp_lens = []
+            b_num = 0
+            # for the unwashed masses
+            ub_disp_vals = []
+            ub_disp_cols = []
+            ub_disp_lens = []
+            ub_num = 0
+                
+            # assign a color to each contig
+            for row_index in np.arange(len(self.PM.indices)):
+                if self.PM.binIds[row_index] == 0:
+                    ub_disp_cols.append(unbinned_col)
+                    ub_disp_vals.append(self.PM.transformedCP[row_index])
+                    ub_disp_lens.append(self.PM.contigLengths[row_index])
+                    ub_num += 1
+                else:
+                    b_disp_cols.append(bin_cols[self.PM.binIds[row_index]])
+                    b_disp_vals.append(self.PM.transformedCP[row_index])
+                    b_disp_lens.append(self.PM.contigLengths[row_index])
+                    b_num += 1
+
+            b_disp_vals = np.reshape(b_disp_vals, (b_num, 3))
+            fig = plt.figure()
+            #import matplotlib.gridspec as gridspec
+            #gs = gridspec.GridSpec(2,1,height_ratios=[4,1])
+            #ax1 = plt.subplot(gs[0], projection='3d')
+            ax1 = plt.subplot(1,1,1, projection='3d')
+            
+            if ub_num != 0:
+                ub_disp_vals = np.reshape(ub_disp_vals, (ub_num, 3))
+                if self.ignoreContigLengths:
+                    sc = ax1.scatter(ub_disp_vals[:,0],
+                                     ub_disp_vals[:,1],
+                                     ub_disp_vals[:,2],
+                                     edgecolors='none',
+                                     c=ub_disp_cols,
+                                     s=10.,
+                                     marker='.',
+                                     alpha=0.35)
+                else:
+                    sc = ax1.scatter(ub_disp_vals[:,0],
+                                     ub_disp_vals[:,1],
+                                     ub_disp_vals[:,2],
+                                     edgecolors='none',
+                                     c=ub_disp_cols,
+                                     s=np.sqrt(ub_disp_lens),
+                                     marker='.',
+                                     alpha=0.35)
+
+            if self.ignoreContigLengths:
+                sc = ax1.scatter(b_disp_vals[:,0],
+                                 b_disp_vals[:,1],
+                                 b_disp_vals[:,2],
+                                 edgecolors='none',
+                                 c=b_disp_cols,
+                                 s=10.,
+                                 marker='.')
+            else:
+                sc = ax1.scatter(b_disp_vals[:,0],
+                                 b_disp_vals[:,1],
+                                 b_disp_vals[:,2],
+                                 edgecolors='none',
+                                 c=b_disp_cols,
+                                 s=np.sqrt(b_disp_lens),
+                                 marker='.')
+
+            (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bin_ids) = self.BM.findCoreCentres(processChimeric=True)
+            outer_index = 0
+            for bid in self.bids:
+                bbox_props = dict(boxstyle="round4", fc="w", ec=bin_cols[bid], alpha=0.6)
+                ax1.text(bin_centroid_points[outer_index, 0],
+                         bin_centroid_points[outer_index, 1],
+                         bin_centroid_points[outer_index, 2],
+                         str(int(bid)),
+                         color='black',
+                         size='large',
+                         ha="center", va="center", bbox=bbox_props
+                         )
+                outer_index += 1
+            ax1.set_xticklabels([])
+            ax1.set_yticklabels([])
+            ax1.set_zticklabels([])
+            ax1.set_xticks([])
+            ax1.set_yticks([])
+            ax1.set_zticks([])
+            
+
+            if False:
+                #plot bin keys
+                ax2 = plt.subplot(gs[1])
+                
+                # work out text placement
+                bin_rows = int(np.sqrt(num_bins)) + 1
+                bin_columns = int(float(num_bins)/float(bin_rows)) + 2
+                bin_rows += 1 
+                ax2.set_xlim(0, bin_columns)
+                ax2.set_ylim(0, bin_rows)
+                bid_coords = zip(np.array([[i]*bin_columns for i in range(bin_rows)]).flatten(), range(bin_columns) * bin_rows)
+    
+                outer_index = 0
+                
+                for bid in self.bids:
+                    bbox_props = dict(boxstyle="round", fc=bin_cols[bid])
+                    ax2.text(bid_coords[outer_index][0] +1,
+                             bid_coords[outer_index][1] +1,
+                             str(int(bid)),
+                             ha="center", va="center",
+                             bbox=bbox_props,
+                             size='medium' 
+                             )
+                    outer_index += 1
+    
+                plt.xticks([], [])
+                plt.yticks([], [])
+
+            plt.show()
+            plt.close(fig)
+            del fig
+
 
     def plotPoints(self, timer):
         """plot points"""
@@ -339,7 +497,7 @@ class BinExplorer:
             self.BM.setColorMap(self.cmString)
             self.BM.plotBinPoints()
 
-    def plotSideBySide(self, timer, coreCut):
+    def plotCompare(self, timer, coreCut):
         """Plot cores side by side with their contigs"""
         self.PM2 = binManager.ProfileManager(dbFileName=self.BM.PM.dbFileName)
         self.PM2.loadData(timer,
@@ -393,7 +551,44 @@ class BinExplorer:
     def plotUnbinned(self, timer, coreCut):
         """Plot all contigs over a certain length which are unbinned"""
         print "Plotting unbinned contigs"
-        self.PM.plotUnbinned(timer, coreCut, transform=self.transform)
+        self.PM.plotUnbinned(timer, coreCut, transform=self.transform, ignoreContigLengths=self.ignoreContigLengths)
+
+    def plotSideBySide(self, timer, coreCut):
+        """Plot all bins separately in one large image"""
+        self.BM.loadBins(timer,
+                         makeBins=True,
+                         silent=False,
+                         bids=self.bids,
+                         transform=self.transform)
+        if len(self.BM.bins) == 0:
+            print "Sorry, no bins to plot"
+        else:
+            self.BM.setColorMap(self.cmString)
+            self.BM.plotBins(sideBySide=True,
+                             plotEllipsoid=True,
+                             ignoreContigLengths=self.ignoreContigLengths)
+
+    def plotTogether(self, timer, coreCut, doMers=False):
+        """Plot all bins in ellipses on one normal image"""
+        self.BM.loadBins(timer,
+                         makeBins=True,
+                         silent=False,
+                         bids=self.bids,
+                         transform=self.transform)
+        if len(self.BM.bins) == 0:
+            print "Sorry, no bins to plot"
+        else:
+            print "Plotting all bins together"
+            self.BM.setColorMap(self.cmString)
+            if self.bids == []:
+                p_bids = self.BM.getBids()
+            else:
+                p_bids = self.bids
+            self.BM.plotSelectBins(p_bids,
+                                   plotMers=doMers,
+                                   plotEllipsoid=True,
+                                   ignoreContigLengths=self.ignoreContigLengths)
+         
 
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING
@@ -404,7 +599,10 @@ class BinExplorer:
             # plot on screen for user
             fig = plt.figure()
             ax1 = fig.add_subplot(121, projection='3d')
-            sc = ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors='k', c=self.PM2.contigGCs, cmap=self.PM2.colorMapGC, vmin=0.0, vmax=1.0, s=np.sqrt(self.PM2.contigLengths), marker='.')
+            if self.ignoreContigLengths:
+                sc = ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors='none', c=self.PM2.contigGCs, cmap=self.PM2.colorMapGC, vmin=0.0, vmax=1.0, s=10, marker='.')
+            else:
+                sc = ax1.scatter(self.PM2.transformedCP[:,0], self.PM2.transformedCP[:,1], self.PM2.transformedCP[:,2], edgecolors='k', c=self.PM2.contigGCs, cmap=self.PM2.colorMapGC, vmin=0.0, vmax=1.0, s=np.sqrt(self.PM2.contigLengths), marker='.')                
             sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
             ax2 = fig.add_subplot(122, projection='3d')

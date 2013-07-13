@@ -89,10 +89,9 @@ def printHelp():
         Printing, plotting:
 
     groopm explore      -> Methods for viewing bin layouts
-    groopm highlight    -> Produce high def images
-    groopm print        -> Print bin statistics
     groopm plot         -> Plot bins
-    groopm dump         -> Write database to text file
+    groopm print        -> Print summary statistics
+    groopm dump         -> Write database fields to csv
 
     USE: groopm OPTION -h to see detailed options
     ''' % __version__
@@ -215,35 +214,50 @@ if __name__ == '__main__':
     ##################################################
 
     #-------------------------------------------------
-    # load bins and visualise
+    # visualise all bins
     bin_explorer = subparsers.add_parser('explore',
                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                         help='explore and validate bins')
     bin_explorer.add_argument('dbname', help="name of the database to open")
     bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to plot (None for all)")
     bin_explorer.add_argument('-c', '--cutoff', default=1000, help="cutoff contig size")
-    bin_explorer.add_argument('-m', '--mode', default="binids", help="Exploration mode [binpoints, binids, allcontigs, unbinnedcontigs, binnedcontigs, compare, flyover]")
+    bin_explorer.add_argument('-m', '--mode', default="binids", help="Exploration mode [binpoints, binids, allcontigs, unbinnedcontigs, binnedcontigs, binsassignments, compare, sidebyside, together]")
     bin_explorer.add_argument('-r', '--no_transform', action="store_true", default=False, help="skip data transformation (3 stoits only)")
+    bin_explorer.add_argument('-k', '--kmers', action="store_true", default=False, help="include kmers in figure [only used when mode == together]")
     bin_explorer.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
+    bin_explorer.add_argument('-p', '--points', action="store_true", default=False, help="ignore contig lengths when plotting")
     bin_explorer.add_argument('-C', '--cm', default="HSV", help="set colormap [HSV, Accent, Blues, Spectral, Grayscale, Discrete, DiscretePaired]")
 
-
     #-------------------------------------------------
-    # produce fancy image for publications
-    bin_highlighter = subparsers.add_parser('highlight',
-                                            formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                            help='highlight specific bins')
-    bin_highlighter.add_argument('dbname', help="name of the database to open")
-    bin_highlighter.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to highlight (None for all)")
-    bin_highlighter.add_argument('-e', '--elevation', type=float, default=25.0, help="elevation in printed image")
-    bin_highlighter.add_argument('-a', '--azimuth', type=float, default=-45.0, help="azimuth in printed image")
-    bin_highlighter.add_argument('-f', '--file', default="gmview", help="name of image file to produce")
-    bin_highlighter.add_argument('--filetype', default="jpg", help="Type of file to produce")
-    bin_highlighter.add_argument('--dpi', default=300, help="Image resolution")
-    bin_highlighter.add_argument('--alpha', default=0.1, type=float,  help="Opacity of background bins")
-    bin_highlighter.add_argument('-i', '--invert', action="store_true", default=False, help="invert colours")
-    bin_highlighter.add_argument('-s', '--show', action="store_true", default=False, help="load image in viewer only")
-    bin_highlighter.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
+    # plot a bin/bins
+    bin_plotter = subparsers.add_parser('plot',
+                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        help='plot bins')
+    bin_plotter.add_argument('dbname', help="name of the database to open")
+    bin_plotter.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to plot (None for all)")
+    bin_plotter.add_argument('-t', '--tag', default="BIN", help="tag to add to output filename")
+    bin_plotter.add_argument('-f', '--folder', default="", help="save plots in folder")
+    bin_plotter.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
+    bin_plotter.add_argument('-p', '--points', action="store_true", default=False, help="ignore contig lengths when plotting")    
+    bin_plotter.add_argument('-C', '--cm', default="HSV", help="set colormap [HSV, Accent, Blues, Spectral, Grayscale, Discrete, DiscretePaired]")
+
+    if False:
+        #-------------------------------------------------
+        # produce fancy image for publications
+        bin_highlighter = subparsers.add_parser('highlight',
+                                                formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                                help='highlight specific bins')
+        bin_highlighter.add_argument('dbname', help="name of the database to open")
+        bin_highlighter.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to highlight (None for all)")
+        bin_highlighter.add_argument('-e', '--elevation', type=float, default=25.0, help="elevation in printed image")
+        bin_highlighter.add_argument('-a', '--azimuth', type=float, default=-45.0, help="azimuth in printed image")
+        bin_highlighter.add_argument('-f', '--file', default="gmview", help="name of image file to produce")
+        bin_highlighter.add_argument('--filetype', default="jpg", help="Type of file to produce")
+        bin_highlighter.add_argument('--dpi', default=300, help="Image resolution")
+        bin_highlighter.add_argument('--alpha', default=0.1, type=float,  help="Opacity of background bins")
+        bin_highlighter.add_argument('-i', '--invert', action="store_true", default=False, help="invert colours")
+        bin_highlighter.add_argument('-s', '--show', action="store_true", default=False, help="load image in viewer only")
+        bin_highlighter.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
 
     #-------------------------------------------------
     # print bin information
@@ -253,7 +267,7 @@ if __name__ == '__main__':
     bin_printer.add_argument('dbname', help="name of the database to open")
     bin_printer.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to print (None for all)")
     bin_printer.add_argument('-o', '--outfile', default="", help="print to file not STDOUT")
-    bin_printer.add_argument('-f', '--format', default='user', help="output format [full, minimal, summary, user]")
+    bin_printer.add_argument('-f', '--format', default='bins', help="output format [bins, contigs]")
     bin_printer.add_argument('-u', '--unbinned', action="store_true", default=False, help="print unbinned contig IDs too")
 
     #-------------------------------------------------
@@ -266,21 +280,6 @@ if __name__ == '__main__':
     data_dumper.add_argument('-o', '--outfile', default="GMdump.csv", help="write data to this file")
     data_dumper.add_argument('-s', '--separator', default=",", help="data separator")
     data_dumper.add_argument('--no_headers', action="store_true", default=False, help="don't add headers")
-
-    #-------------------------------------------------
-    # plot a bin/bins
-    bin_plotter = subparsers.add_parser('plot',
-                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                        help='plot bins')
-    bin_plotter.add_argument('dbname', help="name of the database to open")
-    bin_plotter.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to plot (None for all)")
-    bin_plotter.add_argument('-s', '--sidebyside', action="store_true", default=False, help="plot bins in 3d side by side instead of to file")
-    bin_plotter.add_argument('-T', '--together', action="store_true", default=False, help="plot bins in 3d in one figure")
-    bin_plotter.add_argument('-k', '--kmers', action="store_true", default=False, help="include kmers in figure [only used for option 'T']")
-    bin_plotter.add_argument('-t', '--tag', default="BIN", help="tag to add to output filename")
-    bin_plotter.add_argument('-f', '--folder', default="", help="save plots in folder")
-    bin_plotter.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
-    bin_plotter.add_argument('-C', '--cm', default="HSV", help="set colormap [HSV, Accent, Blues, Spectral, Grayscale, Discrete, DiscretePaired]")
 
     #-------------------------------------------------
     # get and check options

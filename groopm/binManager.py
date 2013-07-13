@@ -72,6 +72,7 @@ from numpy import (abs as np_abs,
                    mean as np_mean,
                    median as np_median,
                    min as np_min,
+                   ones as np_ones,
                    reshape as np_reshape,
                    seterr as np_seterr,
                    size as np_size,
@@ -1132,11 +1133,9 @@ class BinManager:
         """Print bin information to STDOUT"""
         # handle the headers first
         separator = "\t"
-        if(outFormat == 'summary'):
-            stream.write(separator.join(["#\"bid\"","\"Likely chimeric\"","\"totalBP\"","\"numCons\"","\"cMean\"","\"cStdev\"","\"GC Mean\"","\"GC Stdev\""])+"\n")
-        elif(outFormat == 'minimal'):
+        if(outFormat == 'contigs'):
             stream.write(separator.join(["#\"bid\"","\"cid\"","\"length\"","\"GC\""])+"\n")
-        elif(outFormat == 'user'):
+        elif(outFormat == 'bins'):
             header = ["\"bin id\"","\"Likely chimeric\"","\"length (bp)\"","\"# seqs\"","\"GC mean\"","\"GC std\""]
             for i in xrange(0, len(self.PM.covProfiles[0])):
                 header.append("\"Coverage " + str(i+1) + " mean\"")
@@ -1160,7 +1159,13 @@ class BinManager:
         for bid in self.getBids():
             self.bins[bid].plotProfileDistributions(self.PM.transformedCP, self.PM.kmerSigs, fileName="PROFILE_"+str(bid))
 
-    def plotSelectBins(self, bids, plotMers=False, fileName="", plotEllipsoid=False, ET=None):
+    def plotSelectBins(self,
+                       bids,
+                       plotMers=False,
+                       fileName="",
+                       plotEllipsoid=False,
+                       ignoreContigLengths=False,
+                       ET=None):
         """Plot a selection of bids in a window"""
         if plotEllipsoid and ET == None:
             ET = EllipsoidTool()
@@ -1182,6 +1187,7 @@ class BinManager:
                            self.PM.isLikelyChimeric,
                            ET=ET,
                            printID=True,
+                           ignoreContigLengths=ignoreContigLengths,
                            plotColorbar=(num_cols==1 and i==0)
                            )
         if plotMers:
@@ -1228,7 +1234,12 @@ class BinManager:
         plt.close(fig)
         del fig
 
-    def plotMultipleBins(self, bins, useLens=True, untransformed=False, semi_untransformed=False, squash=False):
+    def plotMultipleBins(self,
+                         bins,
+                         untransformed=False,
+                         semi_untransformed=False,
+                         ignoreContigLengths=False,
+                         squash=False):
         """plot a bunch of bins, used mainly for debugging"""
         ET = EllipsoidTool()
         fig = plt.figure()
@@ -1251,7 +1262,6 @@ class BinManager:
             plot_cols = np_ceil(float(num_plots)/plot_rows)
             plot_num = 1
             for bids in bins:
-                print bins
                 ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
                 disp_vals = np_array([])
                 disp_lens = np_array([])
@@ -1267,7 +1277,10 @@ class BinManager:
                 # reshape
                 disp_vals = np_reshape(disp_vals, (num_points, 3))
 
-                sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', c=gcs, cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens, marker='.')
+                if ignoreContigLengths:
+                    sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='none', c=gcs, cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=10., marker='.')
+                else:
+                    sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', c=gcs, cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens, marker='.')
                 sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
                 plot_num += 1
@@ -1287,14 +1300,9 @@ class BinManager:
             plot_num = 1
             ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
 
-            if useLens:
-                lens = self.PM.contigLengths
-            else:
-                lens = np_ones(len(self.PM.indices))
-
             for bids in bins:
                 for bid in bids:
-                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, lens, self.PM.colorMapGC, self.PM.isLikelyChimeric, ET=et, plotCentroid=pc)
+                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric, ignoreContigLengths=ignoreContigLengths, ET=et, plotCentroid=pc)
 
             plot_num += 1
             if semi_untransformed:
@@ -1306,7 +1314,7 @@ class BinManager:
                 ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
                 plot_num += 1
                 for bid in bids:
-                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, lens, self.PM.colorMapGC, self.PM.isLikelyChimeric, ET=et, plotCentroid=pc)
+                    self.bins[bid].plotOnAx(ax, coords, self.PM.contigGCs, self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric, ignoreContigLengths=ignoreContigLengths, ET=et, plotCentroid=pc)
 
         try:
             plt.show()
@@ -1318,7 +1326,13 @@ class BinManager:
         del fig
 
 
-    def plotBins(self, FNPrefix="BIN", sideBySide=False, folder='', plotEllipsoid=False, ET=None):
+    def plotBins(self,
+                 FNPrefix="BIN",
+                 sideBySide=False,
+                 folder='',
+                 plotEllipsoid=False,
+                 ignoreContigLengths=False,
+                 ET=None):
         """Make plots of all the bins"""
         if plotEllipsoid and ET == None:
             ET = EllipsoidTool()
@@ -1331,18 +1345,19 @@ class BinManager:
 
         if(sideBySide):
             print "Plotting side by side"
-            self.plotSideBySide(self.bins.keys(), tag=FNPrefix)
+            self.plotSideBySide(self.bins.keys(), tag=FNPrefix, ignoreContigLengths=ignoreContigLengths)
         else:
             print "Plotting bins"
             for bid in self.getBids():
                 if folder != '':
                     self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
                                             self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric,
-                                            fileName=osp_join(folder, FNPrefix+"_"+str(bid)), ET=ET)
+                                            fileName=osp_join(folder, FNPrefix+"_"+str(bid)),
+                                            ignoreContigLengths=ignoreContigLengths, ET=ET)
                 else:
                     self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
                                               self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric,
-                                              FNPrefix+"_"+str(bid), ET=ET)
+                                              FNPrefix+"_"+str(bid), ignoreContigLengths=ignoreContigLengths, ET=ET)
                     
     def plotBinCoverage(self, plotEllipses=False, plotContigLengs=False, printID=False):
         """Make plots of all the bins"""
@@ -1417,7 +1432,7 @@ class BinManager:
         
         del fig
             
-    def plotSideBySide(self, bids, fileName="", tag="", use_elipses=True):
+    def plotSideBySide(self, bids, fileName="", tag="", use_elipses=True, ignoreContigLengths=False):
         """Plot two bins side by side in 3d"""
         if use_elipses:
             ET = EllipsoidTool()
@@ -1455,7 +1470,8 @@ class BinManager:
             title = self.bins[bid].plotOnFig(fig, plot_rows, plot_cols, plot_num+1,
                                               self.PM.transformedCP, self.PM.contigGCs, self.PM.contigLengths,
                                               self.PM.colorMapGC, self.PM.isLikelyChimeric, ET=ET, fileName=fileName,
-                                              plotColorbar=(plot_num == len(bids)-1), extents=[xMin, xMax, yMin, yMax, zMin, zMax])
+                                              plotColorbar=(plot_num == len(bids)-1), extents=[xMin, xMax, yMin, yMax, zMin, zMax],
+                                              ignoreContigLengths=ignoreContigLengths)
 
             plt.title(title)
         if(fileName != ""):

@@ -67,6 +67,7 @@ from mstore import GMDataManager
 ###############################################################################
 # Track rogue print statements
 #from groopmExceptions import Tracer
+#import sys
 #sys.stdout = Tracer(sys.stdout)
 #sys.stderr = Tracer(sys.stderr)
 ###############################################################################
@@ -222,6 +223,25 @@ class GroopMOptionsParser():
             BM.loadBins(timer, makeBins=True, silent=True)#, bids=options.bids)
             BM.deleteBins(options.bids, force=options.force, saveBins=True, freeBinnedRowIndices=True)
 
+        elif(options.subparser_name == 'plot'):
+            print "*******************************************************************************"
+            print " [[GroopM]] Running in bin plotting mode..."
+            print "*******************************************************************************"
+            BM = binManager.BinManager(dbFileName=options.dbname)
+
+            if options.bids is None:
+                bids = []
+            else:
+                bids = options.bids
+            BM.loadBins(timer, makeBins=True, silent=False, bids=bids, loadContigNames=False)
+
+            BM.setColorMap(options.cm)
+
+            BM.plotBins(FNPrefix=options.tag,
+                        plotEllipsoid=True,
+                        ignoreContigLengths=options.points,
+                        folder=options.folder)
+
         elif(options.subparser_name == 'explore'):
             # make bin cores
             print "*******************************************************************************"
@@ -235,7 +255,8 @@ class GroopMOptionsParser():
                                          bids=bids,
                                          transform=transform,
                                          cmstring=options.cm,
-                                         squish=options.squish)
+                                         squish=options.squish,
+                                         ignoreContigLengths=options.points)
             if(options.mode == 'binpoints'):
                 BE.plotPoints(timer)
             elif(options.mode == 'binids'):
@@ -248,7 +269,13 @@ class GroopMOptionsParser():
                 BE.plotContigs(timer, coreCut=options.cutoff)
             elif(options.mode == 'flyover'):
                 BE.plotFlyOver(timer)
+            elif(options.mode == 'binassignments'):
+                BE.plotBinAssignents(timer, coreCut=options.cutoff)
             elif(options.mode == 'compare'):
+                BE.plotCompare(timer, coreCut=options.cutoff)
+            elif (options.mode == 'together'):
+                BE.plotTogether(timer, coreCut=options.cutoff, doMers=options.kmers)
+            elif (options.mode == 'sidebyside'):
                 BE.plotSideBySide(timer, coreCut=options.cutoff)
             else:
                 print "**Error: unknown mode:",options.mode
@@ -277,33 +304,6 @@ class GroopMOptionsParser():
                 bids = options.bids
             BM.loadBins(timer, getUnbinned=options.unbinned, makeBins=True, silent=True, bids=bids)
             BM.printBins(options.format, fileName=options.outfile)
-
-        elif(options.subparser_name == 'plot'):
-            print "*******************************************************************************"
-            print " [[GroopM]] Running in bin plotting mode..."
-            print "*******************************************************************************"
-            BM = binManager.BinManager(dbFileName=options.dbname)
-
-            if options.bids is None:
-                bids = []
-            else:
-                bids = options.bids
-            BM.loadBins(timer, makeBins=True, silent=False, bids=bids, loadContigNames=False)
-
-            BM.setColorMap(options.cm)
-
-            if options.bids is None:
-                bids = BM.getBids()
-
-            if options.together:
-                BM.plotSelectBins(bids,
-                                  plotMers=options.kmers,
-                                  plotEllipsoid=True)
-            else:
-                BM.plotBins(FNPrefix=options.tag,
-                            sideBySide=options.sidebyside,
-                            plotEllipsoid=True,
-                            folder=options.folder)
 
         elif(options.subparser_name == 'dump'):
             print "*******************************************************************************"

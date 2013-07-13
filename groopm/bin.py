@@ -468,10 +468,18 @@ class Bin:
         del fig
 
 
-    def plotBin(self, transformedCP, contigGCs, kmerNormPC1, contigLengths, colorMapGC, isLikelyChimeric, fileName="", ET=None):
+    def plotBin(self, transformedCP, contigGCs, kmerNormPC1, contigLengths, colorMapGC, isLikelyChimeric, fileName="", ignoreContigLengths=False, ET=None):
         """Plot a single bin"""
         fig = plt.figure()
-        title = self.plotOnFig(fig, 1, 1, 1, transformedCP, contigGCs, contigLengths, colorMapGC, isLikelyChimeric, fileName=fileName, ET=ET)
+        title = self.plotOnFig(fig, 1, 1, 1,
+                               transformedCP,
+                               contigGCs,
+                               contigLengths,
+                               colorMapGC,
+                               isLikelyChimeric,
+                               fileName=fileName,
+                               ignoreContigLengths=ignoreContigLengths,
+                               ET=ET)
 
         plt.title(title)
         if(fileName != ""):
@@ -490,11 +498,48 @@ class Bin:
         plt.close(fig)
         del fig
 
-    def plotOnFig(self, fig, plot_rows, plot_cols, plot_num, transformedCP, contigGCs, contigLengths, colorMapGC, isLikelyChimeric, fileName="", ET=None, plotColorbar=True, extents=None):
+    def plotOnFig(self,
+                  fig,
+                  plot_rows,
+                  plot_cols,
+                  plot_num,
+                  transformedCP,
+                  contigGCs,
+                  contigLengths,
+                  colorMapGC,
+                  isLikelyChimeric,
+                  fileName="",
+                  ignoreContigLengths=False,
+                  ET=None,
+                  plotColorbar=True,
+                  extents=None):
         ax = fig.add_subplot(plot_rows, plot_cols, plot_num, projection='3d')
-        return self.plotOnAx(ax, transformedCP, contigGCs, contigLengths, colorMapGC, isLikelyChimeric, fileName=fileName, ET=ET, plotColorbar=plotColorbar, extents=extents)
+        return self.plotOnAx(ax,
+                             transformedCP,
+                             contigGCs,
+                             contigLengths,
+                             colorMapGC,
+                             isLikelyChimeric,
+                             fileName=fileName,
+                             ignoreContigLengths=ignoreContigLengths,
+                             ET=ET,
+                             plotColorbar=plotColorbar,
+                             extents=extents)
 
-    def plotOnAx(self, ax, transformedCP, contigGCs, contigLengths, colorMapGC, isLikelyChimeric, fileName="", plotCentroid=True, ET=None, printID=False, plotColorbar=True, extents=None):
+    def plotOnAx(self,
+                 ax,
+                 transformedCP,
+                 contigGCs,
+                 contigLengths,
+                 colorMapGC,
+                 isLikelyChimeric,
+                 fileName="",
+                 ignoreContigLengths=False,
+                 plotCentroid=True,
+                 ET=None,
+                 printID=False,
+                 plotColorbar=True,
+                 extents=None):
         """Plot a bin in a given subplot
 
         If you pass through an EllipsoidTool then it will plot the minimum bounding ellipsoid as well!
@@ -526,7 +571,10 @@ class Bin:
         # reshape
         disp_vals = np.reshape(disp_vals, (num_points, 3))
 
-        sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', c=contigGCs[self.rowIndices], cmap=colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens, marker='.')
+        if ignoreContigLengths:
+            sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='none', c=contigGCs[self.rowIndices], cmap=colorMapGC, vmin=0.0, vmax=1.0, s=10, marker='.')
+        else:
+            sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', c=contigGCs[self.rowIndices], cmap=colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens, marker='.')            
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
         ax.set_xlabel('x coverage')
@@ -623,10 +671,10 @@ class Bin:
             stream.write(separator.join(["#\"bid\"""\"cid\"","\"length\""])+"\n")
             for row_index in self.rowIndices:
                 stream.write(separator.join([str(self.id), contigNames[row_index], str(contigLengths[row_index])])+"\n")
-        elif(outFormat == 'minimal'):
+        elif(outFormat == 'contigs'):
             for row_index in self.rowIndices:
                 stream.write(separator.join([str(self.id), contigNames[row_index], str(contigLengths[row_index]), '%.4f' % contigGCs[row_index]])+"\n")
-        elif(outFormat == 'user'):
+        elif(outFormat == 'bins'):
             data = [str(self.id), str(isLikelyChimeric[self.id]), str(self.totalBP), str(self.binSize), gcm_str, gcs_str]
             cov_mean = np.mean(covProfiles[self.rowIndices], axis=0)
             cov_std = np.std(covProfiles[self.rowIndices], axis=0)

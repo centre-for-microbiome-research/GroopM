@@ -681,7 +681,7 @@ class ProfileManager:
                     )
             outer_index += 1
 
-    def plotUnbinned(self, timer, coreCut, transform=True):
+    def plotUnbinned(self, timer, coreCut, transform=True, ignoreContigLengths=False):
         """Plot all contigs over a certain length which are unbinned"""
         self.loadData(timer, condition="((length >= "+str(coreCut)+") & (bid == 0))")
 
@@ -696,7 +696,10 @@ class ProfileManager:
 
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
-        sc = ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, marker='.')
+        if ignoreContigLengths:
+            sc = ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='none', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, s=10, marker='.')
+        else:
+            sc = ax1.scatter(self.transformedCP[:,0], self.transformedCP[:,1], self.transformedCP[:,2], edgecolors='k', c=self.contigGCs, cmap=self.colorMapGC, vmin=0.0, vmax=1.0, s=np_sqrt(self.contigLengths), marker='.')
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
         self.plotStoitNames(ax1)
 
@@ -708,7 +711,7 @@ class ProfileManager:
             raise
         del fig
 
-    def plotAll(self, timer, coreCut, transform=True):
+    def plotAll(self, timer, coreCut, transform=True, ignoreContigLengths=False):
         """Plot all contigs over a certain length which are unbinned"""
         self.loadData(timer, condition="((length >= "+str(coreCut)+"))")
         if transform:
@@ -722,17 +725,31 @@ class ProfileManager:
 
         fig = plt.figure()
         ax1 = fig.add_subplot(111, projection='3d')
-        sc = ax1.scatter(self.transformedCP[:,0],
-                         self.transformedCP[:,1],
-                         self.transformedCP[:,2],
-                         edgecolors='k',
-                         c=self.contigGCs,
-                         cmap=self.colorMapGC,
-                         vmin=0.0,
-                         vmax=1.0,
-                         marker='.',
-                         s=np_sqrt(self.contigLengths)
-                         )
+        if ignoreContigLengths:
+            sc = ax1.scatter(self.transformedCP[:,0],
+                             self.transformedCP[:,1],
+                             self.transformedCP[:,2],
+                             edgecolors='none',
+                             c=self.contigGCs,
+                             cmap=self.colorMapGC,
+                             vmin=0.0,
+                             vmax=1.0,
+                             marker='.',
+                             s=10.
+                             )
+        else:
+            sc = ax1.scatter(self.transformedCP[:,0],
+                             self.transformedCP[:,1],
+                             self.transformedCP[:,2],
+                             edgecolors='k',
+                             c=self.contigGCs,
+                             cmap=self.colorMapGC,
+                             vmin=0.0,
+                             vmax=1.0,
+                             marker='.',
+                             s=np_sqrt(self.contigLengths)
+                             )
+            
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
         #self.plotStoitNames(ax1)
         
@@ -864,7 +881,7 @@ class ProfileManager:
                                cmap=self.colorMapGC,
                                vmin=0.0,
                                vmax=1.0,
-                               s=2,
+                               s=10,
                                marker='.')
                     sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
                 else:
@@ -877,7 +894,7 @@ class ProfileManager:
                                cmap=self.colorMapGC,
                                vmin=0.0,
                                vmax=1.0,
-                               s=2,
+                               s=10,
                                marker='.',
                                alpha=alpha)
                     sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
@@ -898,7 +915,7 @@ class ProfileManager:
                                edgecolors='none',
                                c=self.contigGCs[bin.rowIndices],
                                cmap=self.colorMapGc,
-                               s=2,
+                               s=10,
                                marker='.')
                     sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
@@ -920,7 +937,7 @@ class ProfileManager:
                         num_added += 1
                 r_trans = np_reshape(r_trans, (num_added,3))
                 r_cols = np_reshape(r_cols, (num_added,3))
-                sc = ax.scatter(r_trans[:,0], r_trans[:,1], r_trans[:,2], edgecolors='none', c=r_cols, s=2, marker='.')
+                sc = ax.scatter(r_trans[:,0], r_trans[:,1], r_trans[:,2], edgecolors='none', c=r_cols, s=10, marker='.')
                 sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
             ax.azim = azim
             ax.elev = elev
