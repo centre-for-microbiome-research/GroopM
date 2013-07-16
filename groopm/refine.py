@@ -39,10 +39,10 @@
 ###############################################################################
 
 __author__ = "Michael Imelfort"
-__copyright__ = "Copyright 2012"
+__copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
@@ -111,13 +111,12 @@ class RefineEngine:
                  transform=True,
                  getUnbinned=False,
                  loadContigNames=False,
-                 bids=[],
-                 squish=False
-                 ):
+                 bids=[]):
+        
         # worker classes
         if BM is None:
             # make our own ones from scratch
-            self.BM = BinManager(dbFileName=dbFileName, squish=squish)
+            self.BM = BinManager(dbFileName=dbFileName)
             self.BM.loadBins(timer,
                              bids=bids,
                              makeBins=True,
@@ -902,6 +901,16 @@ class RefineEngine:
 
         return merged_bids
 
+    def small2indices(self, index, side):
+        """Return the indices of the comparative items
+        when given an index into a condensed distance matrix
+        """
+        step = 0
+        while index >= (side-step):
+            index = index - side + step
+            step += 1
+        return (step, step + index + 1)
+
     def combineMergersMike(self, bidList, kCut, cCut, graph=None):
         """Try to merge similar bins in the given list"""
 
@@ -1019,7 +1028,8 @@ class RefineEngine:
 
         # produce the actual training data
         # this is the bin centroid values
-        bids = self.BM.getNonChimericBinIds()
+        bids = self.BM.getBids()
+        #bids = self.BM.getNonChimericBinIds()
         training_data = np_zeros((len(bids), SOMDIM))
         i = 0
         for bid in bids:

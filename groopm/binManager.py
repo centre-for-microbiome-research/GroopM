@@ -39,10 +39,10 @@
 ###############################################################################
 
 __author__ = "Michael Imelfort"
-__copyright__ = "Copyright 2012"
+__copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -106,11 +106,10 @@ class BinManager:
                  dbFileName="",
                  pm=None,
                  minSize=10,
-                 minVol=1000000,
-                 squish=False):
+                 minVol=1000000):
         # data storage
         if(dbFileName != ""):
-            self.PM = ProfileManager(dbFileName, squish=squish)
+            self.PM = ProfileManager(dbFileName)
         elif(pm is not None):
             self.PM = pm
 
@@ -121,8 +120,6 @@ class BinManager:
         # misc
         self.minSize=minSize           # Min number of contigs for a bin to be considered legit
         self.minVol=minVol             # Override on the min size, if we have this many BP
-        self.squish=squish
-
 
     def setColorMap(self, colorMapStr):
         self.PM.setColorMap(colorMapStr)
@@ -142,8 +139,6 @@ class BinManager:
                  loadContigLengths=True,
                  loadLinks=False,
                  loadContigNames=True,
-                 min=None,
-                 max=None,
                  cutOff=0,
                  transform=True):
         """Load data and make bin objects"""
@@ -156,10 +151,6 @@ class BinManager:
                 condition="length >= 0"
             else:
                 condition='bid != 0'
-
-        # no point squishin' if we don't transform
-        if transform == False:
-            self.squish = False
 
         # if we're going to make bins then we'll need kmer sigs
         if(makeBins):
@@ -186,13 +177,13 @@ class BinManager:
 
         if(makeBins):
             if transform:
-                self.PM.transformCP(timer, silent=silent, min=min, max=max)
+                self.PM.transformCP(timer, silent=silent)
             else:
                 if self.PM.numStoits == 3:
                     self.PM.transformedCP = self.PM.covProfiles
                 else:
                     print "Number of stoits != 3. You need to transform"
-                    self.PM.transformCP(timer, silent=silent, min=min, max=max)
+                    self.PM.transformCP(timer, silent=silent)
             if not silent:
                 print "    Making bin objects"
             self.makeBins(self.getBinMembers())

@@ -39,10 +39,10 @@
 ###############################################################################
 
 __author__ = "Michael Imelfort"
-__copyright__ = "Copyright 2012"
+__copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
@@ -119,10 +119,10 @@ class ClusterEngine:
                  force=False,
                  numImgMaps=1,
                  minSize=5,
-                 minVol=1000000,
-                 squish=False):
+                 minVol=1000000):
+        
         # worker classes
-        self.PM = ProfileManager(dbFileName, squish=squish) # store our data
+        self.PM = ProfileManager(dbFileName) # store our data
         self.BM = BinManager(pm=self.PM, minSize=minSize, minVol=minVol)
 
         # heat maps
@@ -192,7 +192,7 @@ class ClusterEngine:
         print "    %s" % self.timer.getTimeStamp()
 
         # transform the data
-        print "Apply data transformations"
+        print "    Loading transformed data"
         self.PM.transformCP(self.timer)
         # plot the transformed space (if we've been asked to...)
         if(self.debugPlots >= 3):
@@ -1379,22 +1379,22 @@ class HoughPartitioner:
 
         squished_rets = []
         squished_keeps = []
-        last_squshed = []
+        last_squished = []
         for i in range(len(rets)):
             if keeps[i]:
                 for ii in rets[i]:
-                    last_squshed.append(ii)
+                    last_squished.append(ii)
             else:
-                if len(last_squshed) > 0:
-                    squished_rets.append(np_array(last_squshed))
-                    last_squshed = []
+                if len(last_squished) > 0:
+                    squished_rets.append(np_array(last_squished))
+                    last_squished = []
                     squished_keeps.append(True)
 
                 # add the dud
                 squished_rets.append(rets[i])
                 squished_keeps.append(False)
-        if len(last_squshed) > 0:
-            squished_rets.append(np_array(last_squshed))
+        if len(last_squished) > 0:
+            squished_rets.append(np_array(last_squished))
             squished_keeps.append(True)
 
         return (np_array(squished_rets), np_array(squished_keeps))

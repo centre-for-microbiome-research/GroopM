@@ -39,10 +39,10 @@
 ###############################################################################
 
 __author__ = "Michael Imelfort"
-__copyright__ = "Copyright 2012"
+__copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -178,14 +178,12 @@ class BinExplorer:
                  bids=[],
                  transform=True,
                  cmstring="HSV",
-                 squish=False,
                  ignoreContigLengths=False):
         
         self.ignoreContigLengths = ignoreContigLengths 
         self.transform = transform
         self.cmString = cmstring
-        self.BM = binManager.BinManager(dbFileName=dbFileName,
-                                        squish=squish)   # bins
+        self.BM = binManager.BinManager(dbFileName=dbFileName)   # bins
         self.PM = self.BM.PM
         self.PM2 = None
         if bids is None:
@@ -336,6 +334,7 @@ class BinExplorer:
                          getUnbinned=True,
                          silent=False,
                          bids=self.bids,
+                         cutOff=coreCut,
                          transform=self.transform)
         if len(self.BM.bins) == 0:
             print "Sorry, no bins to plot"
@@ -508,18 +507,13 @@ class BinExplorer:
                           loadContigLengths=True,
                           )
         if self.transform:
-            (min,max) = self.PM2.transformCP(timer)
-        else:
-            min = 0
-            max = 0
+            self.PM2.transformCP(timer)
 
         self.BM.loadBins(timer,
                          makeBins=True,
                          loadContigNames=False,
                          bids=self.bids,
                          silent=False,
-                         min=min,
-                         max=max,
                          transform=self.transform)
 
         self.PM2.setColorMap(self.cmString)

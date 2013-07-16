@@ -39,10 +39,10 @@
 ###############################################################################
 
 __author__ = "Michael Imelfort"
-__copyright__ = "Copyright 2012"
+__copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.5"
+__version__ = "0.2.6"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Release"
@@ -123,8 +123,7 @@ class GroopMOptionsParser():
                                        finalPlot=options.plot,
                                        plot=options.multiplot,
                                        minSize=options.size,
-                                       minVol=options.bp,
-                                       squish=options.squish)
+                                       minVol=options.bp)
             if options.graphfile is None:
                 gf = ""
             else:
@@ -149,8 +148,7 @@ class GroopMOptionsParser():
                                      dbFileName=options.dbname,
                                      transform=transform,
                                      bids=bids,
-                                     loadContigNames=True,
-                                     squish=options.squish)
+                                     loadContigNames=True)
             
             if options.plot:
                 pfx="REFINED"
@@ -171,8 +169,7 @@ class GroopMOptionsParser():
             RE = refine.RefineEngine(timer,
                                      dbFileName=options.dbname,
                                      getUnbinned=True,
-                                     loadContigNames=False,
-                                     squish=options.squish)
+                                     loadContigNames=False)
 
             RE.recruitWrapper(timer,
                               inclusivity=options.inclusivity,
@@ -257,7 +254,6 @@ class GroopMOptionsParser():
                                          bids=bids,
                                          transform=transform,
                                          cmstring=options.cm,
-                                         squish=options.squish,
                                          ignoreContigLengths=options.points)
             if(options.mode == 'binpoints'):
                 BE.plotPoints(timer)
@@ -314,7 +310,7 @@ class GroopMOptionsParser():
 
             # prep fields. Do this first cause users are mot likely to
             # mess this part up!
-            allowable_fields = ['names', 'mers', 'gc', 'coverage', 'lengths', 'bins', 'all']
+            allowable_fields = ['names', 'mers', 'gc', 'coverage', 'tcoverage', 'ncoverage', 'lengths', 'bins', 'all']
             fields = options.fields.split(',')
             for field in fields:
                 if field not in allowable_fields:

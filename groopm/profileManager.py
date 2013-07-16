@@ -39,10 +39,10 @@
 ###############################################################################
 
 __author__ = "Michael Imelfort"
-__copyright__ = "Copyright 2012"
+__copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -114,7 +114,7 @@ class ProfileManager:
 
     Mostly a wrapper around a group of numpy arrays and a pytables quagmire
     """
-    def __init__(self, dbFileName, force=False, scaleFactor=1000, squish=False):
+    def __init__(self, dbFileName, force=False, scaleFactor=1000):
         # data
         self.dataManager = GMDataManager()  # most data is saved to hdf
         self.dbFileName = dbFileName        # db containing all the data we'd like to use
@@ -156,7 +156,6 @@ class ProfileManager:
         # misc
         self.forceWriting = force           # overwrite existng values silently?
         self.scaleFactor = scaleFactor      # scale every thing in the transformed data to this dimension
-        self.squish = squish
 
     def loadData(self,
                  timer,
@@ -208,7 +207,7 @@ class ProfileManager:
                 if(verbose):
                     print "    Loading coverage profiles"
                 self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indices=self.indices)
-                self.normCoverages = np_array([np_norm(self.covProfiles[i]) for i in range(len(self.indices))])
+                self.normCoverages = self.dataManager.getNormalisedCoverageProfiles(self.dbFileName, indices=self.indices)
 
                 # work out average coverages
                 self.averageCoverages = np_array([sum(i)/self.numStoits for i in self.covProfiles])
@@ -495,109 +494,15 @@ class ProfileManager:
                 self.stoitColNames[[i,loc]] = self.stoitColNames[[loc,i]]
                 working[[i,loc]] = working[[loc,i]]
 
-    def small2indices(self, index, side):
-        """Return the indices of the comparative items
-        when given an index into a condensed distance matrix
-        """
-        step = 0
-        while index >= (side-step):
-            index = index - side + step
-            step += 1
-        return (step, step + index + 1)
-
-    def transformCP(self, timer, silent=False, nolog=False, min=None, max=None):
+    def transformCP(self, timer, silent=False, nolog=False):
         """Do the main transformation on the coverage profile data"""
-        shrinkFn = np_log10
-        if(nolog):
-            shrinkFn = lambda x:x
-
-        self.transformedCP = np_zeros((self.numContigs,3))
-        self.corners = np_zeros((self.numStoits,3))
-
         if(not silent):
             print "    Reticulating splines"
-            if self.squish:
-                print "    Dimensionality reduction with extra squish"
-            else:
-                print "    Dimensionality reduction"
-
-        unit_vectors = [(np_cos(i*2*np_pi/self.numStoits),np_sin(i*2*np_pi/self.numStoits)) for i in range(self.numStoits)]
-
-        # make sure the bams are ordered consistently
-        if self.numStoits > 3:
-            self.shuffleBAMs()
-
-        for i in range(len(self.indices)):
-            shifted_vector = np_array([0.0,0.0])
-            try:
-                flat_vector = (self.covProfiles[i] / sum(self.covProfiles[i]))
-            except FloatingPointError:
-                flat_vector = self.covProfiles[i]
-
-            for j in range(self.numStoits):
-                shifted_vector[0] += unit_vectors[j][0] * flat_vector[j]
-                shifted_vector[1] += unit_vectors[j][1] * flat_vector[j]
-
-            # log scale it towards the centre
-            scaling_vector = shifted_vector * self.scaleFactor
-            sv_size = np_norm(scaling_vector)
-            if sv_size > 1:
-                shifted_vector /= shrinkFn(sv_size)
-
-            self.transformedCP[i,0] = shifted_vector[0]
-            self.transformedCP[i,1] = shifted_vector[1]
-            # should always work cause we nuked
-            # all 0 coverage vecs in parse
-            self.transformedCP[i,2] = shrinkFn(self.normCoverages[i])
-
-        # finally scale the matrix to make it equal in all dimensions
-        if(min is None):
-            min = np_amin(self.transformedCP, axis=0)
-            self.transformedCP -= min
-            max = np_amax(self.transformedCP, axis=0)
-            max = max / (self.scaleFactor-1)
-            self.transformedCP /= max
-        else:
-            self.transformedCP -= min
-            self.transformedCP /= max
-
-        # get the corner points
-        XYcorners = np_reshape([i for i in np_array(unit_vectors)],
-                               (self.numStoits, 2))
-
-        for i in range(self.numStoits):
-            self.corners[i,0] = XYcorners[i,0]
-            self.corners[i,1] = XYcorners[i,1]
-
-        # shift the corners to match the space
-        self.corners -= min
-        self.corners /= max
-
-        # scale the corners to fit the plot
-        cmin = np_amin(self.corners, axis=0)
-        self.corners -= cmin
-        cmax = np_amax(self.corners, axis=0)
-        cmax = cmax / (self.scaleFactor-1)
-        self.corners[:,0] /= cmax[0]
-        self.corners[:,1] /= cmax[1]
-        for i in range(self.numStoits):
-            self.corners[i,2] = self.scaleFactor + 100 # only affect the z axis
-
+            print "    Dimensionality reduction"
+        self.transformedCP = self.dataManager.getTransformedCoverageProfiles(self.dbFileName, indices=self.indices)
+        self.corners = self.dataManager.getTransformedCoverageCorners(self.dbFileName)
         self.TCentre = np_mean(self.corners, axis=0)
-
-        if self.squish:
-            # find the centre of the plot
-            self.TCentre[2] = 0.
-            self.transformedCP -= self.TCentre
-            # squish up
-            for i in range(len(self.transformedCP)):
-                shift = (self.transformedCP[i][2] / self.scaleFactor)
-                mult = np_array([shift, shift, 1.])
-                self.transformedCP[i] *= mult
-            self.transformedCP += self.TCentre
-
-        return(min,max)
-
+        
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING
 
@@ -881,7 +786,7 @@ class ProfileManager:
                                cmap=self.colorMapGC,
                                vmin=0.0,
                                vmax=1.0,
-                               s=10,
+                               s=np_sqrt(self.contigLengths),
                                marker='.')
                     sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
                 else:

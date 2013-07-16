@@ -39,14 +39,14 @@
 ###############################################################################
 
 __author__ = "Michael Imelfort"
-__copyright__ = "Copyright 2012"
+__copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Release"
-__current_GMDB_version__ = 4
+__current_GMDB_version__ = 5
 
 ###############################################################################
 
@@ -56,6 +56,7 @@ from string import maketrans as s_maketrans
 
 import tables
 import numpy as np
+from scipy.spatial.distance import cdist, squareform
 import pysam
 
 # GroopM imports
@@ -105,6 +106,16 @@ class GMDataManager:
     'stoit3' : tables.FloatCol(pos=2)
     ...
 
+    **Transformed coverage profile**
+    table = 'transCoverage'
+    'x' : tables.FloatCol(pos=0)
+    'y' : tables.FloatCol(pos=1)
+    'z' : tables.FloatCol(pos=2)
+
+    **Normalised coverage profile**
+    table = 'normCoverage'
+    'normCov' : tables.FloatCol(pos=0)
+
     ------------------------
      LINKS
     group = '/links'
@@ -153,6 +164,12 @@ class GMDataManager:
     'bid'        : tables.Int32Col(pos=0)
     'numMembers' : tables.Int32Col(pos=1)
     'isLikelyChimeric' : tables.BoolCol(pos=2)
+
+    **Transformed coverage corners**
+    table = 'transCoverageCorners'
+    'x' : tables.FloatCol(pos=0)
+    'y' : tables.FloatCol(pos=1)
+    'z' : tables.FloatCol(pos=2)
 
     """
     def __init__(self): pass
@@ -252,29 +269,7 @@ class GMDataManager:
                 cid_2_indices = dict(zip(con_names, range(num_cons)))
 
                 #------------------------
-                # write cov profiles
-                #------------------------
-                # build a table template based on the number of bamfiles we have
-                db_desc = []
-                for i, bf in enumerate(bamFiles):
-                    # assume the file is called something like "fred.bam"
-                    # we want to rip off the ".bam" part
-                    bam_desc = getBamDescriptor(bf, i + 1)
-                    db_desc.append((bam_desc, float))
-                    stoitColNames.append(bam_desc)
-
-                try:
-                    h5file.createTable(profile_group,
-                                       'coverage',
-                                       np.array(cov_profiles, dtype=db_desc),
-                                       title="Bam based coverage",
-                                       expectedrows=num_cons)
-                except:
-                    print "Error creating coverage table:", exc_info()[0]
-                    raise
-
-                #------------------------
-                # write kmersigs
+                # calculate PCAs and write kmer sigs
                 #------------------------
                 # store the raw calculated kmer sigs in one table
                 db_desc = []
@@ -307,6 +302,87 @@ class GMDataManager:
                                        )
                 except:
                     print "Error creating KMERVALS table:", exc_info()[0]
+                    raise
+
+                #------------------------
+                # write cov profiles
+                #------------------------
+                # build a table template based on the number of bamfiles we have
+                for i, bf in enumerate(bamFiles):
+                    # assume the file is called something like "fred.bam"
+                    # we want to rip off the ".bam" part
+                    bam_desc = getBamDescriptor(bf, i + 1)
+                    stoitColNames.append(bam_desc)
+
+                # determine normalised cov profiles and shuffle the BAMs
+                norm_coverages = np.array([np.linalg.norm(cov_profiles[i]) for i in range(num_cons)])
+                CT = CoverageTransformer(num_cons,
+                                         len(stoitColNames),
+                                         norm_coverages,
+                                         np.array(pc_ksigs)[:,0],
+                                         cov_profiles,
+                                         stoitColNames)
+                
+                CT.transformCP()
+                CT.transformedCP = [tuple(i) for i in CT.transformedCP]
+                CT.corners = [tuple(i) for i in CT.corners]
+                # now CT stores the transformed coverages and other important information
+                # the ordering of stoitColNames and cov_profiles should be fixed
+                # so we will write this to the database without further modification
+
+                # raw coverages
+                db_desc = []
+                for scn in CT.stoitColNames:
+                    db_desc.append((scn, float)) 
+
+                try:
+                    h5file.createTable(profile_group,
+                                       'coverage',
+                                       np.array(cov_profiles, dtype=db_desc),
+                                       title="Bam based coverage",
+                                       expectedrows=num_cons)
+                except:
+                    print "Error creating coverage table:", exc_info()[0]
+                    raise
+
+                # transformed coverages
+                db_desc = [('x', float),
+                           ('y', float),
+                           ('z', float)]
+                try:
+                    h5file.createTable(profile_group,
+                                       'transCoverage',
+                                       np.array(CT.transformedCP , dtype=db_desc),
+                                       title="Transformed coverage",
+                                       expectedrows=num_cons)
+                except:
+                    print "Error creating transformed coverage table:", exc_info()[0]
+                    raise
+
+                # transformed coverage corners
+                db_desc = [('x', float),
+                           ('y', float),
+                           ('z', float)]
+                try:
+                    h5file.createTable(meta_group,
+                                       'transCoverageCorners',
+                                       np.array(CT.corners , dtype=db_desc),
+                                       title="Transformed coverage corners",
+                                       expectedrows=len(stoitColNames))
+                except:
+                    print "Error creating transformed coverage corner table:", exc_info()[0]
+                    raise
+
+                # normalised coverages
+                db_desc = [('normCov', float)]
+                try:
+                    h5file.createTable(profile_group,
+                                       'normCoverage',
+                                       np.array(CT.normCoverages , dtype=db_desc),
+                                       title="Normalised coverage",
+                                       expectedrows=num_cons)
+                except:
+                    print "Error creating normalised coverage table:", exc_info()[0]
                     raise
 
                 #------------------------
@@ -423,10 +499,10 @@ class GMDataManager:
     def checkAndUpgradeDB(self, dbFileName, silent=False):
         """Check the DB and upgrade if necessary"""
         # get the DB format version
-        this_DB_version = self.getGMFormat(dbFileName)
+        this_DB_version = self.getGMDBFormat(dbFileName)
         if __current_GMDB_version__ == this_DB_version:
             if not silent:
-                print "    GroopM DB version up to date"
+                print "    GroopM DB version (%s) up to date" % this_DB_version
             return
 
         # now, if we get here then we need to do some work
@@ -435,6 +511,7 @@ class GMDataManager:
         upgrade_tasks[(1,2)] = self.upgradeDB_1_to_2
         upgrade_tasks[(2,3)] = self.upgradeDB_2_to_3
         upgrade_tasks[(3,4)] = self.upgradeDB_3_to_4
+        upgrade_tasks[(4,5)] = self.upgradeDB_4_to_5
 
         # we need to apply upgrades in order!
         # keep applying the upgrades as long as we need to
@@ -517,11 +594,11 @@ class GMDataManager:
                         pass
 
                     h5file.createTable(pg,
-                                              'tmp_kpca',
-                                              np.array(pc_ksigs, dtype=db_desc),
-                                              title='Kmer signature PCAs',
-                                              expectedrows=num_cons
-                                              )
+                                       'tmp_kpca',
+                                       np.array(pc_ksigs, dtype=db_desc),
+                                       title='Kmer signature PCAs',
+                                       expectedrows=num_cons
+                                      )
 
                     h5file.renameNode(pg, 'kpca', 'tmp_kpca', overwrite=True)
 
@@ -623,7 +700,6 @@ class GMDataManager:
         self.setGMDBFormat(dbFileName, 3)
         print "*******************************************************************************"
 
-
     def upgradeDB_3_to_4(self, dbFileName):
         """Upgrade a GM db from version 3 to version 4"""
         print "*******************************************************************************\n"
@@ -685,6 +761,124 @@ class GMDataManager:
         self.setGMDBFormat(dbFileName, 4)
         print "*******************************************************************************"
 
+    def upgradeDB_4_to_5(self, dbFileName):
+        """Upgrade a GM db from version 4 to version 5"""
+        print "*******************************************************************************\n"
+        print "              *** Upgrading GM DB from version 4 to version 5 ***"
+        print ""
+        print "                            please be patient..."
+        print ""
+        # the change in this version is that we'll be saving the transformed coverage coords
+        print "    Saving transformed coverage profiles"
+        print "    You will not need to re-run parse or core due to this change"
+
+        # we need to get the raw coverage profiles and the kmerPCA1 data
+        indices = self.getConditionalIndices(dbFileName, silent=False, checkUpgrade=False)
+        kPCA_1 = self.getKmerPCAs(dbFileName, indices=indices)[:,0]
+        raw_coverages = self.getCoverageProfiles(dbFileName, indices=indices)
+        norm_coverages = np.array([np.linalg.norm(raw_coverages[i]) for i in range(len(indices))])
+        
+        CT = CoverageTransformer(len(indices),
+                                 self.getNumStoits(dbFileName),
+                                 norm_coverages,
+                                 kPCA_1,
+                                 raw_coverages,
+                                 np.array(self.getStoitColNames(dbFileName).split(",")))
+        
+        CT.transformCP()
+        CT.transformedCP = [tuple(i) for i in CT.transformedCP]
+        CT.covProfiles = [tuple(i) for i in CT.covProfiles]
+        CT.corners = [tuple(i) for i in CT.corners]
+        
+        # now CT stores the transformed coverages and other important information
+        # we will write this to the database
+        with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+            meta_group = h5file.getNode('/', name='meta')
+            profile_group = h5file.getNode('/', name='profile')
+
+            # raw coverages - we may have reordered rows, so we should fix this now!
+            db_desc = []
+            for scn in CT.stoitColNames:
+                db_desc.append((scn, float)) 
+            
+            try:
+                h5file.removeNode(mg, 'tmp_coverages')
+            except:
+                pass
+
+            try:
+                h5file.createTable(profile_group,
+                                   'tmp_coverages',
+                                   np.array(CT.covProfiles, dtype=db_desc),
+                                   title="Bam based coverage",
+                                   expectedrows=CT.numContigs)
+            except:
+                print "Error creating coverage table:", exc_info()[0]
+                raise
+
+            h5file.renameNode(profile_group, 'coverage', 'tmp_coverages', overwrite=True)
+        
+            # transformed coverages
+            db_desc = [('x', float),
+                       ('y', float),
+                       ('z', float)]
+            try:
+                h5file.createTable(profile_group,
+                                   'transCoverage',
+                                   np.array(CT.transformedCP , dtype=db_desc),
+                                   title="Transformed coverage",
+                                   expectedrows=CT.numContigs)
+            except:
+                print "Error creating transformed coverage table:", exc_info()[0]
+                raise
+    
+            # transformed coverage corners
+            db_desc = [('x', float),
+                       ('y', float),
+                       ('z', float)]
+            try:
+                h5file.createTable(meta_group,
+                                   'transCoverageCorners',
+                                   np.array(CT.corners , dtype=db_desc),
+                                   title="Transformed coverage corners",
+                                   expectedrows=CT.numStoits)
+            except:
+                print "Error creating transformed coverage corner table:", exc_info()[0]
+                raise
+    
+    
+            # normalised coverages
+            db_desc = [('normCov', float)]
+            try:
+                h5file.createTable(profile_group,
+                                   'normCoverage',
+                                   np.array(CT.normCoverages , dtype=db_desc),
+                                   title="Normalised coverage",
+                                   expectedrows=CT.numContigs)
+            except:
+                print "Error creating normalised coverage table:", exc_info()[0]
+                raise
+
+        # stoit col names may have been shuffled
+        meta_data = (",".join([str(i) for i in CT.stoitColNames]),
+                    CT.numStoits,
+                    self.getMerColNames(dbFileName),
+                    self.getMerSize(dbFileName),
+                    self.getNumMers(dbFileName),
+                    self.getNumCons(dbFileName),
+                    self.getNumBins(dbFileName),
+                    self.isClustered(dbFileName),
+                    self.isComplete(dbFileName),
+                    self.getGMDBFormat(dbFileName))
+
+        with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
+            self.setMeta(h5file, meta_data, overwrite=True)
+        
+        # update the formatVersion field and we're done
+        self.setGMDBFormat(dbFileName, 5)
+        print "*******************************************************************************"
+
+
 #------------------------------------------------------------------------------
 # GET LINKS
 
@@ -716,10 +910,11 @@ class GMDataManager:
 #------------------------------------------------------------------------------
 # GET / SET DATA TABLES - PROFILES
 
-    def getConditionalIndices(self, dbFileName, condition='', silent=False):
+    def getConditionalIndices(self, dbFileName, condition='', silent=False, checkUpgrade=True):
         """return the indices into the db which meet the condition"""
         # check the DB out and see if we need to change anything about it
-        self.checkAndUpgradeDB(dbFileName, silent=silent)
+        if checkUpgrade:
+            self.checkAndUpgradeDB(dbFileName, silent=silent)
 
         if('' == condition):
             condition = "cid != ''" # no condition breaks everything!
@@ -740,6 +935,34 @@ class GMDataManager:
                     if('' == condition):
                         condition = "cid != ''" # no condition breaks everything!
                     return np.array([list(h5file.root.profile.coverage[x.nrow]) for x in h5file.root.meta.contigs.where(condition)])
+        except:
+            print "Error opening DB:",dbFileName, exc_info()[0]
+            raise
+
+    def getTransformedCoverageProfiles(self, dbFileName, condition='', indices=np.array([])):
+        """Load transformed coverage profiles"""
+        try:
+            with tables.openFile(dbFileName, mode='r') as h5file:
+                if(np.size(indices) != 0):
+                    return np.array([list(h5file.root.profile.transCoverage[x]) for x in indices])
+                else:
+                    if('' == condition):
+                        condition = "cid != ''" # no condition breaks everything!
+                    return np.array([list(h5file.root.profile.transCoverage[x.nrow]) for x in h5file.root.meta.contigs.where(condition)])
+        except:
+            print "Error opening DB:",dbFileName, exc_info()[0]
+            raise
+
+    def getNormalisedCoverageProfiles(self, dbFileName, condition='', indices=np.array([])):
+        """Load normalised coverage profiles"""
+        try:
+            with tables.openFile(dbFileName, mode='r') as h5file:
+                if(np.size(indices) != 0):
+                    return np.array([list(h5file.root.profile.normCoverage[x]) for x in indices])
+                else:
+                    if('' == condition):
+                        condition = "cid != ''" # no condition breaks everything!
+                    return np.array([list(h5file.root.profile.normCoverage[x.nrow]) for x in h5file.root.meta.contigs.where(condition)])
         except:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
@@ -975,6 +1198,9 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
+#------------------------------------------------------------------------------
+# GET / SET METADATA
+
     def getKmerVarPC(self, dbFileName, condition='', indices=np.array([])):
         """Load variance of kmer sig PCAs"""
         try:
@@ -984,8 +1210,14 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
-#------------------------------------------------------------------------------
-# GET / SET METADATA
+    def getTransformedCoverageCorners(self, dbFileName):
+        """Load transformed coverage corners"""
+        try:
+            with tables.openFile(dbFileName, mode='r') as h5file:
+                return np.array([list(x) for x in h5file.root.meta.transCoverageCorners.read()])
+        except:
+            print "Error opening DB:",dbFileName, exc_info()[0]
+            raise
 
     def setMeta(self, h5file, metaData, overwrite=False):
         """Write metadata into the table
@@ -1061,7 +1293,7 @@ class GMDataManager:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
 
-    def getGMFormat(self, dbFileName):
+    def getGMDBFormat(self, dbFileName):
         """return the format version of this GM file"""
         # this guy needs to be a bit different to the other meta methods
         # becuase earlier versions of GM didn't include a format parameter
@@ -1106,7 +1338,7 @@ class GMDataManager:
                     numBins,
                     self.isClustered(dbFileName),
                     self.isComplete(dbFileName),
-                    self.getGMFormat(dbFileName))
+                    self.getGMDBFormat(dbFileName))
         try:
             with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
                 self.setMeta(h5file, meta_data, overwrite=True)
@@ -1146,7 +1378,7 @@ class GMDataManager:
                     self.getNumBins(dbFileName),
                     state,
                     self.isComplete(dbFileName),
-                    self.getGMFormat(dbFileName))
+                    self.getGMDBFormat(dbFileName))
         try:
             with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
                 self.setMeta(h5file, meta_data, overwrite=True)
@@ -1175,7 +1407,7 @@ class GMDataManager:
                     self.getNumBins(dbFileName),
                     self.isClustered(dbFileName),
                     state,
-                    self.getGMFormat(dbFileName))
+                    self.getGMDBFormat(dbFileName))
         try:
             with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
                 self.setMeta(h5file, meta_data, overwrite=True)
@@ -1192,7 +1424,7 @@ class GMDataManager:
         data_arrays = []
 
         if fields == ['all']:
-            fields = ['names', 'lengths', 'gc', 'bins', 'coverage', 'mers']
+            fields = ['names', 'lengths', 'gc', 'bins', 'coverage', 'tcoverage', 'ncoverage', 'mers']
 
         num_fields = len(fields)
         data_converters = []
@@ -1223,6 +1455,18 @@ class GMDataManager:
                 for stoit in stoits:
                     header_strings.append(stoit)
                 data_arrays.append(self.getCoverageProfiles(dbFileName))
+                data_converters.append(lambda x : separator.join(["%0.4f" % i for i in x]))
+
+            elif field == 'tcoverage':
+                header_strings.append('transformedCoverageX')
+                header_strings.append('transformedCoverageY')
+                header_strings.append('transformedCoverageZ')
+                data_arrays.append(self.getTransformedCoverageProfiles(dbFileName))
+                data_converters.append(lambda x : separator.join(["%0.4f" % i for i in x]))
+
+            elif field == 'ncoverage':
+                header_strings.append('normalisedCoverage')
+                data_arrays.append(self.getNormalisedCoverageProfiles(dbFileName))
                 data_converters.append(lambda x : separator.join(["%0.4f" % i for i in x]))
 
             elif field == 'mers':
@@ -1476,11 +1720,202 @@ class BamParser:
 
 def getBamDescriptor(fullPath, index_num):
     """AUX: Reduce a full path to just the file name minus extension"""
-    name = op_splitext(op_basename(fullPath))[0]
-    name = str(index_num) + '_'
-    return name
+    return str(index_num) + '_' + op_splitext(op_basename(fullPath))[0]
 
 ###############################################################################
 ###############################################################################
 ###############################################################################
 ###############################################################################
+
+class CoverageTransformer:
+    """Transform coverage profiles GroopM-style"""
+
+    def __init__(self,
+                 numContigs,
+                 numStoits,
+                 normCoverages,
+                 kmerNormPC1,
+                 coverageProfiles,
+                 stoitColNames,
+                 scaleFactor=1000):
+        self.numContigs = numContigs
+        self.numStoits = numStoits
+        self.normCoverages = normCoverages
+        self.kmerNormPC1 = kmerNormPC1
+        self.covProfiles = coverageProfiles
+        self.stoitColNames = stoitColNames
+        self.indices = range(self.numContigs)
+        self.scaleFactor = scaleFactor
+        
+        # things we care about!
+        self.TCentre = None
+        self.transformedCP = np.zeros((self.numContigs,3))
+        self.corners = np.zeros((self.numStoits,3))
+
+    def transformCP(self, silent=False, nolog=False):
+        """Do the main transformation on the coverage profile data"""
+        shrinkFn = np.log10
+        if(nolog):
+            shrinkFn = lambda x:x
+
+        if(not silent):
+            print "    Reticulating splines"
+            print "    Dimensionality reduction"
+
+        unit_vectors = [(np.cos(i*2*np.pi/self.numStoits),np.sin(i*2*np.pi/self.numStoits)) for i in range(self.numStoits)]
+
+        # make sure the bams are ordered consistently
+        if self.numStoits > 3:
+            self.shuffleBAMs()
+
+        for i in range(len(self.indices)):
+            shifted_vector = np.array([0.0,0.0])
+            try:
+                flat_vector = (self.covProfiles[i] / sum(self.covProfiles[i]))
+            except FloatingPointError:
+                flat_vector = self.covProfiles[i]
+
+            for j in range(self.numStoits):
+                shifted_vector[0] += unit_vectors[j][0] * flat_vector[j]
+                shifted_vector[1] += unit_vectors[j][1] * flat_vector[j]
+
+            # log scale it towards the centre
+            scaling_vector = shifted_vector * self.scaleFactor
+            sv_size = np.linalg.norm(scaling_vector)
+            if sv_size > 1:
+                shifted_vector /= shrinkFn(sv_size)
+
+            self.transformedCP[i,0] = shifted_vector[0]
+            self.transformedCP[i,1] = shifted_vector[1]
+            # should always work cause we nuked
+            # all 0 coverage vecs in parse
+            self.transformedCP[i,2] = shrinkFn(self.normCoverages[i])
+
+        # finally scale the matrix to make it equal in all dimensions
+        min = np.amin(self.transformedCP, axis=0)
+        self.transformedCP -= min
+        max = np.amax(self.transformedCP, axis=0)
+        max = max / (self.scaleFactor-1)
+        self.transformedCP /= max
+
+        # get the corner points
+        XYcorners = np.reshape([i for i in np.array(unit_vectors)],
+                               (self.numStoits, 2))
+
+        for i in range(self.numStoits):
+            self.corners[i,0] = XYcorners[i,0]
+            self.corners[i,1] = XYcorners[i,1]
+
+        # shift the corners to match the space
+        self.corners -= min
+        self.corners /= max
+
+        # scale the corners to fit the plot
+        cmin = np.amin(self.corners, axis=0)
+        self.corners -= cmin
+        cmax = np.amax(self.corners, axis=0)
+        cmax = cmax / (self.scaleFactor-1)
+        self.corners[:,0] /= cmax[0]
+        self.corners[:,1] /= cmax[1]
+        for i in range(self.numStoits):
+            self.corners[i,2] = self.scaleFactor + 100 # only affect the z axis
+
+        self.TCentre = np.mean(self.corners, axis=0)
+
+    def small2indices(self, index, side):
+        """Return the indices of the comparative items
+        when given an index into a condensed distance matrix
+        """
+        step = 0
+        while index >= (side-step):
+            index = index - side + step
+            step += 1
+        return (step, step + index + 1)
+
+    def shuffleBAMs(self, ordering=None):
+        """Make the data transformation deterministic by reordering the bams"""
+        if ordering is None:
+            # we will need to deduce the ordering of the contigs
+            # first we should make a subset of the total data
+            # we'd like to take it down to about 1500 or so RI's
+            # but we'd like to do this in a repeatable way
+            ideal_contig_num = 1500
+            sub_cons = np.arange(self.numContigs)
+            while len(sub_cons) > ideal_contig_num:
+                # select every second contig when sorted by norm cov
+                cov_sorted = np.argsort(self.normCoverages[sub_cons])
+                sub_cons = np.array([sub_cons[cov_sorted[i*2]] for i in np.arange(int(len(sub_cons)/2))])
+                
+                if len(sub_cons) > ideal_contig_num:
+                    # select every second contig when sorted by mer PC1
+                    mer_sorted = np.argsort(self.kmerNormPC1[sub_cons])
+                    sub_cons = np.array([sub_cons[mer_sorted[i*2]] for i in np.arange(int(len(sub_cons)/2))])
+    
+            # now that we have a subset, calculate the distance between each of the untransformed vectors
+            num_sc = len(sub_cons)
+            
+            # log shift the coverages towards the origin
+            sub_covs = np.transpose([self.covProfiles[i]*(np.log10(self.normCoverages[i])/self.normCoverages[i]) for i in sub_cons])
+            sq_dists = cdist(sub_covs,sub_covs,'cityblock')
+            dists = squareform(sq_dists)
+    
+            print "GHGHGHGH"
+            print sq_dists, dists
+            print sub_covs  
+    
+    
+            # initialise a list of left, right neighbours
+            lr_dict = {}
+            for i in range(self.numStoits):
+                lr_dict[i] = []
+    
+            too_big = 10000
+            while True:
+                closest = np.argmin(dists)
+                if dists[closest] == too_big:
+                    break
+                (i,j) = self.small2indices(closest, self.numStoits-1)
+                lr_dict[j].append(i)
+                lr_dict[i].append(j)
+    
+                # mark these guys as neighbours
+                if len(lr_dict[i]) == 2:
+                    # no more than 2 neighbours
+                    sq_dists[i,:] = too_big
+                    sq_dists[:,i] = too_big
+                    sq_dists[i,i] = 0.0
+                if len(lr_dict[j]) == 2:
+                    # no more than 2 neighbours
+                    sq_dists[j,:] = too_big
+                    sq_dists[:,j] = too_big
+                    sq_dists[j,j] = 0.0
+    
+                # fix the dist matrix
+                sq_dists[j,i] = too_big
+                sq_dists[i,j] = too_big
+                dists = squareform(sq_dists)
+    
+            # now make the ordering
+            ordering = [0, lr_dict[0][0]]
+            done = 2
+            while done < self.numStoits:
+                last = ordering[done-1]
+                if lr_dict[last][0] == ordering[done-2]:
+                    ordering.append(lr_dict[last][1])
+                    last = lr_dict[last][1]
+                else:
+                    ordering.append(lr_dict[last][0])
+                    last = lr_dict[last][0]
+                done+=1
+
+        # reshuffle the contig order!
+        # yay for bubble sort!
+        working = np.arange(self.numStoits)
+        for i in range(1, self.numStoits):
+            # where is this guy in the list
+            loc = list(working).index(ordering[i])
+            if loc != i:
+                # swap the columns
+                self.covProfiles[:,[i,loc]] = self.covProfiles[:,[loc,i]]
+                self.stoitColNames[[i,loc]] = self.stoitColNames[[loc,i]]
+                working[[i,loc]] = working[[loc,i]]
