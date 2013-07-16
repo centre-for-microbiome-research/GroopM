@@ -498,7 +498,6 @@ class ProfileManager:
         """Do the main transformation on the coverage profile data"""
         if(not silent):
             print "    Reticulating splines"
-            print "    Dimensionality reduction"
         self.transformedCP = self.dataManager.getTransformedCoverageProfiles(self.dbFileName, indices=self.indices)
         self.corners = self.dataManager.getTransformedCoverageCorners(self.dbFileName)
         self.TCentre = np_mean(self.corners, axis=0)

@@ -250,7 +250,7 @@ class GMDataManager:
                     # and strip them before writing to the DB
                     print "****************************************************************"
                     print " IMPORTANT! - there are %d contigs with 0 coverage" % len(bad_indices)
-                    print " across all stoits. They will be ignored. Example contigs:"
+                    print " across all stoits. They will be ignored:"
                     print "****************************************************************"
                     for i in xrange(0, min(5, len(bad_indices))):
                         print con_names[bad_indices[i]]
@@ -264,9 +264,7 @@ class GMDataManager:
 
                 # these will need to be tupalized regardless...
                 con_ksigs = [tuple(i) for i in con_ksigs[good_indices]]
-                cov_profiles = [tuple(i) for i in cov_profiles[good_indices]]
                 num_cons = len(con_names)
-                cid_2_indices = dict(zip(con_names, range(num_cons)))
 
                 #------------------------
                 # calculate PCAs and write kmer sigs
@@ -324,6 +322,8 @@ class GMDataManager:
                                          stoitColNames)
                 
                 CT.transformCP()
+                # these will need to be tupalized regardless...
+                cov_profiles = [tuple(i) for i in cov_profiles[good_indices]]
                 CT.transformedCP = [tuple(i) for i in CT.transformedCP]
                 CT.corners = [tuple(i) for i in CT.corners]
                 # now CT stores the transformed coverages and other important information
@@ -1858,11 +1858,6 @@ class CoverageTransformer:
             sub_covs = np.transpose([self.covProfiles[i]*(np.log10(self.normCoverages[i])/self.normCoverages[i]) for i in sub_cons])
             sq_dists = cdist(sub_covs,sub_covs,'cityblock')
             dists = squareform(sq_dists)
-    
-            print "GHGHGHGH"
-            print sq_dists, dists
-            print sub_covs  
-    
     
             # initialise a list of left, right neighbours
             lr_dict = {}
