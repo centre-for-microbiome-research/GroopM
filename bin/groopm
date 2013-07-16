@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.6"
+__version__ = "0.2.7"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -221,7 +221,7 @@ if __name__ == '__main__':
     bin_explorer.add_argument('dbname', help="name of the database to open")
     bin_explorer.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to plot (None for all)")
     bin_explorer.add_argument('-c', '--cutoff', default=1000, help="cutoff contig size")
-    bin_explorer.add_argument('-m', '--mode', default="binids", help="Exploration mode [binpoints, binids, allcontigs, unbinnedcontigs, binnedcontigs, binsassignments, compare, sidebyside, together]")
+    bin_explorer.add_argument('-m', '--mode', default="binids", help="Exploration mode [binpoints, binids, allcontigs, unbinnedcontigs, binnedcontigs, binassignments, compare, sidebyside, together]")
     bin_explorer.add_argument('-r', '--no_transform', action="store_true", default=False, help="skip data transformation (3 stoits only)")
     bin_explorer.add_argument('-k', '--kmers', action="store_true", default=False, help="include kmers in figure [only used when mode == together]")
     bin_explorer.add_argument('-q', '--squish', action="store_true", default=False, help="squish more during transform")
@@ -299,7 +299,7 @@ if __name__ == '__main__':
     #-------------------------------------------------
     # do what we came here to do
     try:
-        GM_parser = groopm.GroopMOptionsParser()
+        GM_parser = groopm.GroopMOptionsParser(__version__)
         if(False):
             import cProfile
             cProfile.run('GM_parser.parseOptions(args)', 'prof')

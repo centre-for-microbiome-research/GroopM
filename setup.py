@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='GroopM',
-    version='0.2.6',
+    version='0.2.7',
     author='Michael Imelfort',
     author_email='mike@mikeimelfort.com',
     packages=['groopm', 'groopm.test'],

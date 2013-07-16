@@ -485,7 +485,7 @@ class Bin:
         if(fileName != ""):
             try:
                 fig.set_size_inches(6,6)
-                plt.savefig(fileName,dpi=300)
+                plt.savefig(fileName+".png",dpi=300)
             except:
                 print "Error saving image:", fileName, sys.exc_info()[0]
                 raise

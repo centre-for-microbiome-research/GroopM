@@ -1357,7 +1357,7 @@ class BinManager:
                 else:
                     self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
                                               self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric,
-                                              FNPrefix+"_"+str(bid), ignoreContigLengths=ignoreContigLengths, ET=ET)
+                                              fileName=FNPrefix+"_"+str(bid), ignoreContigLengths=ignoreContigLengths, ET=ET)
                     
     def plotBinCoverage(self, plotEllipses=False, plotContigLengs=False, printID=False):
         """Make plots of all the bins"""

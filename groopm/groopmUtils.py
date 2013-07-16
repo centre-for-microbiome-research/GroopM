@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -340,7 +340,7 @@ class BinExplorer:
         if len(self.BM.bins) == 0:
             print "Sorry, no bins to plot"
         else:
-            print "Plotting binned contigs by bin"
+            print "Plotting bin assignments"
             if self.bids == []:
                 self.bids = self.BM.getBids()
 
@@ -449,7 +449,8 @@ class BinExplorer:
             ax1.set_yticks([])
             ax1.set_zticks([])
             
-
+            plt.title(self.PM.dbFileName)
+            
             if False:
                 #plot bin keys
                 ax2 = plt.subplot(gs[1])
