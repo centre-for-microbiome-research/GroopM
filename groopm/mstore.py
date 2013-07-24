@@ -261,6 +261,7 @@ class GMDataManager:
                     con_names = con_names[good_indices]
                     con_lengths = con_lengths[good_indices]
                     con_gcs = con_gcs[good_indices]
+                    cov_profiles = cov_profiles[good_indices]
 
                 # these will need to be tupalized regardless...
                 con_ksigs = [tuple(i) for i in con_ksigs[good_indices]]
