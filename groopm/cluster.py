@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
@@ -78,6 +78,7 @@ from numpy import (abs as np_abs,
                    min as np_min,
                    ones as np_ones,
                    pi as np_pi,
+                   prod as np_prod,
                    reshape as np_reshape,
                    seterr as np_seterr,
                    shape as np_shape,
@@ -92,7 +93,7 @@ from numpy import (abs as np_abs,
                    zeros as np_zeros)
 from numpy.linalg import norm as np_norm
 import scipy.ndimage as ndi
-from scipy.spatial.distance import pdist, squareform, cityblock
+from scipy.spatial.distance import pdist, squareform, cityblock, euclidean
 from scipy.misc import imsave
 
 # GroopM imports
@@ -149,6 +150,7 @@ class ClusterEngine:
         self.finalPlot = finalPlot
         self.imageCounter = 1           # when we print many images
         self.roundNumber = 0            # how many times have we tried to make a bin?
+        self.subRoundNumber = 0         # measure sub rounds too!
         self.TSpan = 0.                 # dist from centre to the corner
 
     def promptOnOverwrite(self, minimal=False):
@@ -251,9 +253,9 @@ class ClusterEngine:
             else:
                 bids_made = []
                 partitions = putative_clusters[0]
-                [max_blur_value, max_x, max_y] = putative_clusters[1]
+                [max_x, max_y] = putative_clusters[1]
                 self.roundNumber += 1
-                sub_round_number = 1
+                self.subRoundNumber = 1
 
                 for center_row_indices in partitions:
                     total_BP = np_sum(self.PM.contigLengths[center_row_indices])
@@ -277,8 +279,7 @@ class ClusterEngine:
                                         fileName="FRESH_"+str(self.imageCounter))
 
                             self.imageCounter += 1
-                            self.plotHeat("HM_%d.%d.png" % (self.roundNumber, sub_round_number), max=max_blur_value, x=max_x, y=max_y)
-                            sub_round_number += 1
+                            self.subRoundNumber += 1
                     else:
                         # this partition was too small, restrict these guys we don't run across them again
                         self.restrictRowIndices(center_row_indices)
@@ -338,7 +339,10 @@ class ClusterEngine:
         max_x = int(max_index/self.PM.scaleFactor)
         max_y = max_index - self.PM.scaleFactor*max_x
 
-        ret_values = [max_value, max_x, max_y]
+        ret_values = [max_x, max_y]
+        
+        if(self.debugPlots >= 2):
+            self.plotHeat("HM_%d.%d.png" % (self.roundNumber+1, self.subRoundNumber), x=max_x, y=max_y)
 
         start_span = int(1.5 * self.span)
         span_len = 2*start_span+1
@@ -369,10 +373,16 @@ class ClusterEngine:
 
         # now get the basic color of this dense point
         putative_center_row_indices = []
+        
+        # z span should be greater at the corners and shallower at the center
+        z_span_min = 100
+        z_span_max = 400
+        dist_from_centre = euclidean(self.PM.TCentre[:2], np_array([max_x,max_y]))
+        z_span = (z_span_max - z_span_min)/self.PM.transRadius*dist_from_centre + z_span_min
 
         (x_lower, x_upper) = self.makeCoordRanges(max_x, 1.5*self.span)
         (y_lower, y_upper) = self.makeCoordRanges(max_y, 1.5*self.span)
-        (z_lower, z_upper) = self.makeCoordRanges(max_z, 2*self.span)
+        (z_lower, z_upper) = self.makeCoordRanges(max_z, z_span)
 
         for row_index in super_putative_row_indices:
             p = np_around(self.PM.transformedCP[row_index])
@@ -419,7 +429,7 @@ class ClusterEngine:
         
         # make a copy of the data we'll be munging
         k_dat = np_copy(self.PM.kmerPCs[rowIndices])
-        c_dat = np_copy(self.PM.transformedCP[rowIndices])
+        c_dat = np_copy(self.PM.covProfiles[rowIndices])
         l_dat = np_copy(self.PM.contigLengths[rowIndices])
         if self.debugPlots >= 2:
             n_dat = np_copy(self.PM.contigNames[rowIndices])
@@ -427,10 +437,10 @@ class ClusterEngine:
         row_indices = np_copy(rowIndices)
         
         # calculate shortest distance to a corner (this isn't currently used)
-        min_dist_to_corner = 1e9
-        for corner in self.PM.corners:
-            dist = cityblock(corner[:,[0,1]], positionInPlane)
-            min_dist_to_corner = min(dist, min_dist_to_corner)
+        #min_dist_to_corner = 1e9
+        #for corner in self.PM.corners:
+        #    dist = cityblock(corner[:,[0,1]], positionInPlane)
+        #   min_dist_to_corner = min(dist, min_dist_to_corner)
         
         # calculate radius threshold in whitened transformed coverage space
         #eps_neighbours = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
@@ -456,7 +466,7 @@ class ClusterEngine:
         c_converged = coverageThreshold * 3.4  # 5e-2 * np_mean(c_whiten_dist)
         k_delt = 0.
         c_delt = 0.
-        max_iterations = 50
+        max_iterations = 1  # don't worry about params. Just do once
         
         k_move_perc = 0.1
         c_move_perc = 0.1
@@ -585,10 +595,10 @@ class ClusterEngine:
                 c_dat = np_delete(c_dat, noise, axis = 0)
                 k_dat = np_delete(k_dat, noise, axis = 0)
                 l_dat = np_delete(l_dat, noise, axis = 0)
-                if self.debugPlots >= 2:
-                    print "Noise deleting_%d_%d:\n" % (self.cluster_num, iter), n_dat[noise]
-                    n_dat = np_delete(n_dat, noise, axis = 0)
                 row_indices = np_delete(row_indices, noise, axis = 0)
+                if self.debugPlots >= 2:
+                    #print "Noise deleting_%d_%d:\n" % (self.cluster_num, iter), n_dat[noise]
+                    n_dat = np_delete(n_dat, noise, axis = 0)
             
             # get whitened version of modified coverage data (using original transformation)
             c_whiten_dat = (c_dat-c_mean) / c_std
@@ -600,9 +610,7 @@ class ClusterEngine:
             k_delt = np_mean(k_deltas)
             c_delt = np_mean(c_deltas)
             if k_delt < k_converged or c_delt < c_converged:
-#            if np_mean(k_deltas) < 0.2 or np_mean(c_deltas) < 0.05:      
                 break
-
 
         if self.debugPlots >= 2:
         
@@ -638,14 +646,20 @@ class ClusterEngine:
             plt.close(fig)
             del fig
 
-
-
-        # perform hough transform clustering
+        # test total GC spread
+        # if it's very small we won't bother doing hough stuff
+        gcs = self.PM.contigGCs[row_indices]
+        gc_spread = np_max(gcs) - np_min(gcs)
         self.HP.hc += 1
-        if self.debugPlots >= 3:
-            (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, scale=True, imgTag="MER")
+        if gc_spread <= 0.15:
+            # no hough
+            (k_partitions, k_keeps) = (np_array([np_arange(len(row_indices))]),np_array([True]))
         else:
-            (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, scale=True)
+            # perform hough transform clustering
+            if self.debugPlots >= 3:
+                (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat, imgTag="MER")
+            else:
+                (k_partitions, k_keeps) = self.HP.houghPartition(k_dat[:,0], l_dat)
         
         if(len(k_partitions) == 0):
             return None
@@ -700,7 +714,16 @@ class ClusterEngine:
             ax = plt.subplot(222)
             plt.xlabel("PCA1")
             plt.ylabel("PCA2")
-            ax.scatter(k_dat[:,0], k_dat[:,1], edgecolors='none', c=self.PM.contigGCs[row_indices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=lens, zorder=10, alpha=alpha)
+            ax.scatter(k_dat[:,0],
+                       k_dat[:,1],
+                       edgecolors='none',
+                       c=self.PM.contigGCs[row_indices],
+                       cmap=self.PM.colorMapGC,
+                       vmin=0.0,
+                       vmax=1.0,
+                       s=lens,
+                       zorder=10,
+                       alpha=alpha)
             XX = ax.get_xlim()
             YY = ax.get_ylim()
             ax.add_patch(Rectangle((XX[0], YY[0]),XX[1]-XX[0],YY[1]-YY[0],facecolor='#000000'))
@@ -709,7 +732,16 @@ class ClusterEngine:
             plt.title("%s contigs" % len(row_indices))
             plt.xlabel("MER PARTS")
             plt.ylabel("COV PARTS")
-            ax.scatter(k_dat[:,0], c_dat[:,2]/10, edgecolors='none', c=self.PM.contigGCs[row_indices], cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, zorder=10, alpha=alpha)
+            ax.scatter(k_dat[:,0],
+                       c_dat[:,2]/10,
+                       edgecolors='none',
+                       c=self.PM.contigGCs[row_indices],
+                       cmap=self.PM.colorMapGC,
+                       vmin=0.0,
+                       vmax=1.0,
+                       s=lens,
+                       zorder=10,
+                       alpha=alpha)
     
             ax.set_xlim(k_min, k_max)
             ax.set_ylim(c_min, c_max)
@@ -749,18 +781,27 @@ class ClusterEngine:
         
                     # select just the subset of covs for this kmer range
                     data = np_copy(c_dat[k_part])
+                    
+                    # PCA the subset and cluster on the 1st component
                     Center(data,verbose=0)
                     p = PCA(data)
                     components = p.pc()
                     data = np_array([float(i) for i in components[:,0]])
-        
+                    
                     l_data = np_copy(l_dat[k_part])
         
                     # The PCA may reverse the ordering. So we just check here quickly
                     if self.debugPlots >= 3:
-                        (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, imgTag="COV", scale=True)
+                        (c_partitions, c_keeps) = self.HP.houghPartition(data,
+                                                                         l_data,
+                                                                         imgTag="COV_%s" % (pc-1),
+                                                                         gData=self.PM.transformedCP[row_indices[k_part],2],
+                                                                         gCut=10.)
                     else:
-                        (c_partitions, c_keeps) = self.HP.houghPartition(data, l_data, scale=True)
+                        (c_partitions, c_keeps) = self.HP.houghPartition(data,
+                                                                         l_data,
+                                                                         gData=self.PM.transformedCP[row_indices[k_part],2],
+                                                                         gCut=10.)
         
         
                     if self.debugPlots >= 2:
@@ -1143,7 +1184,7 @@ class ClusterEngine:
         plt.close(fig)
         del fig
 
-    def plotHeat(self, fileName = "", max=-1, x=-1, y=-1):
+    def plotHeat(self, fileName = "", x=-1, y=-1):
         """Print the main heat maps
 
         Useful for debugging
@@ -1153,16 +1194,17 @@ class ClusterEngine:
         ax = None
         if(self.numImgMaps == 1):
             ax = fig.add_subplot(121)
-            images.append(ax.imshow(self.blurredMaps[0,:,:]**0.5))
-            if(max > 0):
-                title = "Max value: %f (%f, %f)" % (max, x, y)
-                plt.title(title)
+            ax.imshow(self.blurredMaps[0,:,:]**0.5)
+            if x != -1:
+                ax.scatter([y],
+                           [x],
+                           edgecolors='#ff69b4',
+                           c='none',
+                           s=5000.,
+                           marker='.')
         else:
             ax = fig.add_subplot(231)
             images.append(ax.imshow(self.blurredMaps[0,:,:]**0.5))
-            if(max > 0):
-                title = str.join(" ", ["Max value:",str(max)])
-                plt.title(title)
             ax = fig.add_subplot(232)
             images.append(ax.imshow(self.blurredMaps[1,:,:]**0.5))
             ax = fig.add_subplot(233)
@@ -1170,7 +1212,7 @@ class ClusterEngine:
 
         if(self.numImgMaps == 1):
             ax = fig.add_subplot(122)
-            images.append(ax.imshow(self.imageMaps[0,:,:]**0.5))
+            ax.imshow(self.imageMaps[0,:,:]**0.5)
         else:
             ax = fig.add_subplot(234)
             images.append(ax.imshow(self.imageMaps[0,:,:]**0.5))
@@ -1201,7 +1243,13 @@ class HoughPartitioner:
     def __init__(self):
         self.hc = 0
 
-    def houghPartition(self, dAta, lengths, scale=False, imgTag=None):
+    def houghPartition(self,
+                       dAta,            # data to cluster with
+                       lData,           # lengths for filling in about long contigs
+                       imgTag=None,     # make debug plots
+                       gData=None,      # gap data to check partitions with
+                       gCut=0           # gap cutoff to stop merging of partitions
+                       ):
         """Use the hough transform to find k clusters for some unknown value of K"""
         d_len_raw = int(len(dAta))
         if d_len_raw < 2:
@@ -1213,7 +1261,6 @@ class HoughPartitioner:
         #----------------------------------------------------------------------
         # prep the data
         #
-
         sorted_indices_raw = np_argsort(dAta)
         nUm_points = len(dAta)
 
@@ -1229,7 +1276,7 @@ class HoughPartitioner:
         # let's say 1 point per 2000bp
         for i in range(len(dAta)):
             real_index = sorted_indices_raw[i]
-            rep = int((lengths[real_index] - 1.)/5000.) + 1
+            rep = int((lData[real_index] - 1.)/5000.) + 1
             scales_per[real_index] = rep
             if rep == 1:
                 spread_data.append(dAta[real_index])
@@ -1259,10 +1306,7 @@ class HoughPartitioner:
         data = np_array(spread_data)
         data -= np_min(data)    # shift to 0 but DO NOT scale to 1
         d_len = len(data)
-        if scale is False:
-            scale = d_len
-        else:
-            scale = np_max(dAta) - np_min(dAta)
+        scale = np_max(dAta) - np_min(dAta)
 
         # we want to know how much each value differs from it's neighbours
         back_diffs = [float(data[i] - data[i-1]) for i in range(1,d_len)]
@@ -1380,10 +1424,42 @@ class HoughPartitioner:
         squished_rets = []
         squished_keeps = []
         last_squished = []
+        
+        if gData is not None:
+            # measure the gaps between potential squishables
+            last_max = -1
+            gaps = []
+            for i in range(len(rets)):
+                tmp_gs = []
+                for ii in rets[i]:
+                    tmp_gs.append(gData[ii])    # collate the gData for this partition
+                    
+                A = np_min(tmp_gs)              # find it's boundaries
+                B = np_max(tmp_gs)
+                if last_max > 0:
+                    gaps.append(A - last_max)   # measure the gap
+                last_max = B
+            gap_info = [True] + [ggg < gCut for ggg in gaps]
+        else:
+            gap_info = [True] * len(keeps)
+            
         for i in range(len(rets)):
             if keeps[i]:
-                for ii in rets[i]:
-                    last_squished.append(ii)
+                # check and see if we are allowed to squish
+                if gap_info[i]: 
+                    # squish OK
+                    for ii in rets[i]:
+                        last_squished.append(ii)
+                else:
+                    # shouldn't squish
+                    # push on the last fella
+                    if len(last_squished) > 0:
+                        squished_rets.append(np_array(last_squished))
+                        squished_keeps.append(True)
+                    # remake the last_squished holder
+                    last_squished = []
+                    for ii in rets[i]:
+                        last_squished.append(ii)
             else:
                 if len(last_squished) > 0:
                     squished_rets.append(np_array(last_squished))
@@ -1447,6 +1523,7 @@ class HoughPartitioner:
                 fff[p[0],p[1]] = 220
             for p in tData:
                 fff[p[0],p[1]] = 0
+            
             # scale so colors look sharper
             accumulator -= np_min(accumulator)
             accumulator /= np_max(accumulator)
