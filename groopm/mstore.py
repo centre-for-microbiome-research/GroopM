@@ -324,7 +324,7 @@ class GMDataManager:
                 
                 CT.transformCP()
                 # these will need to be tupalized regardless...
-                cov_profiles = [tuple(i) for i in cov_profiles[good_indices]]
+                cov_profiles = [tuple(i) for i in cov_profiles]#[good_indices]]
                 CT.transformedCP = [tuple(i) for i in CT.transformedCP]
                 CT.corners = [tuple(i) for i in CT.corners]
                 # now CT stores the transformed coverages and other important information
