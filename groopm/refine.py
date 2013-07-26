@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
@@ -552,6 +552,7 @@ class RefineEngine:
                            saveBins=False)
 
         print "    Identified %d likely chimeric bin(s), removed %d small chimeric bin(s)" % (num_chimeric_bins, len(dead_bins))
+        print "    %s" % ",".join(str(u) for u in dead_bins)
         return dead_bins
 
     def mergeSimilarBins(self, verbose=False, graph=None, silent=False):

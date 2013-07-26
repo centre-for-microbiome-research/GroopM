@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -127,6 +127,7 @@ class ProfileManager:
         self.transformedCP = np_array([])   # the munged data points
         self.corners = np_array([])         # the corners of the tranformed space
         self.TCentre = 0.                   # the centre of the coverage space
+        self.transRadius = 0.               # distance from corner to centre of transformed space
         self.averageCoverages = np_array([])# average coverage across all stoits
         self.normCoverages = np_array([])   # norm of the raw coverage vectors
         self.kmerSigs = np_array([])        # raw kmer signatures
@@ -501,6 +502,7 @@ class ProfileManager:
         self.transformedCP = self.dataManager.getTransformedCoverageProfiles(self.dbFileName, indices=self.indices)
         self.corners = self.dataManager.getTransformedCoverageCorners(self.dbFileName)
         self.TCentre = np_mean(self.corners, axis=0)
+        self.transRadius = np_norm(self.corners[0] - self.TCentre)
         
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING

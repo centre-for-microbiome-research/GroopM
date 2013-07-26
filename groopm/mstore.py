@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.3.4"
+__version__ = "0.3.5"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Release"
@@ -261,7 +261,7 @@ class GMDataManager:
                     con_names = con_names[good_indices]
                     con_lengths = con_lengths[good_indices]
                     con_gcs = con_gcs[good_indices]
-                    cov_profiles = cov_profiles[good_indices]
+                    cov_profiles = cov_profiles[good_indices] 
 
                 # these will need to be tupalized regardless...
                 con_ksigs = [tuple(i) for i in con_ksigs[good_indices]]
@@ -324,7 +324,8 @@ class GMDataManager:
                 
                 CT.transformCP()
                 # these will need to be tupalized regardless...
-                cov_profiles = [tuple(i) for i in cov_profiles]#[good_indices]]
+                cov_profiles = [tuple(i) for i in cov_profiles]
+                
                 CT.transformedCP = [tuple(i) for i in CT.transformedCP]
                 CT.corners = [tuple(i) for i in CT.corners]
                 # now CT stores the transformed coverages and other important information
