@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.6"
+__version__ = "0.2.7"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Release"
@@ -129,9 +129,7 @@ class GroopMOptionsParser():
             else:
                 gf=options.graphfile
             CE.makeCores(coreCut=options.cutoff,
-                         gf=gf,                          
-                         kmerThreshold=options.kmer,
-                         coverageThreshold=options.coverage)
+                         gf=gf)
 
         elif(options.subparser_name == 'refine'):
             # refine bin cores

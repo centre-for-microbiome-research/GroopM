@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Release"
@@ -360,7 +360,7 @@ class Bin:
                 PM,
                 GT,
                 im2RowIndices,
-                inclusivity=2):
+                inclusivity=1):
         """Recruit more contigs into the bin, used during coring only"""
         num_recruited = 0
 
