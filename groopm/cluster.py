@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.5"
+__version__ = "0.2.6"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
@@ -292,13 +292,6 @@ class ClusterEngine:
                     for row_indices in partitions:
                         self.restrictRowIndices(row_indices)
 
-                # try to merge these guys here...
-#                 if num_bids_made > 1:
-#                     self.RE.mergeSimilarBins(bids=bids_made,
-#                                         loose=2.,
-#                                         verbose=False,
-#                                         silent=True)
-
                 # do some post processing
                 for bid in bids_made:
                     try:
@@ -380,8 +373,8 @@ class ClusterEngine:
         dist_from_centre = euclidean(self.PM.TCentre[:2], np_array([max_x,max_y]))
         z_span = (z_span_max - z_span_min)/self.PM.transRadius*dist_from_centre + z_span_min
 
-        (x_lower, x_upper) = self.makeCoordRanges(max_x, 1.5*self.span)
-        (y_lower, y_upper) = self.makeCoordRanges(max_y, 1.5*self.span)
+        (x_lower, x_upper) = self.makeCoordRanges(max_x, self.span)
+        (y_lower, y_upper) = self.makeCoordRanges(max_y, self.span)
         (z_lower, z_upper) = self.makeCoordRanges(max_z, z_span)
 
         for row_index in super_putative_row_indices:
@@ -429,7 +422,8 @@ class ClusterEngine:
         
         # make a copy of the data we'll be munging
         k_dat = np_copy(self.PM.kmerPCs[rowIndices])
-        c_dat = np_copy(self.PM.covProfiles[rowIndices])
+        #c_dat = np_copy(self.PM.covProfiles[rowIndices])
+        c_dat = np_copy(self.PM.transformedCP[rowIndices])
         l_dat = np_copy(self.PM.contigLengths[rowIndices])
         if self.debugPlots >= 2:
             n_dat = np_copy(self.PM.contigNames[rowIndices])
