@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.3.6"
+__version__ = "0.3.6.1"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Release"
@@ -313,7 +313,7 @@ class GMDataManager:
                     bam_desc = getBamDescriptor(bf, i + 1)
                     stoitColNames.append(bam_desc)
 
-                stoitColNames = np_array(stoitColNames)
+                stoitColNames = np.array(stoitColNames)
                 
                 # determine normalised cov profiles and shuffle the BAMs
                 norm_coverages = np.array([np.linalg.norm(cov_profiles[i]) for i in range(num_cons)])
