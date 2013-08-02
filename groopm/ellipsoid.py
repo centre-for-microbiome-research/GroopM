@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -148,6 +148,7 @@ class EllipsoidTool:
                     return (None, center, radii, rotation)
                 else:
                     return (center, radii, rotation)
+            
             # Get the values we'd like to return
             try:
                 U, s, rotation = linalg.svd(A)

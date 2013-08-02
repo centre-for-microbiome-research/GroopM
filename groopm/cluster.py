@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.6"
+__version__ = "0.2.7"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
@@ -1523,7 +1523,7 @@ class HoughPartitioner:
             accumulator /= np_max(accumulator)
             accumulator *= 255
 
-            #imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
+            imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
             print "%d_%s_%s_%d.png" % (self.hc, imgTag, side, level)
 
         # see which points lie on the line
