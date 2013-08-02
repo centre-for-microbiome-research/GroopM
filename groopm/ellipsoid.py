@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -149,14 +149,18 @@ class EllipsoidTool:
                 else:
                     return (center, radii, rotation)
 
-        # Get the values we'd like to return
-        try:
-            U, s, rotation = linalg.svd(A)
-            radii = 1.0/np.sqrt(s)
-        except np.linalg.linalg.LinAlgError:
+            # Get the values we'd like to return
+            try:
+                U, s, rotation = linalg.svd(A)
+                radii = 1.0/np.sqrt(s)
+            except np.linalg.linalg.LinAlgError:
+                # hack -> better than crashing...
+                rotation = np.eye(3)
+                radii = np.ones(3)
+        else:
             # hack -> better than crashing...
             rotation = np.eye(3)
-            radii = np.ones(3)
+            radii = np.ones(3)            
         if retA:
             return (A, center, radii, rotation)
         else:
