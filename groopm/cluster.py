@@ -197,8 +197,8 @@ class ClusterEngine:
         print "    Loading transformed data"
         self.PM.transformCP(self.timer)
         # plot the transformed space (if we've been asked to...)
-        if(self.debugPlots >= 3):
-            self.PM.renderTransCPData()
+        #if(self.debugPlots >= 3):
+        #    self.PM.renderTransCPData()
 
         # now we can make this guy
         self.TSpan = np_mean([np_norm(self.PM.corners[i] - self.PM.TCentre) for i in range(self.PM.numStoits)])
@@ -1523,7 +1523,8 @@ class HoughPartitioner:
             accumulator /= np_max(accumulator)
             accumulator *= 255
 
-            imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
+            #imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
+            print "%d_%s_%s_%d.png" % (self.hc, imgTag, side, level)
 
         # see which points lie on the line
         # we need to protect against the data line crossing

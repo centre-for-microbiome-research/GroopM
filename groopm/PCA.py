@@ -62,10 +62,17 @@ See also:
 """
 
 class PCA:
-    def __init__( self, A, fraction=0.80 ):
+    def __init__( self, A, fraction=0.80):
         assert 0 <= fraction <= 1
             # A = U . diag(d) . Vt, O( m n^2 ), lapack_lite --
         self.U, self.d, self.Vt = np.linalg.svd( A, full_matrices=False )
+        # different versions of numpy can return U and Vt such that
+        # U * Vt is constant but the signs may be switched. Gross...
+        # numpy, you owe me one day buster!
+        # force a check here...
+        if self.Vt[0,0] < 0:
+            self.Vt *= -1.
+            self.U *= -1. 
         assert np.all( self.d[:-1] >= self.d[1:] )  # sorted
         self.eigen = self.d**2
         self.sumvariance = np.cumsum(self.eigen)
