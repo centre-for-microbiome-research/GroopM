@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.5"
+__version__ = "0.2.6"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
@@ -111,6 +111,7 @@ class RefineEngine:
                  transform=True,
                  getUnbinned=False,
                  loadContigNames=False,
+                 cutOff=0,
                  bids=[]):
         
         # worker classes
@@ -121,6 +122,7 @@ class RefineEngine:
                              bids=bids,
                              makeBins=True,
                              silent=False,
+                             cutOff=cutOff,
                              loadContigNames=loadContigNames,
                              getUnbinned=getUnbinned,
                              transform=transform)
