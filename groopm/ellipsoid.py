@@ -186,8 +186,11 @@ class EllipsoidTool:
         # degenerate cases where B is only a single point or an otherwise
         # degenerate ellipse.
         p_c = cB - cA
-        if np.dot(p_c.T, np.dot(A, p_c)) <= 1:
-            return True
+        try:
+            if np.dot(p_c.T, np.dot(A, p_c)) <= 1:
+                return True
+        except TypeError:
+                return False
 
         if A == None or B == None: # degenerate ellipse that can't be processed
             return False

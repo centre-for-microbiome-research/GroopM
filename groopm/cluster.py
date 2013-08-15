@@ -537,9 +537,15 @@ class ClusterEngine:
                 neighbour_dist = k_dist_matrix[index][neigbhours] + 0.1 * k_radius
                 
                 # move point towards neighbours using inverse distance weighting
-                inv_dist = 1.0 / neighbour_dist
+                try:
+                    inv_dist = 1.0 / neighbour_dist
+                except FloatingPointError:
+                    inv_dist = 0.
                 sum_inv_dist = np_sum(inv_dist)
-                neighbour_weights = inv_dist / sum_inv_dist
+                try:
+                    neighbour_weights = inv_dist / sum_inv_dist
+                except FloatingPointError:
+                    neighbour_weights = 0.
                 new_k_dat[index] = (1-k_move_perc) * k_dat[index] + k_move_perc * np_sum( (k_dat[neigbhours].T * neighbour_weights).T, axis = 0 )
                 
                 k_deltas.append(cityblock(k_dat[index], new_k_dat[index]))
