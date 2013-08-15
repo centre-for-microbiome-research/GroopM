@@ -253,7 +253,8 @@ class GroopMOptionsParser():
                                          bids=bids,
                                          transform=transform,
                                          cmstring=options.cm,
-                                         ignoreContigLengths=options.points)
+                                         ignoreContigLengths=options.points,
+                                         labels=options.labels)
             if(options.mode == 'binpoints'):
                 BE.plotPoints(timer)
             elif(options.mode == 'binids'):

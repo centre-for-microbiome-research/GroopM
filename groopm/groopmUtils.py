@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.5"
+__version__ = "0.2.6"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -178,7 +178,8 @@ class BinExplorer:
                  bids=[],
                  transform=True,
                  cmstring="HSV",
-                 ignoreContigLengths=False):
+                 ignoreContigLengths=False,
+                 labels=""):
         
         self.ignoreContigLengths = ignoreContigLengths 
         self.transform = transform
@@ -190,6 +191,9 @@ class BinExplorer:
             self.bids = []
         else:
             self.bids = bids
+
+        self.labels = labels
+        self.LP = None 
 
     def plotHighlights(self, timer, bids, elevation, azimuth, file, filetype, dpi, alpha, invert=False, show=False):
         """Plot a high def image suitable for publication"""
@@ -343,21 +347,11 @@ class BinExplorer:
             if self.bids == []:
                 self.bids = self.BM.getBids()
 
-            # work out colors per bin
-            S = 1.0
-            V = 1.0
-            num_bins = len(self.bids)
-            offset = 0.5
-            step = 1. /(num_bins-1 + 2. * offset)
-            Hs = np.array([step*(i + offset) for i in range(num_bins)])
-            cols = [htr(H, S, V) for H in Hs]
-            np.random.shuffle(cols)
-            unbinned_col = (0.2,0.2,0.2)
-            bin_cols = {0:(0.2,0.2,0.2)}    # unassigned color
-            i = 0
-            for bid in self.bids:
-                bin_cols[bid] = cols[i]
-                i += 1
+            self.LP = LabelParser(self.BM.getBids())
+            if self.labels != "":
+                self.LP.parseLabels(self.labels)
+            else:
+                self.LP.randomizeCols()
 
             # for binned contigs
             b_disp_vals = []
@@ -373,12 +367,12 @@ class BinExplorer:
             # assign a color to each contig
             for row_index in np.arange(len(self.PM.indices)):
                 if self.PM.binIds[row_index] == 0:
-                    ub_disp_cols.append(unbinned_col)
+                    ub_disp_cols.append(self.LP.unbinnedCol)
                     ub_disp_vals.append(self.PM.transformedCP[row_index])
                     ub_disp_lens.append(self.PM.contigLengths[row_index])
                     ub_num += 1
                 else:
-                    b_disp_cols.append(bin_cols[self.PM.binIds[row_index]])
+                    b_disp_cols.append(self.LP.bin2Cols[self.PM.binIds[row_index]])
                     b_disp_vals.append(self.PM.transformedCP[row_index])
                     b_disp_lens.append(self.PM.contigLengths[row_index])
                     b_num += 1
@@ -431,11 +425,11 @@ class BinExplorer:
             (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bin_ids) = self.BM.findCoreCentres(processChimeric=True)
             outer_index = 0
             for bid in self.bids:
-                bbox_props = dict(boxstyle="round4", fc="w", ec=bin_cols[bid], alpha=0.6)
+                bbox_props = dict(boxstyle="round4", fc="w", ec=self.LP.bin2Cols[bid], alpha=0.6)
                 ax1.text(bin_centroid_points[outer_index, 0],
                          bin_centroid_points[outer_index, 1],
                          bin_centroid_points[outer_index, 2],
-                         str(int(bid)),
+                         self.LP.bin2Str[bid],
                          color='black',
                          size='large',
                          ha="center", va="center", bbox=bbox_props
@@ -449,34 +443,6 @@ class BinExplorer:
             ax1.set_zticks([])
             
             plt.title(self.PM.dbFileName)
-            
-            if False:
-                #plot bin keys
-                ax2 = plt.subplot(gs[1])
-                
-                # work out text placement
-                bin_rows = int(np.sqrt(num_bins)) + 1
-                bin_columns = int(float(num_bins)/float(bin_rows)) + 2
-                bin_rows += 1 
-                ax2.set_xlim(0, bin_columns)
-                ax2.set_ylim(0, bin_rows)
-                bid_coords = zip(np.array([[i]*bin_columns for i in range(bin_rows)]).flatten(), range(bin_columns) * bin_rows)
-    
-                outer_index = 0
-                
-                for bid in self.bids:
-                    bbox_props = dict(boxstyle="round", fc=bin_cols[bid])
-                    ax2.text(bid_coords[outer_index][0] +1,
-                             bid_coords[outer_index][1] +1,
-                             str(int(bid)),
-                             ha="center", va="center",
-                             bbox=bbox_props,
-                             size='medium' 
-                             )
-                    outer_index += 1
-    
-                plt.xticks([], [])
-                plt.yticks([], [])
 
             plt.show()
             plt.close(fig)
@@ -684,3 +650,87 @@ class BinExplorer:
 ###############################################################################
 ###############################################################################
 ###############################################################################
+
+class LabelParser:
+
+    def __init__(self, binIds):
+        self.unbinnedCol = (0.2,0.2,0.2)        # unassigned color
+        self.bin2Cols = {0:self.unbinnedCol}    # map of bin ID to plotting colors
+        self.bin2Str = {}                       # map of bin ID to plot labels
+        self.loaded = {}
+        for bid in binIds:
+            self.bin2Str[bid] = str(bid)        # lables are easy!
+            self.loaded[bid] = False
+
+        # color conversions             
+        self._NUMERALS = '0123456789abcdefABCDEF'
+        self._HEXDEC = {}
+        for v in (x+y for x in self._NUMERALS for y in self._NUMERALS):
+            self._HEXDEC[v] = int(v, 16)     
+
+    def rgb(self, triplet):
+        """Hex triplet to rgb"""
+        triplet = triplet.replace("#", "")
+        return (float(self._HEXDEC[triplet[0:2]])/255.,
+                float(self._HEXDEC[triplet[2:4]])/255.,
+                float(self._HEXDEC[triplet[4:6]])/255.)
+            
+    def parseLabels(self, labelFileName):
+        """parse labels file
+        
+        each line of the label file looks like:
+        
+        binID<tab>[label]<tab>[color]
+        """
+        cols_given = False
+        try:
+            with open(labelFileName, "r") as l_fh:
+                for line in l_fh:
+                    fields = line.rstrip().split("\t")
+                    bid = int(fields[0])
+                    if fields[1] != '':
+                        self.bin2Str[bid] = fields[1]
+                    try:
+                        if fields[2] != '':
+                            cols_given = True
+                            self.bin2Cols[bid] = self.rgb(fields[2])
+                    except IndexError: pass
+                    self.loaded[bid] = True
+        except:
+            print "ERROR parsing labels file: %s" % labelFileName
+            raise
+        all_good = True
+        for bid in self.loaded.keys():
+            if self.loaded[bid] == False:
+                print "Error: No information in labels for bid: %d" % bid
+                all_good = False
+        if all_good != True:
+            print "ABORTING"
+            sys.exit(2)
+            
+        # check to see if we've assigned colors, otherwise do it randomly
+        if not cols_given:
+            self.randomizeCols()
+            
+    def randomizeCols(self):
+        """choose colors randomly"""
+        S = 1.0
+        V = 1.0
+        num_bins = len(self.bin2Str)
+        offset = 0.5
+        step = 1. /(num_bins-1 + 2. * offset)
+        Hs = np.array([step*(i + offset) for i in range(num_bins)])
+        cols = [htr(H, S, V) for H in Hs]
+        np.random.shuffle(cols)
+        i = 0
+        for bid in self.bin2Str.keys():
+            self.bin2Cols[bid] = cols[i]
+            i += 1
+        
+            
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
