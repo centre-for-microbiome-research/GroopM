@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.6"
+__version__ = "0.2.7"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -179,8 +179,8 @@ class BinExplorer:
                  transform=True,
                  cmstring="HSV",
                  ignoreContigLengths=False,
-                 labels=""):
-        
+                 binLabelsFile = "",
+                 contigColorsFile = ""):        
         self.ignoreContigLengths = ignoreContigLengths 
         self.transform = transform
         self.cmString = cmstring
@@ -192,53 +192,159 @@ class BinExplorer:
         else:
             self.bids = bids
 
-        self.labels = labels
+        # labels and colurs
+        self.binLabelsFile = binLabelsFile
+        self.contigColorsFile = contigColorsFile        
         self.LP = None 
 
-    def plotHighlights(self, timer, bids, elevation, azimuth, file, filetype, dpi, alpha, invert=False, show=False):
+    def plotHighlights(self,
+                       timer,
+                       elevation,
+                       azimuth,
+                       file,
+                       filetype,
+                       dpi,
+                       show=False,
+                       coreCut=1000):
         """Plot a high def image suitable for publication"""
         self.BM.loadBins(timer,
                          makeBins=True,
                          silent=False,
                          loadContigLengths=True,
-                         loadContigNames=False,
+                         loadContigNames=True,
                          transform = self.transform)
         if len(self.BM.bins) == 0:
             print "Sorry, no bins to plot"
         else:
             print "Plotting image"
-            self.BM.setColorMap(self.cmString)
+            if self.bids == []:
+                self.bids = self.BM.getBids()
+
+            # bids as labels and randomise colours
+            self.LP = LabelParser(self.BM.getBids())
+            self.LP.parseBinLabels(self.binLabelsFile)
+            if self.contigColorsFile == "":
+                self.LP.randomizeCols()
+            else:
+                self.LP.parseContigColorLabels(self.contigColorsFile, self.PM)
+
+            foreground_disp_vals = []
+            foreground_disp_cols = []
+            foreground_disp_lens = []
+            foreground_num = 0
+            background_disp_vals = []
+            background_disp_cols = []
+            background_disp_lens = []
+            background_num = 0
+
+                
+            # assign a color to each contig
+            for row_index in np.arange(len(self.PM.indices)):
+                # plot only binned contigs here
+                bid = self.PM.binIds[row_index]
+                if bid != 0:
+                    if self.LP.loaded[bid]:
+                        # this is one we want to show
+                        if self.contigColorsFile == "":
+                            # set the contigs to the colour of the bins
+                            foreground_disp_cols.append(self.LP.bin2Cols[bid])
+                        else:
+                            # set the contigs to the user defined colour
+                            foreground_disp_cols.append(self.LP.contig2Cols[row_index])
+                        foreground_disp_vals.append(self.PM.transformedCP[row_index])
+                        foreground_disp_lens.append(self.PM.contigLengths[row_index])
+                        foreground_num += 1
+                    else:
+                        # this is one we want to background
+                        if self.contigColorsFile == "":
+                            # set the contigs to the colour of the bins
+                            background_disp_cols.append(self.LP.unbinnedCol)
+                            background_disp_vals.append(self.PM.transformedCP[row_index])
+                            background_disp_lens.append(self.PM.contigLengths[row_index])
+                            background_num += 1
+                        elif self.LP.contig2Cols[row_index] != self.LP.unbinnedCol:
+                            # set the contigs to the user defined colour, put this in the foreground plot too
+                            foreground_disp_cols.append(self.LP.contig2Cols[row_index])
+                            foreground_disp_vals.append(self.PM.transformedCP[row_index])
+                            foreground_disp_lens.append(self.PM.contigLengths[row_index])
+                            foreground_num += 1
+                        else:
+                            # set the contigs to the colour of the bins
+                            background_disp_cols.append(self.LP.unbinnedCol)
+                            background_disp_vals.append(self.PM.transformedCP[row_index])
+                            background_disp_lens.append(self.PM.contigLengths[row_index])
+                            background_num += 1
+
+            foreground_disp_vals = np.reshape(foreground_disp_vals, (foreground_num, 3))
+            background_disp_vals = np.reshape(background_disp_vals, (background_num, 3))
+            
             fig = plt.figure()
-            bins=[]
-            if bids is not None:
-                for bid in bids:
-                    bins.append(self.BM.getBin(bid))
+            ax1 = plt.subplot(1,1,1, projection='3d')
 
-            if show:
-                file=""
-            elif not file.endswith(filetype):
-                file += "." + filetype
+            if background_num > 0:
+                if self.ignoreContigLengths:
+                    sc = ax1.scatter(background_disp_vals[:,0],
+                                     background_disp_vals[:,1],
+                                     background_disp_vals[:,2],
+                                     edgecolors='none',
+                                     c=background_disp_cols,
+                                     s=10.,
+                                     alpha=self.LP.unbinnedAlpha,
+                                     marker='.')
+                else:
+                    sc = ax1.scatter(background_disp_vals[:,0],
+                                     background_disp_vals[:,1],
+                                     background_disp_vals[:,2],
+                                     edgecolors='none',
+                                     c=background_disp_cols,
+                                     s=np.sqrt(background_disp_lens),
+                                     alpha=self.LP.unbinnedAlpha,
+                                     marker='.')
 
-            self.PM.renderTransCPData(fileName=file,
-                                      elev=elevation,
-                                      azim=azimuth,
-                                      primaryWidth=6,
-                                      dpi=dpi,
-                                      showAxis=True,
-                                      format=filetype,
-                                      fig=fig,
-                                      highlight=bins,
-                                      alpha=alpha
-                                      )
+            
+            if self.ignoreContigLengths:
+                sc = ax1.scatter(foreground_disp_vals[:,0],
+                                 foreground_disp_vals[:,1],
+                                 foreground_disp_vals[:,2],
+                                 edgecolors='none',
+                                 c=foreground_disp_cols,
+                                 s=10.,
+                                 marker='.')
+            else:
+                sc = ax1.scatter(foreground_disp_vals[:,0],
+                                 foreground_disp_vals[:,1],
+                                 foreground_disp_vals[:,2],
+                                 edgecolors='none',
+                                 c=foreground_disp_cols,
+                                 s=np.sqrt(foreground_disp_lens),
+                                 marker='.')
+
+            (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bin_ids) = self.BM.findCoreCentres(processChimeric=True)
+            outer_index = 0
+            for bid in self.bids:
+                if self.LP.bin2Str[bid] != '':
+                    bbox_props = dict(boxstyle="round4", fc="w", ec="none", alpha=0.6)
+                    ax1.text(bin_centroid_points[outer_index, 0],
+                             bin_centroid_points[outer_index, 1],
+                             bin_centroid_points[outer_index, 2],
+                             self.LP.bin2Str[bid],
+                             color='black',
+                             size='large',
+                             ha="center", va="center", bbox=bbox_props
+                             )
+                outer_index += 1
+            ax1.set_xticklabels([])
+            ax1.set_yticklabels([])
+            ax1.set_zticklabels([])
+            ax1.set_xticks([])
+            ax1.set_yticks([])
+            ax1.set_zticks([])
+            
+            plt.title(self.PM.dbFileName)
+
+            plt.show()
+            plt.close(fig)
             del fig
-
-            if invert:
-                # invert the colors
-                from PIL import Image
-                import PIL.ImageOps
-                image = Image.open(file)
-                inverted_image = PIL.ImageOps.invert(image)
-                inverted_image.save(file)
 
     def plotFlyOver(self, timer, fps=10.0, totalTime=120.0):
         """Plot a flyover of the data with bins being removed"""
@@ -321,7 +427,8 @@ class BinExplorer:
                              makeBins=True,
                              silent=False,
                              bids=self.bids,
-                             transform=self.transform)
+                             transform=self.transform,
+                             cutOff=coreCut)
             if len(self.BM.bins) == 0:
                 print "Sorry, no bins to plot"
             else:
@@ -347,11 +454,9 @@ class BinExplorer:
             if self.bids == []:
                 self.bids = self.BM.getBids()
 
-            self.LP = LabelParser(self.BM.getBids())
-            if self.labels != "":
-                self.LP.parseLabels(self.labels)
-            else:
-                self.LP.randomizeCols()
+            # bids as labels and randomise colours
+            self.LP = LabelParser(self.BM.getBids(), setBids=True)
+            self.LP.randomizeCols()
 
             # for binned contigs
             b_disp_vals = []
@@ -379,9 +484,6 @@ class BinExplorer:
 
             b_disp_vals = np.reshape(b_disp_vals, (b_num, 3))
             fig = plt.figure()
-            #import matplotlib.gridspec as gridspec
-            #gs = gridspec.GridSpec(2,1,height_ratios=[4,1])
-            #ax1 = plt.subplot(gs[0], projection='3d')
             ax1 = plt.subplot(1,1,1, projection='3d')
             
             if ub_num != 0:
@@ -394,7 +496,7 @@ class BinExplorer:
                                      c=ub_disp_cols,
                                      s=10.,
                                      marker='.',
-                                     alpha=0.35)
+                                     alpha=self.LP.unbinnedAlpha)
                 else:
                     sc = ax1.scatter(ub_disp_vals[:,0],
                                      ub_disp_vals[:,1],
@@ -403,7 +505,7 @@ class BinExplorer:
                                      c=ub_disp_cols,
                                      s=np.sqrt(ub_disp_lens),
                                      marker='.',
-                                     alpha=0.35)
+                                     alpha=self.LP.unbinnedAlpha)
 
             if self.ignoreContigLengths:
                 sc = ax1.scatter(b_disp_vals[:,0],
@@ -425,15 +527,16 @@ class BinExplorer:
             (bin_centroid_points, bin_centroid_colors, bin_centroid_gc, bin_ids) = self.BM.findCoreCentres(processChimeric=True)
             outer_index = 0
             for bid in self.bids:
-                bbox_props = dict(boxstyle="round4", fc="w", ec=self.LP.bin2Cols[bid], alpha=0.6)
-                ax1.text(bin_centroid_points[outer_index, 0],
-                         bin_centroid_points[outer_index, 1],
-                         bin_centroid_points[outer_index, 2],
-                         self.LP.bin2Str[bid],
-                         color='black',
-                         size='large',
-                         ha="center", va="center", bbox=bbox_props
-                         )
+                if self.LP.bin2Str[bid] != '':
+                    bbox_props = dict(boxstyle="round4", fc="w", ec=self.LP.bin2Cols[bid], alpha=0.6)
+                    ax1.text(bin_centroid_points[outer_index, 0],
+                             bin_centroid_points[outer_index, 1],
+                             bin_centroid_points[outer_index, 2],
+                             self.LP.bin2Str[bid],
+                             color='black',
+                             size='large',
+                             ha="center", va="center", bbox=bbox_props
+                             )
                 outer_index += 1
             ax1.set_xticklabels([])
             ax1.set_yticklabels([])
@@ -448,14 +551,14 @@ class BinExplorer:
             plt.close(fig)
             del fig
 
-
     def plotPoints(self, timer):
         """plot points"""
         self.BM.loadBins(timer,
                          makeBins=True,
                          silent=False,
                          bids=self.bids,
-                         transform=self.transform)
+                         transform=self.transform,
+                         cutOff=coreCut)
         if len(self.BM.bins) == 0:
             print "Sorry, no bins to plot"
         else:
@@ -480,7 +583,8 @@ class BinExplorer:
                          loadContigNames=False,
                          bids=self.bids,
                          silent=False,
-                         transform=self.transform)
+                         transform=self.transform,
+                         cutOff=coreCut)
 
         self.PM2.setColorMap(self.cmString)
         self.BM.setColorMap(self.cmString)
@@ -520,7 +624,8 @@ class BinExplorer:
                          makeBins=True,
                          silent=False,
                          bids=self.bids,
-                         transform=self.transform)
+                         transform=self.transform,
+                         cutOff=coreCut)
         if len(self.BM.bins) == 0:
             print "Sorry, no bins to plot"
         else:
@@ -535,7 +640,8 @@ class BinExplorer:
                          makeBins=True,
                          silent=False,
                          bids=self.bids,
-                         transform=self.transform)
+                         transform=self.transform,
+                         cutOff=coreCut)
         if len(self.BM.bins) == 0:
             print "Sorry, no bins to plot"
         else:
@@ -653,14 +759,21 @@ class BinExplorer:
 
 class LabelParser:
 
-    def __init__(self, binIds):
-        self.unbinnedCol = (0.2,0.2,0.2)        # unassigned color
+    def __init__(self, binIds, setBids=False, unbinnedCol=(0.2,0.2,0.2), unbinnedAlpha=0.2):
+        self.unbinnedCol = unbinnedCol          # unassigned color
+        self.unbinnedAlpha = unbinnedAlpha      # transparency for unbinned mofos
         self.bin2Cols = {0:self.unbinnedCol}    # map of bin ID to plotting colors
+        self.contig2Cols = {}                   # map of rowIndices to contig colours
         self.bin2Str = {}                       # map of bin ID to plot labels
         self.loaded = {}
-        for bid in binIds:
-            self.bin2Str[bid] = str(bid)        # lables are easy!
-            self.loaded[bid] = False
+        if setBids:
+            for bid in binIds:
+                self.bin2Str[bid] = str(bid)        # labels are easy!
+                self.loaded[bid] = True
+        else:
+            for bid in binIds:
+                self.bin2Str[bid] = ''              # labels are easy!
+                self.loaded[bid] = False
 
         # color conversions             
         self._NUMERALS = '0123456789abcdefABCDEF'
@@ -674,43 +787,78 @@ class LabelParser:
         return (float(self._HEXDEC[triplet[0:2]])/255.,
                 float(self._HEXDEC[triplet[2:4]])/255.,
                 float(self._HEXDEC[triplet[4:6]])/255.)
-            
-    def parseLabels(self, labelFileName):
-        """parse labels file
+
+    def parseContigColorLabels(self, labelFileName, PM, nullCol=(0.2,0.2,0.2)):
+        """parse labels file containing bin text
         
         each line of the label file looks like:
         
-        binID<tab>[label]<tab>[color]
+        contigID<tab>#colour
+        
+        If a contig is omitted from this list then it gets coloured nullCol
         """
-        cols_given = False
+        # first we need to make a map of contig name to rowIndex
+        name_2_row_index = {}
+        for row_index in range(len(PM.indices)):
+            name_2_row_index[PM.contigNames[row_index]] = row_index
+
+        # first we parse the file
         try:
             with open(labelFileName, "r") as l_fh:
                 for line in l_fh:
                     fields = line.rstrip().split("\t")
-                    bid = int(fields[0])
-                    if fields[1] != '':
-                        self.bin2Str[bid] = fields[1]
+                    cid = fields[0]
                     try:
-                        if fields[2] != '':
-                            cols_given = True
-                            self.bin2Cols[bid] = self.rgb(fields[2])
-                    except IndexError: pass
-                    self.loaded[bid] = True
+                        self.contig2Cols[name_2_row_index[cid]] = self.rgb(fields[1])
+                    except KeyError:
+                        print "ERROR: contig name %s not recognised" % cid
+        except:
+            print "ERROR: parsing labels file: %s" % labelFileName
+            raise
+
+        # now we parse the reast of the contig names and colour the null colour
+        for row_index in range(len(PM.indices)):
+            if row_index not in self.contig2Cols:
+                self.contig2Cols[row_index] = self.unbinnedCol
+            
+    def parseBinLabels(self, labelFileName):
+        """parse labels file containing bin text
+        
+        each line of the label file looks like:
+        
+        binID<tab>label<tab>[BG]
+        
+        If label is ommitted then the bin gets no label
+        If label is '-', then the bin gets it's number as a label
+        
+        BG is assumed to be False, if it is "BG" the the bin will be
+        placed in the background (ie, alpha set...)
+        
+        lines can be commented out using "#"
+        """
+        try:
+            with open(labelFileName, "r") as l_fh:
+                for line in l_fh:
+                    if line[0] != "#":
+                        fields = line.rstrip().split("\t")
+                        bid = int(fields[0])
+                        loaded_bin = True
+                        # grab the label if any
+                        try:
+                            if fields[1] == '-':
+                                self.bin2Str[bid] = fields[0]
+                            else:
+                                self.bin2Str[bid] = fields[1]
+                            # is backgrounded?
+                            try:
+                                if fields[2] == 'BG':
+                                    loaded_bin = False
+                            except IndexError: pass
+                        except IndexError: pass
+                        self.loaded[bid] = loaded_bin
         except:
             print "ERROR parsing labels file: %s" % labelFileName
             raise
-        all_good = True
-        for bid in self.loaded.keys():
-            if self.loaded[bid] == False:
-                print "Error: No information in labels for bid: %d" % bid
-                all_good = False
-        if all_good != True:
-            print "ABORTING"
-            sys.exit(2)
-            
-        # check to see if we've assigned colors, otherwise do it randomly
-        if not cols_given:
-            self.randomizeCols()
             
     def randomizeCols(self):
         """choose colors randomly"""
@@ -724,10 +872,13 @@ class LabelParser:
         np.random.shuffle(cols)
         i = 0
         for bid in self.bin2Str.keys():
-            self.bin2Cols[bid] = cols[i]
+            if self.loaded[bid]:
+                # assign the color we picked
+                self.bin2Cols[bid] = cols[i]
+            else:
+                # set to the unbinned color
+                self.bin2Cols[bid] = self.unbinnedCol
             i += 1
-        
-            
 
 ###############################################################################
 ###############################################################################

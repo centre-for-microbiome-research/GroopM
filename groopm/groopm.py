@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.8"
+__version__ = "0.2.9"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Release"
@@ -253,8 +253,7 @@ class GroopMOptionsParser():
                                          bids=bids,
                                          transform=transform,
                                          cmstring=options.cm,
-                                         ignoreContigLengths=options.points,
-                                         labels=options.labels)
+                                         ignoreContigLengths=options.points)
             if(options.mode == 'binpoints'):
                 BE.plotPoints(timer)
             elif(options.mode == 'binids'):
@@ -283,17 +282,18 @@ class GroopMOptionsParser():
             print "*******************************************************************************"
             print " [[GroopM %s]] Running in highlighter mode..." % self.GMVersion
             print "*******************************************************************************"
-            BE = groopmUtils.BinExplorer(options.dbname, bids=[])
+            BE = groopmUtils.BinExplorer(options.dbname,
+                                         binLabelsFile = options.binlabels,
+                                         contigColorsFile = options.contigcolors)
             BE.plotHighlights(timer,
-                              options.bids,
                               options.elevation,
                               options.azimuth,
                               options.file,
                               options.filetype,
                               options.dpi,
-                              options.alpha,
-                              options.invert,
-                              options.show)
+                              show=options.show,
+                              coreCut=options.cutoff
+                              )
 
         elif(options.subparser_name == 'print'):
             BM = binManager.BinManager(dbFileName=options.dbname)
