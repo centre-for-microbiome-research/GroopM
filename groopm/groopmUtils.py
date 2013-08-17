@@ -340,9 +340,15 @@ class BinExplorer:
             ax1.set_yticks([])
             ax1.set_zticks([])
             
-            plt.title(self.PM.dbFileName)
+            if show:
+                plt.show()
+            elif not file.endswith(filetype):
+                file += "." + filetype
 
-            plt.show()
+                ax1.azim = azimuth
+                ax1.elev = elevation
+                plt.savefig(file,dpi=dpi,format=filetype)
+
             plt.close(fig)
             del fig
 

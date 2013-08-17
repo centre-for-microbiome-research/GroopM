@@ -284,7 +284,8 @@ class GroopMOptionsParser():
             print "*******************************************************************************"
             BE = groopmUtils.BinExplorer(options.dbname,
                                          binLabelsFile = options.binlabels,
-                                         contigColorsFile = options.contigcolors)
+                                         contigColorsFile = options.contigcolors,
+                                         ignoreContigLengths=options.points)
             BE.plotHighlights(timer,
                               options.elevation,
                               options.azimuth,
