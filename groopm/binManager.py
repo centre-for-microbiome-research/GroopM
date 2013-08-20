@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.6"
+__version__ = "0.2.7"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -144,10 +144,15 @@ class BinManager:
         """Load data and make bin objects"""
         # build the condition
         
-        if bids == []:
-            condition = "((length >= %d) & (bid != 0))" % cutOff
+        if getUnbinned:
+            # get everything
+            condition = "(length >= %d) " % cutOff
         else:
-            condition = "((length >= %d) & " % cutOff + " | ".join(["(bid == %d)"%bid for bid in bids])+")"
+            # make sense of bin information
+            if bids == []:
+                condition = "((length >= %d) & (bid != 0))" % cutOff
+            else:
+                condition = "((length >= %d) & " % cutOff + " | ".join(["(bid == %d)"%bid for bid in bids])+")"
 
         # if we're going to make bins then we'll need kmer sigs
         if(makeBins):
@@ -519,7 +524,15 @@ class BinManager:
                        verbose=verbose,
                        printInstructions=False,
                        use_elipses=use_elipses)
-
+        elif(user_option == 'L'):
+            self.split(bid,
+                       n,
+                       mode='len',
+                       auto=auto,
+                       saveBins=saveBins,
+                       verbose=verbose,
+                       printInstructions=False,
+                       use_elipses=use_elipses)
         elif(user_option == 'P'):
             not_got_parts = True
             parts = 0
@@ -550,6 +563,8 @@ class BinManager:
             obs = np_array([self.PM.kmerNormPC1[i] for i in self.getBin(bid).rowIndices])
         elif(mode=='cov'):
             obs = np_array([self.PM.covProfiles[i] for i in self.getBin(bid).rowIndices])
+        elif(mode=='len'):
+            obs = np_array([self.PM.contigLengths[i] for i in self.getBin(bid).rowIndices])
 
         # do the clustering
         try:
@@ -894,7 +909,7 @@ class BinManager:
     def promptOnSplit(self, parts, mode, minimal=False):
         """Check that the user is ok with this split"""
         input_not_ok = True
-        valid_responses = ['Y','N','C','K','P']
+        valid_responses = ['Y','N','C','K','L','P']
         vrs = ",".join([str.lower(str(x)) for x in valid_responses])
         while(input_not_ok):
             if(minimal):
@@ -905,10 +920,11 @@ class BinManager:
                                    " You have been shown a 3d plot of the bin after splitting.\n" \
                                    " Continue only if you're sure this is what you want to do!\n" \
                                    " y = yes, n = no, c = redo but use coverage profile,\n" \
-                                   " k = redo but use kmer profile, p = choose new number of parts\n" \
+                                   " k = redo but use kmer profile, l = redo but use length profile,\n" \
+                                   " p = choose new number of parts\n" \
                                    " Split? ("+vrs+") : ")
             if(option.upper() in valid_responses):
-                if(option.upper() == 'K' and mode.upper() == 'KMER' or option.upper() == 'C' and mode.upper() == 'COV'):
+                if(option.upper() == 'K' and mode.upper() == 'KMER' or option.upper() == 'C' and mode.upper() == 'COV' or option.upper() == 'L' and mode.upper() == 'LEN'):
                     print "Error, you are already using that profile to split!"
                     minimal=True
                 else:
