@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.6"
+__version__ = "0.2.7"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
@@ -1504,7 +1504,7 @@ class RefineEngine:
     def getEvenlySpacedPtsZ(self, row_indices, sample_size):
         # select samples evenly along Z-axis of coverage space
         # (this makes the program deterministic while getting a good 'random' spread of points)
-        sorted_indices = np_argsort(self.PM.covProfiles[row_indices, 2])
+        sorted_indices = np_argsort(self.PM.transformedCP[row_indices, -1])
         step_size = float(len(row_indices)) / sample_size
         si = []
         index = 0.0
