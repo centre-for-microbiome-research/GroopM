@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.5"
+__version__ = "0.2.6"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -160,7 +160,7 @@ class ProfileManager:
 
     def loadData(self,
                  timer,
-                 condition="",              # condition as set by another function
+                 condition,                 # condition as set by another function
                  bids=[],                   # if this is set then only load those contigs with these bin ids
                  verbose=True,              # many to some output messages
                  silent=False,              # some to no output messages
@@ -181,12 +181,6 @@ class ProfileManager:
         if verbose:
             print "Loading data from:", self.dbFileName
 
-        # check to see if we need to override the condition
-        if(len(bids) != 0):
-            condition = "((bid == "+str(bids[0])+")"
-            for index in range (1,len(bids)):
-                condition += " | (bid == "+str(bids[index])+")"
-            condition += ")"
         try:
             self.numStoits = self.getNumStoits()
             self.condition = condition
@@ -589,7 +583,7 @@ class ProfileManager:
 
     def plotUnbinned(self, timer, coreCut, transform=True, ignoreContigLengths=False):
         """Plot all contigs over a certain length which are unbinned"""
-        self.loadData(timer, condition="((length >= "+str(coreCut)+") & (bid == 0))")
+        self.loadData(timer, "((length >= "+str(coreCut)+") & (bid == 0))")
 
         if transform:
             self.transformCP(timer)
@@ -619,7 +613,7 @@ class ProfileManager:
 
     def plotAll(self, timer, coreCut, transform=True, ignoreContigLengths=False):
         """Plot all contigs over a certain length which are unbinned"""
-        self.loadData(timer, condition="((length >= "+str(coreCut)+"))")
+        self.loadData(timer, "((length >= "+str(coreCut)+"))")
         if transform:
             self.transformCP(timer)
         else:

@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.5"
+__version__ = "0.2.6"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -142,15 +142,12 @@ class BinManager:
                  cutOff=0,
                  transform=True):
         """Load data and make bin objects"""
-        # fix the condition
-        condition=""
-        if(cutOff != 0):
-            condition="length >= %d" % cutOff
-        elif(len(bids) == 0):
-            if getUnbinned:
-                condition="length >= 0"
-            else:
-                condition='bid != 0'
+        # build the condition
+        
+        if bids == []:
+            condition = "((length >= %d) & (bid != 0))" % cutOff
+        else:
+            condition = "((length >= %d) & " % cutOff + " | ".join(["(bid == %d)"%bid for bid in bids])+")"
 
         # if we're going to make bins then we'll need kmer sigs
         if(makeBins):
@@ -158,8 +155,8 @@ class BinManager:
             loadCovProfiles=True
 
         self.PM.loadData(timer,
+                         condition,
                          bids=bids,
-                         condition=condition,
                          silent=silent,
                          loadCovProfiles=loadCovProfiles,
                          loadKmerPCs=loadKmerPCs,

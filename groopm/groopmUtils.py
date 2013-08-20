@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.7"
+__version__ = "0.2.9"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -95,7 +95,7 @@ class GMExtractor:
     def extractContigs(self, timer, fasta=[], cutoff=0):
         """Extract contigs and write to file"""
         self.BM = binManager.BinManager(dbFileName=self.dbFileName)   # bins
-        self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
+        self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids, cutOff=cutoff)
         self.PM = self.BM.PM
 
         # load all the contigs which have been assigned to bins
@@ -212,7 +212,8 @@ class BinExplorer:
                          silent=False,
                          loadContigLengths=True,
                          loadContigNames=True,
-                         transform = self.transform)
+                         transform = self.transform,
+                         cutOff=coreCut)
         if len(self.BM.bins) == 0:
             print "Sorry, no bins to plot"
         else:
@@ -576,7 +577,7 @@ class BinExplorer:
         """Plot cores side by side with their contigs"""
         self.PM2 = binManager.ProfileManager(dbFileName=self.BM.PM.dbFileName)
         self.PM2.loadData(timer,
-                          condition="length >= "+str(coreCut),
+                          "length >= "+str(coreCut),
                           bids=self.bids,
                           loadContigNames=False,
                           loadContigLengths=True,
