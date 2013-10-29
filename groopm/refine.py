@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.7"
+__version__ = "0.2.8"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
@@ -113,7 +113,7 @@ class RefineEngine:
                  loadContigNames=False,
                  cutOff=0,
                  bids=[]):
-        
+
         # worker classes
         if BM is None:
             # make our own ones from scratch
@@ -569,7 +569,7 @@ class RefineEngine:
 
         # identify merging groups and then merge them
         mergers = self.findMergeGroups(kCutMedian, kCutStd, cCutMedian, cCutStd, verbose=verbose)
-        
+
         num_bins_removed = 0
         for merge in mergers:
             bins_removed = self.combineMergers(merge, kCutMedian, kCutStd, cCutMedian, cCutStd, graph=graph)
@@ -621,8 +621,8 @@ class RefineEngine:
             kmer_tdm.append(bin.kMedian)
 
             # work out the volume of the minimum bounding coverage ellipsoid and kmer ellipse
-            (bin_c_ellipsoids[bid], bin_c_ellipsoid_volumes[bid]) = bin.getBoundingCEllipsoidVol(self.PM.transformedCP, 
-                                                                                                 ET=self.ET, 
+            (bin_c_ellipsoids[bid], bin_c_ellipsoid_volumes[bid]) = bin.getBoundingCEllipsoidVol(self.PM.transformedCP,
+                                                                                                 ET=self.ET,
                                                                                                  retA=True)
 
             BP = self.PM.kmerPCs[bin.rowIndices,0:3]
@@ -639,7 +639,7 @@ class RefineEngine:
             # we will not process any pair twice.
             # we also wish to avoid checking if a bin will merge with itself
             processed_pairs[self.BM.makeBidKey(bid, bid)] = True
-            
+
 #-----
 # ALL Vs ALL
 
@@ -694,32 +694,32 @@ class RefineEngine:
                 processed_pairs[seen_key] = True
 
                 query_bin = self.BM.bins[query_bid]
-                
+
 #-----
 # K and C SPACE SIMILARITY CHECK
                 # If the bins are highly similar in their coverage and kmer distances
-                # compared to other core bins than just merge them now    
+                # compared to other core bins than just merge them now
                 k_dist_bw = self.kDistBetweenBins(base_bin, query_bin)
                 c_dist_bw = self.cDistBetweenBins(base_bin, query_bin)
 
                 if verbose:
                     print 'k_dist_bw, c_dist_bw'
                     print k_dist_bw, c_dist_bw
-                    print '---------------------'    
-                    
-                 
+                    print '---------------------'
+
+
                 if k_dist_bw < kCutMedian and c_dist_bw < cCutMedian:
                     if verbose:
                         print 'MERGED'
-                        print '---------------------'        
-                          
+                        print '---------------------'
+
                     if merged_query_bid < merged_base_bid:
                         merged_bins[merged_base_bid] = merged_query_bid
                         break # we just nuked the base bid
                     else:
                         merged_bins[merged_query_bid] = merged_base_bid
                         continue
-                
+
 #-----
 # CONTIG LENGTH SANITY
                 # Test the smaller bin against the larger
@@ -828,7 +828,7 @@ class RefineEngine:
                 merge_list_id_1 = processed_bids[bid]
             except KeyError:
                 merge_list_id_1 = -1
-                
+
             try:
                 merge_list_id_2 = processed_bids[merging_bid]
             except KeyError:
@@ -849,44 +849,44 @@ class RefineEngine:
                 mergers[merge_list_id_1].append(merging_bid)
 
         return mergers
-    
+
     def combineMergers(self, bidList, kCutMedian, kCutStd, cCutMedian, cCutStd, graph=None):
         """Merge similar bins in the given list"""
         merged_bids = []
-  
+
         while len(bidList) > 1:
             # sort bins by length in bp
             length_and_bid = []
             for bid in bidList:
                 length_and_bid.append([self.BM.getBin(bid).totalBP,bid])
-                
+
             length_and_bid.sort(reverse=True)
             sorted_bid = [x[1] for x in length_and_bid]
-            
+
             # find distance from largest bin to each putative bin fragment
             cur_bid = sorted_bid[0]
-            cur_bin = self.BM.getBin(cur_bid)       
-            
+            cur_bin = self.BM.getBin(cur_bid)
+
             dists = []
             for i in xrange(1, len(sorted_bid)):
-                frag_bid = sorted_bid[i]  
+                frag_bid = sorted_bid[i]
                 frag_bin = self.BM.getBin(frag_bid)
-                
+
                 k_dist_bw = self.kDistBetweenBins(cur_bin, frag_bin)
                 c_dist_bw = self.cDistBetweenBins(cur_bin, frag_bin)
-                
+
                 z_dist = (k_dist_bw - kCutMedian) / kCutStd
                 z_dist += (c_dist_bw - cCutMedian) / cCutStd
-                
+
                 dists.append([z_dist, k_dist_bw, c_dist_bw, frag_bid])
-                
+
             # check if closest fragment should be merged
             dists.sort()
-            
+
             closest_frag_kdist = dists[0][1]
             closest_frag_cdist = dists[0][2]
             closest_frag_bid = dists[0][3]
-            
+
             if closest_frag_kdist < (kCutMedian + 2*kCutStd) and closest_frag_cdist < (cCutMedian + 2*cCutStd):
                 # merge bins
                 merged_bids.append(closest_frag_bid)
@@ -961,7 +961,7 @@ class RefineEngine:
                 except KeyError:
                     c1 = np_mean([self.PM.covProfiles[row_index] for row_index in self.BM.bins[bid1].rowIndices], axis=0)
                     raw_coverage_centroids[bid1] = c1
-                    
+
                 try:
                     c2 = raw_coverage_centroids[bid2]
                 except KeyError:
@@ -1115,11 +1115,12 @@ class RefineEngine:
                                 maxz,
                                 silent=silent,
                                 render=render)
-            #SS.renderWeights("gg")
+            if render:
+                SS.renderWeights("gg")
             print "    --"
 
         if render:
-            #SS.renderWeights("S7")
+            SS.renderWeights("S7")
             pass
 
         return (SS, minz, maxz, som_side)
@@ -1485,22 +1486,22 @@ class RefineEngine:
                     median_k_vals.append(kdist)
 
         return np_median(median_k_vals), np_std(median_k_vals)
-    
+
     def kDist(self, row_indices):
         bin_k_vals = self.PM.kmerPCs[row_indices]
         k_dist = pdist(bin_k_vals, 'cityblock')
         if len(k_dist) > 0:
             return np_median(k_dist)
-        
+
         return None
-    
+
     def kDistMergedBins(self, bin1, bin2):
         merged_indices = np_concatenate((bin1.rowIndices, bin2.rowIndices))
         return self.kDist(merged_indices)
-    
+
     def kDistBetweenBins(self, bin1, bin2):
         return np_median(cdist(self.PM.kmerPCs[bin1.rowIndices], self.PM.kmerPCs[bin2.rowIndices], 'cityblock'))
-    
+
     def getEvenlySpacedPtsZ(self, row_indices, sample_size):
         # select samples evenly along Z-axis of coverage space
         # (this makes the program deterministic while getting a good 'random' spread of points)
@@ -1511,7 +1512,7 @@ class RefineEngine:
         for _i in xrange(0, sample_size):
             si.append(row_indices[sorted_indices[int(index)]])
             index += step_size
-        
+
         return si
 
     def getCCut(self):
@@ -1523,17 +1524,17 @@ class RefineEngine:
                 median_angles.append(cdistance)
 
         return np_median(median_angles), np_std(median_angles)
-    
-    def cDist(self, row_indices): 
+
+    def cDist(self, row_indices):
         max_in_bin = 100
-        
+
         if len(row_indices) > max_in_bin:
             sample_size = max_in_bin
-            si = self.getEvenlySpacedPtsZ(row_indices, max_in_bin)     
+            si = self.getEvenlySpacedPtsZ(row_indices, max_in_bin)
         else:
             sample_size = len(row_indices)
             si = row_indices
-            
+
         # select a few at random
         angles = []
         for i in range(sample_size):
@@ -1548,29 +1549,29 @@ class RefineEngine:
                     pass
 
         return np_median(angles)
-    
+
     def cDistMergedBins(self, bin1, bin2):
         merged_indices = np_concatenate((bin1.rowIndices, bin2.rowIndices))
         return self.cDist(merged_indices)
-    
+
     def cDistBetweenBins(self, bin1, bin2):
         max_in_bin = 100
-        
+
         if len(bin1.rowIndices) > max_in_bin:
-            indices1 = self.getEvenlySpacedPtsZ(bin1.rowIndices, max_in_bin)   
+            indices1 = self.getEvenlySpacedPtsZ(bin1.rowIndices, max_in_bin)
         else:
             indices1 = bin1.rowIndices
-            
+
         if len(bin2.rowIndices) > max_in_bin:
-            indices2 = self.getEvenlySpacedPtsZ(bin2.rowIndices, max_in_bin)   
+            indices2 = self.getEvenlySpacedPtsZ(bin2.rowIndices, max_in_bin)
         else:
             indices2 = bin2.rowIndices
-            
+
         angles = []
         for i in xrange(0, min(len(bin1.rowIndices), max_in_bin)):
             r1 = indices1[i]
-            
-            for j in xrange(0, min(len(bin2.rowIndices), max_in_bin)):    
+
+            for j in xrange(0, min(len(bin2.rowIndices), max_in_bin)):
                 r2 = indices2[j]
                 try:
                     ang = np_arccos(np_dot(self.PM.covProfiles[r1], self.PM.covProfiles[r2]) /
@@ -1578,7 +1579,7 @@ class RefineEngine:
                     angles.append(ang)
                 except FloatingPointError:
                     pass
-                            
+
         return np_median(angles)
 
 #-----------------------------

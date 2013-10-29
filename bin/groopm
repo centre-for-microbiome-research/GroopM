@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.10.8"
+__version__ = "0.2.10.9"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -65,7 +65,7 @@ def printHelp():
                ...::: GroopM :::...
 
        Automagical metagenomic binning FTW!
-  
+
     -----------------------------------------
                  version: %s
     -----------------------------------------
@@ -232,7 +232,7 @@ if __name__ == '__main__':
     bin_plotter.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to plot (None for all)")
     bin_plotter.add_argument('-t', '--tag', default="BIN", help="tag to add to output filename")
     bin_plotter.add_argument('-f', '--folder', default="", help="save plots in folder")
-    bin_plotter.add_argument('-p', '--points', action="store_true", default=False, help="ignore contig lengths when plotting")    
+    bin_plotter.add_argument('-p', '--points', action="store_true", default=False, help="ignore contig lengths when plotting")
     bin_plotter.add_argument('-C', '--cm', default="HSV", help="set colormap [HSV, Accent, Blues, Spectral, Grayscale, Discrete, DiscretePaired]")
 
     #-------------------------------------------------
@@ -241,16 +241,18 @@ if __name__ == '__main__':
                                             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                             help='highlight specific bins')
     bin_highlighter.add_argument('dbname', help="name of the database to open")
-    bin_highlighter.add_argument('binlabels', help="replace bin IDs with user specified labels")
-    bin_highlighter.add_argument('--contigcolors', default="", help="specify contig colors")
+    bin_highlighter.add_argument('-P', '--place', action="store_true", default=False, help="use this to help work out azimuth/elevation parameters")
+    bin_highlighter.add_argument('-L', '--binlabels', default="", help="replace bin IDs with user specified labels (use 'none' to force no labels)")
+    bin_highlighter.add_argument('-C', '--contigcolors', default="", help="specify contig colors")
+    bin_highlighter.add_argument('-r', '--radius', action="store_true", default=False, help="draw placement radius to help with label moving")
     bin_highlighter.add_argument('-c', '--cutoff', type=int, default=1000, help="cutoff contig size")
     bin_highlighter.add_argument('-e', '--elevation', type=float, default=25.0, help="elevation in printed image")
     bin_highlighter.add_argument('-a', '--azimuth', type=float, default=-45.0, help="azimuth in printed image")
     bin_highlighter.add_argument('-f', '--file', default="gmview", help="name of image file to produce")
-    bin_highlighter.add_argument('--filetype', default="jpg", help="Type of file to produce")
-    bin_highlighter.add_argument('--dpi', default=300, help="Image resolution")
+    bin_highlighter.add_argument('-t', '--filetype', default="jpg", help="Type of file to produce")
+    bin_highlighter.add_argument('-d', '--dpi', default=300, help="Image resolution")
     bin_highlighter.add_argument('-s', '--show', action="store_true", default=False, help="load image in viewer only")
-    bin_highlighter.add_argument('-p', '--points', action="store_true", default=False, help="ignore contig lengths when plotting")    
+    bin_highlighter.add_argument('-p', '--points', action="store_true", default=False, help="ignore contig lengths when plotting")
 
     #-------------------------------------------------
     # print bin information

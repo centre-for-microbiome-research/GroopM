@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.9"
+__version__ = "0.2.10"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Release"
@@ -79,21 +79,21 @@ class GroopMOptionsParser():
     def __init__(self, version):
         # set default value for matplotlib
         mpl.rcParams['lines.linewidth'] = 1
-        
+
         mpl.rcParams['xtick.labelsize'] = 8
         mpl.rcParams['ytick.labelsize'] = 8
         mpl.rcParams['legend.fontsize'] = 10
         mpl.rcParams['axes.labelsize'] = 10
         mpl.rcParams['axes.titlesize'] = 12
         mpl.rcParams['axes.linewidth'] = 0.25
-        
+
         mpl.rcParams['axes3d.grid'] = True
-        
+
         mpl.rcParams['savefig.dpi'] = 300
-        
+
         mpl.rcParams['figure.figsize'] = [6.5, 6.5]
         mpl.rcParams['figure.facecolor'] = '1.0'
-        
+
         self.GMVersion = version
 
     def parseOptions(self, options ):
@@ -147,7 +147,7 @@ class GroopMOptionsParser():
                                      transform=transform,
                                      bids=bids,
                                      loadContigNames=True)
-            
+
             if options.plot:
                 pfx="REFINED"
             else:
@@ -292,8 +292,10 @@ class GroopMOptionsParser():
                               options.file,
                               options.filetype,
                               options.dpi,
+                              drawRadius=options.radius,
                               show=options.show,
-                              coreCut=options.cutoff
+                              coreCut=options.cutoff,
+                              testing=options.place
                               )
 
         elif(options.subparser_name == 'print'):
