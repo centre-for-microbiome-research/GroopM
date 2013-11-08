@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.10"
+__version__ = "0.2.10.11"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Release"
@@ -137,8 +137,8 @@ class GroopMOptionsParser():
             print " [[GroopM %s]] Running in core refining mode..." % self.GMVersion
             print "*******************************************************************************"
             bids = []
-            if options.bids is not None:
-                bids = options.bids
+            #if options.bids is not None:
+            #    bids = options.bids
             auto = options.auto
             transform=True^options.no_transform
 
