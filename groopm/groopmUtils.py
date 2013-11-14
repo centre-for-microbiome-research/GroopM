@@ -909,7 +909,7 @@ class Labelled3DPlotter:
         transFigure = self.fig.transFigure.inverted()
         coord1 = transFigure.transform(self.screenAxis.transData.transform([x2d,y2d]))
         coord2 = transFigure.transform(self.screenAxis.transData.transform([xl,yl]))
-        self.fig.lines += self.screenAxis.plot((coord1[0],coord2[0]),(coord1[1],coord2[1]), linestyle='dashed', c="#999999" )
+        self.fig.lines += self.screenAxis.plot((coord1[0],coord2[0]),(coord1[1],coord2[1]), linestyle=':', c="#999999" )
         if label is None:
             label_text = "(%0.1f,%0.1f,%0.1f)" % (px, py, pz)
         else:
