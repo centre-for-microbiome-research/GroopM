@@ -696,6 +696,22 @@ class RefineEngine:
                 query_bin = self.BM.bins[query_bid]
 
 #-----
+# CONTIG LENGTH SANITY
+                # Test the smaller bin against the larger
+                if query_bin.binSize < base_bin.binSize:
+                    lengths_wrong = self.GT.isMaxOutlier(np_median(bin_c_lengths[query_bid]),
+                                                         bin_c_lengths[base_bid]
+                                                         )
+                else:
+                    lengths_wrong = self.GT.isMaxOutlier(np_median(bin_c_lengths[base_bid]),
+                                                         bin_c_lengths[query_bid]
+                                                         )
+                if lengths_wrong:
+                    if verbose:
+                        print "LW"
+                    continue
+
+#-----
 # K and C SPACE SIMILARITY CHECK
                 # If the bins are highly similar in their coverage and kmer distances
                 # compared to other core bins than just merge them now
@@ -720,21 +736,6 @@ class RefineEngine:
                         merged_bins[merged_query_bid] = merged_base_bid
                         continue
 
-#-----
-# CONTIG LENGTH SANITY
-                # Test the smaller bin against the larger
-                if query_bin.binSize < base_bin.binSize:
-                    lengths_wrong = self.GT.isMaxOutlier(np_median(bin_c_lengths[query_bid]),
-                                                         bin_c_lengths[base_bid]
-                                                         )
-                else:
-                    lengths_wrong = self.GT.isMaxOutlier(np_median(bin_c_lengths[base_bid]),
-                                                         bin_c_lengths[query_bid]
-                                                         )
-                if lengths_wrong:
-                    if verbose:
-                        print "LW"
-                    continue
 #-----
 # KMER ELLIPSE OVERLAP
                 if (bin_k_ellipse_areas[base_bid] <= bin_k_ellipse_areas[query_bid]):
@@ -1028,7 +1029,6 @@ class RefineEngine:
                  silent=False,
                  animateFilePrefix=""):
         """Build, train and return a SOM for the given bids"""
-
         # produce the actual training data
         # this is the bin centroid values
         bids = self.BM.getBids()
@@ -1089,7 +1089,7 @@ class RefineEngine:
                 print "    Defining bin regions"
             SS.defineBinRegions(bids, training_data, render=render)
             if render:
-                SS.renderBoundaryMask(plotMaskFile="S5.png")
+                SS.renderBoundaryMask("S5.png")
         if maskBoundaries:
             # mask out regions where we don't like it
             if not silent:
