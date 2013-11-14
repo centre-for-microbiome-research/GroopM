@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.3.6.1"
+__version__ = "0.3.6.2"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Release"
@@ -261,7 +261,7 @@ class GMDataManager:
                     con_names = con_names[good_indices]
                     con_lengths = con_lengths[good_indices]
                     con_gcs = con_gcs[good_indices]
-                    cov_profiles = cov_profiles[good_indices] 
+                    cov_profiles = cov_profiles[good_indices]
 
                 # these will need to be tupalized regardless...
                 con_ksigs = [tuple(i) for i in con_ksigs[good_indices]]
@@ -314,7 +314,7 @@ class GMDataManager:
                     stoitColNames.append(bam_desc)
 
                 stoitColNames = np.array(stoitColNames)
-                
+
                 # determine normalised cov profiles and shuffle the BAMs
                 norm_coverages = np.array([np.linalg.norm(cov_profiles[i]) for i in range(num_cons)])
                 CT = CoverageTransformer(num_cons,
@@ -323,11 +323,11 @@ class GMDataManager:
                                          np.array(pc_ksigs)[:,0],
                                          cov_profiles,
                                          stoitColNames)
-                
+
                 CT.transformCP()
                 # these will need to be tupalized regardless...
                 cov_profiles = [tuple(i) for i in cov_profiles]
-                
+
                 CT.transformedCP = [tuple(i) for i in CT.transformedCP]
                 CT.corners = [tuple(i) for i in CT.corners]
                 # now CT stores the transformed coverages and other important information
@@ -337,7 +337,7 @@ class GMDataManager:
                 # raw coverages
                 db_desc = []
                 for scn in CT.stoitColNames:
-                    db_desc.append((scn, float)) 
+                    db_desc.append((scn, float))
 
                 try:
                     h5file.createTable(profile_group,
@@ -781,19 +781,19 @@ class GMDataManager:
         kPCA_1 = self.getKmerPCAs(dbFileName, indices=indices)[:,0]
         raw_coverages = self.getCoverageProfiles(dbFileName, indices=indices)
         norm_coverages = np.array([np.linalg.norm(raw_coverages[i]) for i in range(len(indices))])
-        
+
         CT = CoverageTransformer(len(indices),
                                  self.getNumStoits(dbFileName),
                                  norm_coverages,
                                  kPCA_1,
                                  raw_coverages,
                                  np.array(self.getStoitColNames(dbFileName).split(",")))
-        
+
         CT.transformCP()
         CT.transformedCP = [tuple(i) for i in CT.transformedCP]
         CT.covProfiles = [tuple(i) for i in CT.covProfiles]
         CT.corners = [tuple(i) for i in CT.corners]
-        
+
         # now CT stores the transformed coverages and other important information
         # we will write this to the database
         with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
@@ -803,8 +803,8 @@ class GMDataManager:
             # raw coverages - we may have reordered rows, so we should fix this now!
             db_desc = []
             for scn in CT.stoitColNames:
-                db_desc.append((scn, float)) 
-            
+                db_desc.append((scn, float))
+
             try:
                 h5file.removeNode(mg, 'tmp_coverages')
             except:
@@ -821,7 +821,7 @@ class GMDataManager:
                 raise
 
             h5file.renameNode(profile_group, 'coverage', 'tmp_coverages', overwrite=True)
-        
+
             # transformed coverages
             db_desc = [('x', float),
                        ('y', float),
@@ -835,7 +835,7 @@ class GMDataManager:
             except:
                 print "Error creating transformed coverage table:", exc_info()[0]
                 raise
-    
+
             # transformed coverage corners
             db_desc = [('x', float),
                        ('y', float),
@@ -849,8 +849,8 @@ class GMDataManager:
             except:
                 print "Error creating transformed coverage corner table:", exc_info()[0]
                 raise
-    
-    
+
+
             # normalised coverages
             db_desc = [('normCov', float)]
             try:
@@ -877,7 +877,7 @@ class GMDataManager:
 
         with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
             self.setMeta(h5file, meta_data, overwrite=True)
-        
+
         # update the formatVersion field and we're done
         self.setGMDBFormat(dbFileName, 5)
         print "*******************************************************************************"
@@ -1664,18 +1664,17 @@ class KmerSigEngine:
         num_mers = len(seq)-self.kLen+1
         for i in range(0,num_mers):
             try:
-                this_mer = self.llDict[seq[i:i+self.kLen]]
-                try:
-                    sig[this_mer] += 1.0
-                except KeyError:
-                    # Ns
-                    sig[this_mer] = 1.0
+                sig[self.llDict[seq[i:i+self.kLen]]] += 1.0
             except KeyError:
-                # typically due to an N in the sequence...
-                pass
+                # typically due to an N in the sequence. Reduce the number of mers we've seen
+                num_mers -= 1
 
         # normalise by length and return
-        return tuple([sig[x] / num_mers for x in self.kmerCols])
+        try:
+            return tuple([sig[x] / num_mers for x in self.kmerCols])
+        except ZeroDivisionError:
+            print "***WARNING*** Sequence '%s' is not playing well with the kmer signature engine " % seq
+            return tuple([0.0] * self.numMers)
 
 ###############################################################################
 ###############################################################################
@@ -1750,7 +1749,7 @@ class CoverageTransformer:
         self.stoitColNames = stoitColNames
         self.indices = range(self.numContigs)
         self.scaleFactor = scaleFactor
-        
+
         # things we care about!
         self.TCentre = None
         self.transformedCP = np.zeros((self.numContigs,3))
@@ -1849,25 +1848,25 @@ class CoverageTransformer:
                 # select every second contig when sorted by norm cov
                 cov_sorted = np.argsort(self.normCoverages[sub_cons])
                 sub_cons = np.array([sub_cons[cov_sorted[i*2]] for i in np.arange(int(len(sub_cons)/2))])
-                
+
                 if len(sub_cons) > ideal_contig_num:
                     # select every second contig when sorted by mer PC1
                     mer_sorted = np.argsort(self.kmerNormPC1[sub_cons])
                     sub_cons = np.array([sub_cons[mer_sorted[i*2]] for i in np.arange(int(len(sub_cons)/2))])
-    
+
             # now that we have a subset, calculate the distance between each of the untransformed vectors
             num_sc = len(sub_cons)
-            
+
             # log shift the coverages towards the origin
             sub_covs = np.transpose([self.covProfiles[i]*(np.log10(self.normCoverages[i])/self.normCoverages[i]) for i in sub_cons])
             sq_dists = cdist(sub_covs,sub_covs,'cityblock')
             dists = squareform(sq_dists)
-    
+
             # initialise a list of left, right neighbours
             lr_dict = {}
             for i in range(self.numStoits):
                 lr_dict[i] = []
-    
+
             too_big = 10000
             while True:
                 closest = np.argmin(dists)
@@ -1876,7 +1875,7 @@ class CoverageTransformer:
                 (i,j) = self.small2indices(closest, self.numStoits-1)
                 lr_dict[j].append(i)
                 lr_dict[i].append(j)
-    
+
                 # mark these guys as neighbours
                 if len(lr_dict[i]) == 2:
                     # no more than 2 neighbours
@@ -1888,12 +1887,12 @@ class CoverageTransformer:
                     sq_dists[j,:] = too_big
                     sq_dists[:,j] = too_big
                     sq_dists[j,j] = 0.0
-    
+
                 # fix the dist matrix
                 sq_dists[j,i] = too_big
                 sq_dists[i,j] = too_big
                 dists = squareform(sq_dists)
-    
+
             # now make the ordering
             ordering = [0, lr_dict[0][0]]
             done = 2

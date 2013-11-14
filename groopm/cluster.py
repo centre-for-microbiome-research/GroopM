@@ -42,14 +42,14 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.8"
+__version__ = "0.2.10.12"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
 
 ###############################################################################
 
-from sys import stdout
+from sys import stdout, exit
 
 from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
@@ -445,15 +445,39 @@ class ClusterEngine:
         c_std = np_std(c_dat, axis=0)
         c_std += np_where(c_std == 0, 1, 0) # make sure std dev is never zero
         c_whiten_dat = (c_dat-c_mean) / c_std
-
-        print
-        print
-        print c_whiten_dat
-        print
-        print
-
         c_whiten_dist = pdist(c_whiten_dat, 'cityblock')
-        c_dist_matrix = squareform(c_whiten_dist)
+
+        try:
+            c_dist_matrix = squareform(c_whiten_dist)
+        except MemoryError:
+            print "\n"
+            print '*******************************************************************************'
+            print '*********************************    ERROR    *********************************'
+            print '*******************************************************************************'
+            print 'GroopM is attempting to do some maths on a putative bin which contains:'
+            print
+            print '\t\t%d contigs'  % (len(rowIndices))
+            print
+            print 'This has caused your machine to run out of memory.'
+            print 'The most likely cause is that your samples are very different from each other.'
+            print 'You can confirm this by running:'
+            print
+            print '\t\tgroopm explore -m allcontigs %s' % self.PM.dbFileName
+            print
+            print 'If you notice only vertical "spears" of contigs at the corners of the plot then'
+            print 'this means that your samples are very different and you are not getting a good'
+            print 'mapping from all samples to all contigs. You may get more mileage by assembling'
+            print 'and binning your samples separately.'
+            print
+            print 'If you notice "clouds" of contigs then congratulations! You have found a bug.'
+            print 'Please let me know at mike@mikeimelfort.com or via github.com/minillinim/GroopM'
+            print
+            print 'GroopM is aborting... sorry'
+            print
+            print '*******************************************************************************'
+            print "\n"
+            exit(-1)
+
         c_radius = np_median(np_sort(c_dist_matrix)[:,eps_neighbours-1])
 
         # calculate radius threshold in kmer space
