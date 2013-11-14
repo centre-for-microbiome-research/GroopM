@@ -175,6 +175,7 @@ class ProfileManager:
                  loadBins=False,
                  loadLinks=False):
         """Load pre-parsed data"""
+
         timer.getTimeStamp()
         if(silent):
             verbose=False
@@ -242,7 +243,7 @@ class ProfileManager:
                 self.contigGCs = self.dataManager.getContigGCs(self.dbFileName, indices=self.indices)
                 if(verbose):
                     print "    Loading contig GC ratios (Average GC: %0.3f)" % ( np_mean(self.contigGCs) )
-                    
+
             if(makeColors):
                 if(verbose):
                     print "    Creating color map"
@@ -419,7 +420,7 @@ class ProfileManager:
             # select every second contig when sorted by norm cov
             cov_sorted = np_argsort(self.normCoverages[sub_cons])
             sub_cons = np_array([sub_cons[cov_sorted[i*2]] for i in np_arange(int(len(sub_cons)/2))])
-            
+
             if len(sub_cons) > ideal_contig_num:
                 # select every second contig when sorted by mer PC1
                 mer_sorted = np_argsort(self.kmerNormPC1[sub_cons])
@@ -427,7 +428,7 @@ class ProfileManager:
 
         # now that we have a subset, calculate the distance between each of the untransformed vectors
         num_sc = len(sub_cons)
-        
+
         # log shift the coverages towards the origin
         sub_covs = np_transpose([self.covProfiles[i]*(np_log10(self.normCoverages[i])/self.normCoverages[i]) for i in sub_cons])
         sq_dists = cdist(sub_covs,sub_covs,'cityblock')
@@ -497,7 +498,28 @@ class ProfileManager:
         self.corners = self.dataManager.getTransformedCoverageCorners(self.dbFileName)
         self.TCentre = np_mean(self.corners, axis=0)
         self.transRadius = np_norm(self.corners[0] - self.TCentre)
-        
+
+#------------------------------------------------------------------------------
+# DEBUG CRUFT
+
+    def rewriteBins(self):
+        """rewrite the bins table in hdf5 based on numbers in meta-contigs"""
+        bins = self.dataManager.getBins(self.dbFileName)
+        bin_store = {}
+        for c in bins:
+            if c != 0:
+                try:
+                    bin_store[c] += 1
+                except KeyError:
+                    bin_store[c] = 1
+
+        bin_stats = []
+        for bid in bin_store:
+            # [(bid, size, likelyChimeric)]
+            bin_stats.append((bid, bin_store[bid], False))
+
+        self.setBinStats(bin_stats)
+
 #------------------------------------------------------------------------------
 # IO and IMAGE RENDERING
 
@@ -649,10 +671,10 @@ class ProfileManager:
                              marker='.',
                              s=np_sqrt(self.contigLengths)
                              )
-            
+
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
         #self.plotStoitNames(ax1)
-        
+
         cbar = plt.colorbar(sc, shrink=0.5)
         cbar.ax.tick_params()
         cbar.ax.set_title("% GC", size=10)
