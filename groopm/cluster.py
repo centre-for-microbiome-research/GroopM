@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.10.12"
+__version__ = "0.2.10.13"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Alpha"
@@ -396,7 +396,7 @@ class ClusterEngine:
             return [[np_array(putative_center_row_indices)], ret_values]
         else:
             total_BP = np_sum(self.PM.contigLengths[putative_center_row_indices])
-            if not self.BM.isGoodBin(total_BP, len(putative_center_row_indices), ms=5): # Can we trust very small bins?.
+            if not self.BM.isGoodBin(total_BP, len(putative_center_row_indices), ms=5) or len(putative_center_row_indices) < 5: # Can we trust very small bins?.
                 # get out of here but keep trying
                 # the calling function should restrict these indices
                 return [[np_array(putative_center_row_indices)], ret_values]
@@ -412,7 +412,7 @@ class ClusterEngine:
 
     def twoWayContraction(self, rowIndices, positionInPlane, kmerThreshold, coverageThreshold):
         """Partition a collection of contigs into 'core' groups"""
-
+        
         # sanity check that there is enough data here to try a determine 'core' groups
         total_BP = np_sum(self.PM.contigLengths[rowIndices])
         if not self.BM.isGoodBin(total_BP, len(rowIndices), ms=5): # Can we trust very small bins?.
@@ -478,12 +478,12 @@ class ClusterEngine:
             print "\n"
             exit(-1)
 
-        c_radius = np_median(np_sort(c_dist_matrix)[:,eps_neighbours-1])
+        c_radius = np_median(np_sort(c_dist_matrix)[:,eps_neighbours])
 
         # calculate radius threshold in kmer space
         k_dist = pdist(k_dat, 'cityblock')
         k_dist_matrix = squareform(k_dist)
-        k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours-1])
+        k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours])
 
         # calculate convergence criteria
         k_converged = kmerThreshold * 30.0 #5e-2 * np_mean(k_dist)
