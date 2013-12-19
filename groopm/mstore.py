@@ -45,7 +45,7 @@ __license__ = "GPL3"
 __version__ = "0.3.6.2"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
-__status__ = "Release"
+__status__ = "Released"
 __current_GMDB_version__ = 5
 
 ###############################################################################

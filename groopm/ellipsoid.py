@@ -45,7 +45,7 @@ __license__ = "GPL3"
 __version__ = "0.1.2"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
-__status__ = "Beta"
+__status__ = "Released"
 
 ###############################################################################
 

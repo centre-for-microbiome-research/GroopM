@@ -2,10 +2,10 @@ from distutils.core import setup
 
 setup(
     name='GroopM',
-    version='0.2.10.13',
+    version='0.2.10.14',
     author='Michael Imelfort',
     author_email='mike@mikeimelfort.com',
-    packages=['groopm', 'groopm.test'],
+    packages=['groopm'],
     scripts=['bin/groopm'],
 	url='http://pypi.python.org/pypi/GroopM/',
     license='LICENSE.txt',

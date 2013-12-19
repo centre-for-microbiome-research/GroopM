@@ -45,7 +45,7 @@ __license__ = "GPL3"
 __version__ = "0.2.1"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
-__status__ = "Alpha"
+__status__ = "Released"
 
 ###############################################################################
 import time
