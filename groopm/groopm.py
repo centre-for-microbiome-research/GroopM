@@ -282,7 +282,11 @@ class GroopMOptionsParser():
             print "*******************************************************************************"
             print " [[GroopM %s]] Running in highlighter mode..." % self.GMVersion
             print "*******************************************************************************"
+            bids = []
+            if options.bids is not None:
+                bids = options.bids
             BE = groopmUtils.BinExplorer(options.dbname,
+                                         bids=bids,
                                          binLabelsFile = options.binlabels,
                                          contigColorsFile = options.contigcolors,
                                          ignoreContigLengths=options.points)

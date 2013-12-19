@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.10.13"
+__version__ = "0.2.10.14"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -259,6 +259,7 @@ if __name__ == '__main__':
     bin_highlighter.add_argument('-d', '--dpi', default=300, help="Image resolution")
     bin_highlighter.add_argument('-s', '--show', action="store_true", default=False, help="load image in viewer only")
     bin_highlighter.add_argument('-p', '--points', action="store_true", default=False, help="ignore contig lengths when plotting")
+    bin_highlighter.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to plot (None for all)")
 
     #-------------------------------------------------
     # print bin information

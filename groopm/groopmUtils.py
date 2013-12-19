@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.10"
+__version__ = "0.2.10.14"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Beta"
@@ -127,7 +127,7 @@ class GMExtractor:
                         if(cid in contigs):
                             f.write(">%s\n%s\n" % (cid, contigs[cid]))
                         else:
-                            print "WTF", bid, cid
+                            print "These are not the contigs you're looking for. ( %s )" % (cid)
             except:
                 print "Could not open file for writing:",file_name,sys.exc_info()[0]
                 raise
@@ -213,6 +213,7 @@ class BinExplorer:
                        testing=False):
         """Plot a high def image suitable for publication"""
         self.BM.loadBins(timer,
+                         bids=self.bids,
                          makeBins=True,
                          silent=False,
                          loadContigLengths=True,
@@ -1015,7 +1016,7 @@ class LabelParser:
             print "ERROR: parsing labels file: %s" % labelFileName
             raise
 
-        # now we parse the reast of the contig names and colour the null colour
+        # now we parse the rest of the contig names and colour the null colour
         for row_index in range(len(PM.indices)):
             if row_index not in self.contig2Cols:
                 self.contig2Cols[row_index] = self.unbinnedCol

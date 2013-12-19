@@ -262,8 +262,13 @@ class ProfileManager:
                 if len(bids) != 0: # need to make sure we're not restricted in terms of bins
                     bin_stats = self.getBinStats()
                     for bid in bids:
-                        self.validBinIds[bid] = bin_stats[bid][0]
-                        self.isLikelyChimeric[bid]= bin_stats[bid][1]
+                        try:
+                            self.validBinIds[bid] = bin_stats[bid][0]
+                            self.isLikelyChimeric[bid]= bin_stats[bid][1]
+                        except KeyError:
+                            self.validBinIds[bid] = 0
+                            self.isLikelyChimeric[bid]= False
+
                 else:
                     bin_stats = self.getBinStats()
                     for bid in bin_stats:

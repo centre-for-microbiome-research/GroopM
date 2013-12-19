@@ -412,7 +412,7 @@ class ClusterEngine:
 
     def twoWayContraction(self, rowIndices, positionInPlane, kmerThreshold, coverageThreshold):
         """Partition a collection of contigs into 'core' groups"""
-        
+
         # sanity check that there is enough data here to try a determine 'core' groups
         total_BP = np_sum(self.PM.contigLengths[rowIndices])
         if not self.BM.isGoodBin(total_BP, len(rowIndices), ms=5): # Can we trust very small bins?.
@@ -1303,7 +1303,7 @@ class HoughPartitioner:
         j = 0
 
         # all points get at least one point, but long ones get more
-        # let's say 1 point per 2000bp
+        # let's say 1 point per 5000bp
         for i in range(len(dAta)):
             real_index = sorted_indices_raw[i]
             rep = int((lData[real_index] - 1.)/5000.) + 1
