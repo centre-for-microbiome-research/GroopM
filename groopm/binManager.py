@@ -454,7 +454,7 @@ class BinManager:
 
     def split(self, bid, n, mode='kmer', auto=False, saveBins=False, verbose=False, printInstructions=True, use_elipses=True):
         """split a bin into n parts
-
+        
         if auto == True, then just railroad the split
         if test == True, then test via merging
         if savebins == True, save the split (if you will do it)
