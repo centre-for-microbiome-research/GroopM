@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.3.6.2"
+__version__ = "0.3.6.3"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -221,8 +221,19 @@ class GMDataManager:
                 # Before writing to the database we need to make sure that none of them have
                 # 0 coverage @ all stoits.
                 #------------------------
+                import mimetypes
+                GM_open = open
                 try:
-                    with open(contigsFile, "r") as f:
+                    # handle gzipped files
+                    mime = mimetypes.guess_type(contigsFile)
+                    if mime[1] == 'gzip':
+                        import gzip
+                        GM_open = gzip.open
+                except:
+                    print "Error when guessing contig file mimetype"
+                    raise
+                try:
+                    with GM_open(contigsFile, "r") as f:
                         try:
                             (con_names, con_gcs, con_lengths, con_ksigs) = conParser.parse(f, kse)
                             num_cons = len(con_names)
@@ -1504,43 +1515,29 @@ class ContigParser:
     """Main class for reading in and parsing contigs"""
     def __init__(self): pass
 
-    def readfq(self, fp): # this is a generator function
-        """https://github.com/lh3"""
-        last = None # this is a buffer keeping the last unprocessed line
-        while True: # mimic closure; is it a bad idea?
-            if not last: # the first record or a record following a fastq
-                for l in fp: # search for the start of the next record
-                    if l[0] in '>@': # fasta/q header line
-                        last = l[:-1] # save this line
-                        break
-            if not last: break
-            name, seqs, last = last[1:].split()[0], [], None
-            for l in fp: # read the sequence
-                if l[0] in '@+>':
-                    last = l[:-1]
-                    break
-                seqs.append(l[:-1])
-            if not last or last[0] != '+': # this is a fasta record
-                yield name, ''.join(seqs), None # yield a fasta record
-                if not last: break
-            else: # this is a fastq record
-                seq, leng, seqs = ''.join(seqs), 0, []
-                for l in fp: # read the quality
-                    seqs.append(l[:-1])
-                    leng += len(l) - 1
-                    if leng >= len(seq): # have read enough quality
-                        last = None
-                        yield name, seq, ''.join(seqs); # yield a fastq record
-                        break
-                if last: # reach EOF before reading enough quality
-                    yield name, seq, None # yield a fasta record instead
-                    break
+    def readFasta(self, fp): # this is a generator function
+        header = None
+        seq = None
+        while True:
+            for l in fp:
+                if l[0] == '>': # fasta header line
+                    if header is not None:
+                        # we have reached a new sequence
+                        yield header, "".join(seq)
+                    header = l.rstrip()[1:].partition(" ")[0] # save the header we just saw
+                    seq = []
+                else:
+                    seq.append(l.rstrip())
+            # anything left in the barrel?
+            if header is not None:
+                yield header, "".join(seq)
+            break
 
     def parse(self, contigFile, kse):
         """Do the heavy lifting of parsing"""
         print "Parsing contigs"
         contigInfo = {} # save everything here first so we can sort accordingly
-        for cid,seq,qual in self.readfq(contigFile):
+        for cid,seq in self.readFasta(contigFile):
             contigInfo[cid] = (kse.getKSig(seq.upper()), len(seq), self.calculateGC(seq))
 
         # sort the contig names here once!
