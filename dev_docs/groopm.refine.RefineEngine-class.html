@@ -1,0 +1,1220 @@
+<?xml version="1.0" encoding="ascii"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+          "DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>groopm.refine.RefineEngine</title>
+  <link rel="stylesheet" href="epydoc.css" type="text/css" />
+  <script type="text/javascript" src="epydoc.js"></script>
+</head>
+
+<body bgcolor="white" text="black" link="blue" vlink="#204080"
+      alink="#204080">
+<!-- ==================== NAVIGATION BAR ==================== -->
+<table class="navbar" border="0" width="100%" cellpadding="0"
+       bgcolor="#a0c0ff" cellspacing="0">
+  <tr valign="middle">
+  <!-- Home link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="groopm-module.html">Home</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Tree link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="module-tree.html">Trees</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Index link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="identifier-index.html">Indices</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Help link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Project homepage -->
+      <th class="navbar" align="right" width="100%">
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr><th class="navbar" align="center"
+            ><a class="navbar" target="_top" href="http://minillinim.github.io/GroopM/">GroopM</a></th>
+          </tr></table></th>
+  </tr>
+</table>
+<table width="100%" cellpadding="0" cellspacing="0">
+  <tr valign="top">
+    <td width="100%">
+      <span class="breadcrumbs">
+        <a href="groopm-module.html">Package&nbsp;groopm</a> ::
+        <a href="groopm.refine-module.html">Module&nbsp;refine</a> ::
+        Class&nbsp;RefineEngine
+      </span>
+    </td>
+    <td>
+      <table cellpadding="0" cellspacing="0">
+        <!-- hide/show private -->
+        <tr><td align="right"><span class="options">[<a href="javascript:void(0);" class="privatelink"
+    onclick="toggle_private();">hide&nbsp;private</a>]</span></td></tr>
+        <tr><td align="right"><span class="options"
+            >[<a href="frames.html" target="_top">frames</a
+            >]&nbsp;|&nbsp;<a href="groopm.refine.RefineEngine-class.html"
+            target="_top">no&nbsp;frames</a>]</span></td></tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- ==================== CLASS DESCRIPTION ==================== -->
+<h1 class="epydoc">Class RefineEngine</h1><p class="nomargin-top"><span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine">source&nbsp;code</a></span></p>
+<p>Workhorse wrapper for bin refinement</p>
+
+<!-- ==================== INSTANCE METHODS ==================== -->
+<a name="section-InstanceMethods"></a>
+<table class="summary" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Instance Methods</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-InstanceMethods"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="__init__"></a><span class="summary-sig-name">__init__</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">timer</span>,
+        <span class="summary-sig-arg">BM</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">dbFileName</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">transform</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">getUnbinned</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">loadContigNames</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">cutOff</span>=<span class="summary-sig-default">0</span>,
+        <span class="summary-sig-arg">bids</span>=<span class="summary-sig-default"><code class="variable-group">[</code><code class="variable-group">]</code></span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.__init__">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="refineBins"></a><span class="summary-sig-name">refineBins</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">timer</span>,
+        <span class="summary-sig-arg">auto</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">saveBins</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">plotFinal</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">gf</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>)</span><br />
+      Iterative wrapper for the refine function</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.refineBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="plotterRefineBins"></a><span class="summary-sig-name">plotterRefineBins</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">ignoreRanges</span>=<span class="summary-sig-default">False</span>)</span><br />
+      combine similar bins using 3d plots</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.plotterRefineBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="autoRefineBins"></a><span class="summary-sig-name">autoRefineBins</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">timer</span>,
+        <span class="summary-sig-arg">mergeSimilarBins</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">removeDuds</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">markLikelyChimeric</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">shuffleRefine</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">verbose</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">plotAfterOB</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">makeGraph</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Automagically refine bins</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.autoRefineBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.refine.RefineEngine-class.html#markLikelyChimericBins" class="summary-sig-name">markLikelyChimericBins</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">verbose</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Identify bins which contain mixed genomes based on GC.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.markLikelyChimericBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="mergeSimilarBins"></a><span class="summary-sig-name">mergeSimilarBins</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">verbose</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">graph</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">silent</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Merge bins which are just crying out to be merged!</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.mergeSimilarBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="findMergeGroups"></a><span class="summary-sig-name">findMergeGroups</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">kCutMedian</span>,
+        <span class="summary-sig-arg">kCutStd</span>,
+        <span class="summary-sig-arg">cCutMedian</span>,
+        <span class="summary-sig-arg">cCutStd</span>,
+        <span class="summary-sig-arg">verbose</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Identify groups of contigs which could be merged</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.findMergeGroups">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="combineMergers"></a><span class="summary-sig-name">combineMergers</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">bidList</span>,
+        <span class="summary-sig-arg">kCutMedian</span>,
+        <span class="summary-sig-arg">kCutStd</span>,
+        <span class="summary-sig-arg">cCutMedian</span>,
+        <span class="summary-sig-arg">cCutStd</span>,
+        <span class="summary-sig-arg">graph</span>=<span class="summary-sig-default">None</span>)</span><br />
+      Merge similar bins in the given list</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.combineMergers">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="small2indices"></a><span class="summary-sig-name">small2indices</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">index</span>,
+        <span class="summary-sig-arg">side</span>)</span><br />
+      Return the indices of the comparative items when given an index into 
+      a condensed distance matrix</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.small2indices">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="combineMergersMike"></a><span class="summary-sig-name">combineMergersMike</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">bidList</span>,
+        <span class="summary-sig-arg">kCut</span>,
+        <span class="summary-sig-arg">cCut</span>,
+        <span class="summary-sig-arg">graph</span>=<span class="summary-sig-default">None</span>)</span><br />
+      Try to merge similar bins in the given list</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.combineMergersMike">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="buildSOM"></a><span class="summary-sig-name">buildSOM</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">timer</span>,
+        <span class="summary-sig-arg">maskBoundaries</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">defineBins</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">retrain</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">render</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">silent</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">animateFilePrefix</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>)</span><br />
+      Build, train and return a SOM for the given bids</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.buildSOM">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="retrainSOM"></a><span class="summary-sig-name">retrainSOM</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">SS</span>,
+        <span class="summary-sig-arg">bid</span>,
+        <span class="summary-sig-arg">maskPoints</span>,
+        <span class="summary-sig-arg">som_side</span>,
+        <span class="summary-sig-arg">minz</span>,
+        <span class="summary-sig-arg">maxz</span>,
+        <span class="summary-sig-arg">silent</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">render</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Further training of a SOM built using bin means</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.retrainSOM">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="shuffleRefineContigs"></a><span class="summary-sig-name">shuffleRefineContigs</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">timer</span>,
+        <span class="summary-sig-arg">inclusivity</span>=<span class="summary-sig-default">2</span>)</span><br />
+      refine bins by shuffling contigs around</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.shuffleRefineContigs">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="removeDuds"></a><span class="summary-sig-name">removeDuds</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">ms</span>=<span class="summary-sig-default">20</span>,
+        <span class="summary-sig-arg">mv</span>=<span class="summary-sig-default">1000000</span>,
+        <span class="summary-sig-arg">verbose</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Run this after refining to remove scrappy leftovers</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.removeDuds">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.refine.RefineEngine-class.html#rePCA" class="summary-sig-name">rePCA</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">bidList</span>,
+        <span class="summary-sig-arg">mode</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string">mer</code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">doBoth</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">doContigs</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">addZeros</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">addOnes</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Re-calculate PCA coords for a collection of bins</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.rePCA">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getKCut"></a><span class="summary-sig-name">getKCut</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Work out the easy cutoff for kmerVal distance</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.getKCut">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="kDist"></a><span class="summary-sig-name">kDist</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">row_indices</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.kDist">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="kDistMergedBins"></a><span class="summary-sig-name">kDistMergedBins</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">bin1</span>,
+        <span class="summary-sig-arg">bin2</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.kDistMergedBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="kDistBetweenBins"></a><span class="summary-sig-name">kDistBetweenBins</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">bin1</span>,
+        <span class="summary-sig-arg">bin2</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.kDistBetweenBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getEvenlySpacedPtsZ"></a><span class="summary-sig-name">getEvenlySpacedPtsZ</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">row_indices</span>,
+        <span class="summary-sig-arg">sample_size</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.getEvenlySpacedPtsZ">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getCCut"></a><span class="summary-sig-name">getCCut</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Work out the easy cutoff for coverage angle difference</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.getCCut">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="cDist"></a><span class="summary-sig-name">cDist</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">row_indices</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.cDist">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="cDistMergedBins"></a><span class="summary-sig-name">cDistMergedBins</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">bin1</span>,
+        <span class="summary-sig-arg">bin2</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.cDistMergedBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="cDistBetweenBins"></a><span class="summary-sig-name">cDistBetweenBins</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">bin1</span>,
+        <span class="summary-sig-arg">bin2</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.cDistBetweenBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="testMergeMer"></a><span class="summary-sig-name">testMergeMer</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">bid1</span>,
+        <span class="summary-sig-arg">bid2</span>,
+        <span class="summary-sig-arg">merPCAs</span>,
+        <span class="summary-sig-arg">maxSample</span>=<span class="summary-sig-default">200</span>,
+        <span class="summary-sig-arg">confidence</span>=<span class="summary-sig-default">0.97</span>,
+        <span class="summary-sig-arg">verbose</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Determine if a merge makes sense in mer land</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.testMergeMer">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.refine.RefineEngine-class.html#calculateMerAlphaPartSampleNoSame" class="summary-sig-name">calculateMerAlphaPartSampleNoSame</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">RI1</span>,
+        <span class="summary-sig-arg">RI2</span>,
+        <span class="summary-sig-arg">profile</span>,
+        <span class="summary-sig-arg">alphas</span>,
+        <span class="summary-sig-arg">sampleSize</span>=<span class="summary-sig-default">2000</span>)</span><br />
+      Calculate one part of an alpha score</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateMerAlphaPartSampleNoSame">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.refine.RefineEngine-class.html#calculateMerAlphaPartSample" class="summary-sig-name">calculateMerAlphaPartSample</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">RI1</span>,
+        <span class="summary-sig-arg">RI2</span>,
+        <span class="summary-sig-arg">profile</span>,
+        <span class="summary-sig-arg">alphas</span>,
+        <span class="summary-sig-arg">sampleSize</span>=<span class="summary-sig-default">2000</span>)</span><br />
+      Calculate one part of an alpha score</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateMerAlphaPartSample">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.refine.RefineEngine-class.html#calculateMerAlphaPart" class="summary-sig-name">calculateMerAlphaPart</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">RI1</span>,
+        <span class="summary-sig-arg">RI2</span>,
+        <span class="summary-sig-arg">profile</span>,
+        <span class="summary-sig-arg">alphas</span>)</span><br />
+      Calculate one part of an alpha score</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateMerAlphaPart">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.refine.RefineEngine-class.html#calculateMerAlphaTScore" class="summary-sig-name">calculateMerAlphaTScore</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">RI1</span>,
+        <span class="summary-sig-arg">RI2</span>,
+        <span class="summary-sig-arg">profile</span>,
+        <span class="summary-sig-arg">alphas</span>)</span><br />
+      Measure the goodness of the separation into lists</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateMerAlphaTScore">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.refine.RefineEngine-class.html#testMergeCoverage" class="summary-sig-name">testMergeCoverage</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">bid1</span>,
+        <span class="summary-sig-arg">bid2</span>,
+        <span class="summary-sig-arg">maxSample</span>=<span class="summary-sig-default">200</span>,
+        <span class="summary-sig-arg">confidence</span>=<span class="summary-sig-default">0.97</span>,
+        <span class="summary-sig-arg">verbose</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Determine if a merge based on kmer PCAs makes sense in coverage land</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.testMergeCoverage">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.refine.RefineEngine-class.html#calculateCovAlphaPartSampleNoSame" class="summary-sig-name">calculateCovAlphaPartSampleNoSame</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">RI1</span>,
+        <span class="summary-sig-arg">RI2</span>,
+        <span class="summary-sig-arg">alphas</span>,
+        <span class="summary-sig-arg">sampleSize</span>=<span class="summary-sig-default">2000</span>)</span><br />
+      Calculate one part of an alpha score</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateCovAlphaPartSampleNoSame">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.refine.RefineEngine-class.html#calculateCovAlphaPartSample" class="summary-sig-name">calculateCovAlphaPartSample</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">RI1</span>,
+        <span class="summary-sig-arg">RI2</span>,
+        <span class="summary-sig-arg">alphas</span>,
+        <span class="summary-sig-arg">sampleSize</span>=<span class="summary-sig-default">2000</span>)</span><br />
+      Calculate one part of an alpha score</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateCovAlphaPartSample">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.refine.RefineEngine-class.html#calculateCovAlphaPart" class="summary-sig-name">calculateCovAlphaPart</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">RI1</span>,
+        <span class="summary-sig-arg">RI2</span>,
+        <span class="summary-sig-arg">alphas</span>)</span><br />
+      Calculate one part of an alpha score</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateCovAlphaPart">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.refine.RefineEngine-class.html#calculateCovAlphaTScore" class="summary-sig-name">calculateCovAlphaTScore</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">RI1</span>,
+        <span class="summary-sig-arg">RI2</span>,
+        <span class="summary-sig-arg">alphas</span>)</span><br />
+      Measure the goodness of the separation into lists</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateCovAlphaTScore">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="recruitWrapper"></a><span class="summary-sig-name">recruitWrapper</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">timer</span>,
+        <span class="summary-sig-arg">inclusivity</span>=<span class="summary-sig-default">2</span>,
+        <span class="summary-sig-arg">step</span>=<span class="summary-sig-default">200</span>,
+        <span class="summary-sig-arg">nukeAll</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">saveBins</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Recuit more contigs to the bins</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.recruitWrapper">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="writeGV"></a><span class="summary-sig-name">writeGV</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">graph</span>)</span><br />
+      Output a valid graphviz dot file</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.writeGV">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="printRefinePlotterInstructions"></a><span class="summary-sig-name">printRefinePlotterInstructions</span>(<span class="summary-sig-arg">self</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.printRefinePlotterInstructions">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="promptOnPlotterRefine"></a><span class="summary-sig-name">promptOnPlotterRefine</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">minimal</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Find out what the user wishes to do next when refining bins</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.promptOnPlotterRefine">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="PCA2Col"></a><span class="summary-sig-name">PCA2Col</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">PCAs</span>)</span><br />
+      Convert a set of PCA coords into a color</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.PCA2Col">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+</table>
+<!-- ==================== METHOD DETAILS ==================== -->
+<a name="section-MethodDetails"></a>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Method Details</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-MethodDetails"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+</table>
+<a name="markLikelyChimericBins"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">markLikelyChimericBins</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">verbose</span>=<span class="sig-default">False</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.markLikelyChimericBins">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Identify bins which contain mixed genomes based on GC. Small bins are 
+  nuked, large bins are flagged as chimeric.</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="rePCA"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">rePCA</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">bidList</span>,
+        <span class="sig-arg">mode</span>=<span class="sig-default"><code class="variable-quote">'</code><code class="variable-string">mer</code><code class="variable-quote">'</code></span>,
+        <span class="sig-arg">doBoth</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">doContigs</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">addZeros</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">addOnes</span>=<span class="sig-default">False</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.rePCA">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Re-calculate PCA coords for a collection of bins</p>
+  <p>mode may be 'mer', 'cov' or 'trans'</p>
+  <p>If do contigs is set then it returns a n X 2 array of PC1, PC2 for all
+  contigs in all bins in bidList The ordering is bidList -&gt; rowIndices. 
+  IE. n = sum(rowIndices) for all bins in bidList</p>
+  <p>If doContigs is not set then we average across all the contigs in each
+  bin and return a n X 2 array where n is the number of bins in bidList</p>
+  <p>If doBoth is set then we do both. However, we return a dict of type: 
+  {row_index : np_array([PC1, PC2])}</p>
+  <p>addZeros adds a zero vector as the final entry in the PCA output 
+  addOnes adds a ones vector as the second last entry. addOnes implies 
+  addZeros</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="calculateMerAlphaPartSampleNoSame"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">calculateMerAlphaPartSampleNoSame</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">RI1</span>,
+        <span class="sig-arg">RI2</span>,
+        <span class="sig-arg">profile</span>,
+        <span class="sig-arg">alphas</span>,
+        <span class="sig-arg">sampleSize</span>=<span class="sig-default">2000</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateMerAlphaPartSampleNoSame">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Calculate one part of an alpha score</p>
+  <p>Subsample of all vs all, assumes RI1 == RI2</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="calculateMerAlphaPartSample"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">calculateMerAlphaPartSample</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">RI1</span>,
+        <span class="sig-arg">RI2</span>,
+        <span class="sig-arg">profile</span>,
+        <span class="sig-arg">alphas</span>,
+        <span class="sig-arg">sampleSize</span>=<span class="sig-default">2000</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateMerAlphaPartSample">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Calculate one part of an alpha score</p>
+  <p>Subsample of all vs all, assumes RI1 != RI2</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="calculateMerAlphaPart"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">calculateMerAlphaPart</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">RI1</span>,
+        <span class="sig-arg">RI2</span>,
+        <span class="sig-arg">profile</span>,
+        <span class="sig-arg">alphas</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateMerAlphaPart">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Calculate one part of an alpha score</p>
+  <p>All vs all complete</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="calculateMerAlphaTScore"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">calculateMerAlphaTScore</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">RI1</span>,
+        <span class="sig-arg">RI2</span>,
+        <span class="sig-arg">profile</span>,
+        <span class="sig-arg">alphas</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateMerAlphaTScore">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Measure the goodness of the separation into lists</p>
+  <p>specifically, calculate: t = INTER_DIST / (INTRA_LIST1_DISTANCE + 
+  INTRA_LIST2_DISTANCE)</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="testMergeCoverage"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">testMergeCoverage</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">bid1</span>,
+        <span class="sig-arg">bid2</span>,
+        <span class="sig-arg">maxSample</span>=<span class="sig-default">200</span>,
+        <span class="sig-arg">confidence</span>=<span class="sig-default">0.97</span>,
+        <span class="sig-arg">verbose</span>=<span class="sig-default">False</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.testMergeCoverage">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Determine if a merge based on kmer PCAs makes sense in coverage 
+  land</p>
+  <p>Calculates a t-score which measures the coverage separation of the two
+  groups Higher t-scores indicate greater separation between the 
+  groups.</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="calculateCovAlphaPartSampleNoSame"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">calculateCovAlphaPartSampleNoSame</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">RI1</span>,
+        <span class="sig-arg">RI2</span>,
+        <span class="sig-arg">alphas</span>,
+        <span class="sig-arg">sampleSize</span>=<span class="sig-default">2000</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateCovAlphaPartSampleNoSame">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Calculate one part of an alpha score</p>
+  <p>Subsample of all vs all, assumes RI1 == RI2</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="calculateCovAlphaPartSample"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">calculateCovAlphaPartSample</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">RI1</span>,
+        <span class="sig-arg">RI2</span>,
+        <span class="sig-arg">alphas</span>,
+        <span class="sig-arg">sampleSize</span>=<span class="sig-default">2000</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateCovAlphaPartSample">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Calculate one part of an alpha score</p>
+  <p>Subsample of all vs all, assumes RI1 != RI2</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="calculateCovAlphaPart"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">calculateCovAlphaPart</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">RI1</span>,
+        <span class="sig-arg">RI2</span>,
+        <span class="sig-arg">alphas</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateCovAlphaPart">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Calculate one part of an alpha score</p>
+  <p>All vs all</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="calculateCovAlphaTScore"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">calculateCovAlphaTScore</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">RI1</span>,
+        <span class="sig-arg">RI2</span>,
+        <span class="sig-arg">alphas</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.refine-pysrc.html#RefineEngine.calculateCovAlphaTScore">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Measure the goodness of the separation into lists</p>
+  <p>specifically, calculate: t = INTER_DIST / (INTRA_LIST1_DISTANCE + 
+  INTRA_LIST2_DISTANCE)</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<br />
+<!-- ==================== NAVIGATION BAR ==================== -->
+<table class="navbar" border="0" width="100%" cellpadding="0"
+       bgcolor="#a0c0ff" cellspacing="0">
+  <tr valign="middle">
+  <!-- Home link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="groopm-module.html">Home</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Tree link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="module-tree.html">Trees</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Index link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="identifier-index.html">Indices</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Help link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Project homepage -->
+      <th class="navbar" align="right" width="100%">
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr><th class="navbar" align="center"
+            ><a class="navbar" target="_top" href="http://minillinim.github.io/GroopM/">GroopM</a></th>
+          </tr></table></th>
+  </tr>
+</table>
+<table border="0" cellpadding="0" cellspacing="0" width="100%%">
+  <tr>
+    <td align="left" class="footer">
+    Generated by Epydoc 3.0.1 on Thu Dec 19 23:19:18 2013
+    </td>
+    <td align="right" class="footer">
+      <a target="mainFrame" href="http://epydoc.sourceforge.net"
+        >http://epydoc.sourceforge.net</a>
+    </td>
+  </tr>
+</table>
+
+<script type="text/javascript">
+  <!--
+  // Private objects are initially displayed (because if
+  // javascript is turned off then we want them to be
+  // visible); but by default, we want to hide them.  So hide
+  // them unless we have a cookie that says to show them.
+  checkCookie();
+  // -->
+</script>
+</body>
+</html>

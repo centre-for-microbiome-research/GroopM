@@ -1,0 +1,865 @@
+<?xml version="1.0" encoding="ascii"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+          "DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>groopm.bin.Bin</title>
+  <link rel="stylesheet" href="epydoc.css" type="text/css" />
+  <script type="text/javascript" src="epydoc.js"></script>
+</head>
+
+<body bgcolor="white" text="black" link="blue" vlink="#204080"
+      alink="#204080">
+<!-- ==================== NAVIGATION BAR ==================== -->
+<table class="navbar" border="0" width="100%" cellpadding="0"
+       bgcolor="#a0c0ff" cellspacing="0">
+  <tr valign="middle">
+  <!-- Home link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="groopm-module.html">Home</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Tree link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="module-tree.html">Trees</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Index link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="identifier-index.html">Indices</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Help link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Project homepage -->
+      <th class="navbar" align="right" width="100%">
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr><th class="navbar" align="center"
+            ><a class="navbar" target="_top" href="http://minillinim.github.io/GroopM/">GroopM</a></th>
+          </tr></table></th>
+  </tr>
+</table>
+<table width="100%" cellpadding="0" cellspacing="0">
+  <tr valign="top">
+    <td width="100%">
+      <span class="breadcrumbs">
+        <a href="groopm-module.html">Package&nbsp;groopm</a> ::
+        <a href="groopm.bin-module.html">Module&nbsp;bin</a> ::
+        Class&nbsp;Bin
+      </span>
+    </td>
+    <td>
+      <table cellpadding="0" cellspacing="0">
+        <!-- hide/show private -->
+        <tr><td align="right"><span class="options">[<a href="javascript:void(0);" class="privatelink"
+    onclick="toggle_private();">hide&nbsp;private</a>]</span></td></tr>
+        <tr><td align="right"><span class="options"
+            >[<a href="frames.html" target="_top">frames</a
+            >]&nbsp;|&nbsp;<a href="groopm.bin.Bin-class.html"
+            target="_top">no&nbsp;frames</a>]</span></td></tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- ==================== CLASS DESCRIPTION ==================== -->
+<h1 class="epydoc">Class Bin</h1><p class="nomargin-top"><span class="codelink"><a href="groopm.bin-pysrc.html#Bin">source&nbsp;code</a></span></p>
+<p>Class for managing collections of contigs</p>
+  <p>To (perhaps) simplify things think of a &quot;bin&quot; as an 
+  row_index into the column names array. The ClusterBlob has a list of bins
+  which it can update etc...</p>
+
+<!-- ==================== INSTANCE METHODS ==================== -->
+<a name="section-InstanceMethods"></a>
+<table class="summary" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Instance Methods</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-InstanceMethods"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="__init__"></a><span class="summary-sig-name">__init__</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">rowIndices</span>,
+        <span class="summary-sig-arg">id</span>,
+        <span class="summary-sig-arg">upperCov</span>,
+        <span class="summary-sig-arg">covtol</span>=<span class="summary-sig-default">2</span>,
+        <span class="summary-sig-arg">mertol</span>=<span class="summary-sig-default">2</span>,
+        <span class="summary-sig-arg">gctol</span>=<span class="summary-sig-default">2</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.__init__">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="__cmp__"></a><span class="summary-sig-name">__cmp__</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">alien</span>)</span><br />
+      Sort bins based on the normalized first PC of kmer signatures.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.__cmp__">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="consume"></a><span class="summary-sig-name">consume</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">transformedCP</span>,
+        <span class="summary-sig-arg">averageCoverages</span>,
+        <span class="summary-sig-arg">kmerNormPC1</span>,
+        <span class="summary-sig-arg">kmerPCs</span>,
+        <span class="summary-sig-arg">contigGCs</span>,
+        <span class="summary-sig-arg">contigLengths</span>,
+        <span class="summary-sig-arg">deadBin</span>,
+        <span class="summary-sig-arg">verbose</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Combine the contigs of another bin with this one</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.consume">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.bin.Bin-class.html#scoreProfile" class="summary-sig-name">scoreProfile</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">kmerVal</span>,
+        <span class="summary-sig-arg">transformedCP</span>)</span><br />
+      Determine how similar this profile is to the bin distribution</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.scoreProfile">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="purge"></a><span class="summary-sig-name">purge</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">deadIndices</span>,
+        <span class="summary-sig-arg">transformedCP</span>,
+        <span class="summary-sig-arg">averageCoverages</span>,
+        <span class="summary-sig-arg">kmerNormPC1</span>,
+        <span class="summary-sig-arg">kmerPCs</span>,
+        <span class="summary-sig-arg">contigGCs</span>,
+        <span class="summary-sig-arg">contigLengths</span>)</span><br />
+      Delete some rowIndices and remake stats</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.purge">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="clearBinDist"></a><span class="summary-sig-name">clearBinDist</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Clear any set distribution statistics</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.clearBinDist">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.bin.Bin-class.html#makeBinDist" class="summary-sig-name">makeBinDist</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">transformedCP</span>,
+        <span class="summary-sig-arg">averageCoverages</span>,
+        <span class="summary-sig-arg">kmerNormPC1</span>,
+        <span class="summary-sig-arg">kmerPCs</span>,
+        <span class="summary-sig-arg">contigGCs</span>,
+        <span class="summary-sig-arg">contigLengths</span>)</span><br />
+      Determine the distribution of the points in this bin</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.makeBinDist">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="makeLimits"></a><span class="summary-sig-name">makeLimits</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Set inclusion limits based on mean, variance and tolerance settings</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.makeLimits">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getCentroidStats"></a><span class="summary-sig-name">getCentroidStats</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">profile</span>)</span><br />
+      Calculate the centroids of the profile</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.getCentroidStats">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getkmerValDist"></a><span class="summary-sig-name">getkmerValDist</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">kmerNormPC1</span>)</span><br />
+      Return an array of kmer vals for this bin</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.getkmerValDist">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getGC_Dist"></a><span class="summary-sig-name">getGC_Dist</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">GCs</span>)</span><br />
+      Return an array of GCs for this bin</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.getGC_Dist">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getAverageCoverageDist"></a><span class="summary-sig-name">getAverageCoverageDist</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">averageCoverages</span>)</span><br />
+      Return the average coverage for all contigs in this bin</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.getAverageCoverageDist">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getAverageTransformedCoverageDist"></a><span class="summary-sig-name">getAverageTransformedCoverageDist</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">coverages</span>)</span><br />
+      Return the average transformed coverage for all contigs in this bin</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.getAverageTransformedCoverageDist">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getInnerVariance"></a><span class="summary-sig-name">getInnerVariance</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">profile</span>,
+        <span class="summary-sig-arg">mode</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string">kmer</code><code class="variable-quote">'</code></span>)</span><br />
+      Work out the variance for the coverage/kmer/gc profile</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.getInnerVariance">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getCDist"></a><span class="summary-sig-name">getCDist</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">Csig</span>,
+        <span class="summary-sig-arg">centroid</span>=<span class="summary-sig-default">None</span>)</span><br />
+      Get the distance of this contig from the coverage centroid</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.getCDist">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.bin.Bin-class.html#getBoundingEllipsoid" class="summary-sig-name">getBoundingEllipsoid</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">transformedCP</span>,
+        <span class="summary-sig-arg">ET</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">retA</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Return the minimum bounding ellipsoid</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.getBoundingEllipsoid">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getBoundingCEllipsoidVol"></a><span class="summary-sig-name">getBoundingCEllipsoidVol</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">transformedCP</span>,
+        <span class="summary-sig-arg">ET</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">retA</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Return the volume of the minimum bounding coverage ellipsoid</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.getBoundingCEllipsoidVol">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getBoundingKEllipseArea"></a><span class="summary-sig-name">getBoundingKEllipseArea</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">KPCAs</span>,
+        <span class="summary-sig-arg">ET</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">retA</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Return the area of the minimum bounding kmer PCA ellipse</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.getBoundingKEllipseArea">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="makeRanges"></a><span class="summary-sig-name">makeRanges</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">pos</span>,
+        <span class="summary-sig-arg">span</span>,
+        <span class="summary-sig-arg">limit</span>)</span><br />
+      Make search ranges which won't go out of bounds</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.makeRanges">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="recruit"></a><span class="summary-sig-name">recruit</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">PM</span>,
+        <span class="summary-sig-arg">GT</span>,
+        <span class="summary-sig-arg">im2RowIndices</span>,
+        <span class="summary-sig-arg">inclusivity</span>=<span class="summary-sig-default">1</span>)</span><br />
+      Recruit more contigs into the bin, used during coring only</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.recruit">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="shuffleMembers"></a><span class="summary-sig-name">shuffleMembers</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">adds</span>,
+        <span class="summary-sig-arg">removes</span>)</span><br />
+      add some guys, take some guys away</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.shuffleMembers">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="plotProfileDistributions"></a><span class="summary-sig-name">plotProfileDistributions</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">transformedCP</span>,
+        <span class="summary-sig-arg">kmerSigs</span>,
+        <span class="summary-sig-arg">fileName</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>)</span><br />
+      plot the profile distibutions for this bin</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.plotProfileDistributions">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="plotBin"></a><span class="summary-sig-name">plotBin</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">transformedCP</span>,
+        <span class="summary-sig-arg">contigGCs</span>,
+        <span class="summary-sig-arg">kmerNormPC1</span>,
+        <span class="summary-sig-arg">contigLengths</span>,
+        <span class="summary-sig-arg">colorMapGC</span>,
+        <span class="summary-sig-arg">isLikelyChimeric</span>,
+        <span class="summary-sig-arg">fileName</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">ignoreContigLengths</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">ET</span>=<span class="summary-sig-default">None</span>)</span><br />
+      Plot a single bin</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.plotBin">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="plotOnFig"></a><span class="summary-sig-name">plotOnFig</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">fig</span>,
+        <span class="summary-sig-arg">plot_rows</span>,
+        <span class="summary-sig-arg">plot_cols</span>,
+        <span class="summary-sig-arg">plot_num</span>,
+        <span class="summary-sig-arg">transformedCP</span>,
+        <span class="summary-sig-arg">contigGCs</span>,
+        <span class="summary-sig-arg">contigLengths</span>,
+        <span class="summary-sig-arg">colorMapGC</span>,
+        <span class="summary-sig-arg">isLikelyChimeric</span>,
+        <span class="summary-sig-arg">fileName</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">ignoreContigLengths</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">ET</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">plotColorbar</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">extents</span>=<span class="summary-sig-default">None</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.plotOnFig">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.bin.Bin-class.html#plotOnAx" class="summary-sig-name">plotOnAx</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">ax</span>,
+        <span class="summary-sig-arg">transformedCP</span>,
+        <span class="summary-sig-arg">contigGCs</span>,
+        <span class="summary-sig-arg">contigLengths</span>,
+        <span class="summary-sig-arg">colorMapGC</span>,
+        <span class="summary-sig-arg">isLikelyChimeric</span>,
+        <span class="summary-sig-arg">fileName</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">ignoreContigLengths</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">plotCentroid</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">ET</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">printID</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">plotColorbar</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">extents</span>=<span class="summary-sig-default">None</span>)</span><br />
+      Plot a bin in a given subplot</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.plotOnAx">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.bin.Bin-class.html#plotMersOnAx" class="summary-sig-name">plotMersOnAx</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">ax</span>,
+        <span class="summary-sig-arg">kPCA1</span>,
+        <span class="summary-sig-arg">kPCA2</span>,
+        <span class="summary-sig-arg">contigGCs</span>,
+        <span class="summary-sig-arg">contigLengths</span>,
+        <span class="summary-sig-arg">colorMapGC</span>,
+        <span class="summary-sig-arg">fileName</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">ET</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">printID</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">plotColorbar</span>=<span class="summary-sig-default">True</span>)</span><br />
+      Plot a bins kmer sig PCAs in a given subplot</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.plotMersOnAx">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="printBin"></a><span class="summary-sig-name">printBin</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">contigNames</span>,
+        <span class="summary-sig-arg">covProfiles</span>,
+        <span class="summary-sig-arg">contigGCs</span>,
+        <span class="summary-sig-arg">contigLengths</span>,
+        <span class="summary-sig-arg">isLikelyChimeric</span>,
+        <span class="summary-sig-arg">outFormat</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string">summary</code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">separator</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string">\t</code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">stream</span>=<span class="summary-sig-default">sys_stdout</span>)</span><br />
+      print this bin info in csvformat</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.bin-pysrc.html#Bin.printBin">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+</table>
+<!-- ==================== METHOD DETAILS ==================== -->
+<a name="section-MethodDetails"></a>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Method Details</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-MethodDetails"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+</table>
+<a name="scoreProfile"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">scoreProfile</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">kmerVal</span>,
+        <span class="sig-arg">transformedCP</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.bin-pysrc.html#Bin.scoreProfile">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Determine how similar this profile is to the bin distribution</p>
+  <p>This is the norm of the vector containing z distances for both 
+  profiles</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="makeBinDist"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">makeBinDist</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">transformedCP</span>,
+        <span class="sig-arg">averageCoverages</span>,
+        <span class="sig-arg">kmerNormPC1</span>,
+        <span class="sig-arg">kmerPCs</span>,
+        <span class="sig-arg">contigGCs</span>,
+        <span class="sig-arg">contigLengths</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.bin-pysrc.html#Bin.makeBinDist">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Determine the distribution of the points in this bin</p>
+  <p>The distribution is largely normal, except at the boundaries.</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="getBoundingEllipsoid"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">getBoundingEllipsoid</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">transformedCP</span>,
+        <span class="sig-arg">ET</span>=<span class="sig-default">None</span>,
+        <span class="sig-arg">retA</span>=<span class="sig-default">False</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.bin-pysrc.html#Bin.getBoundingEllipsoid">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Return the minimum bounding ellipsoid</p>
+  <p>returns (center, radii, rotation) or (A, center, radii, rotation)</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="plotOnAx"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">plotOnAx</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">ax</span>,
+        <span class="sig-arg">transformedCP</span>,
+        <span class="sig-arg">contigGCs</span>,
+        <span class="sig-arg">contigLengths</span>,
+        <span class="sig-arg">colorMapGC</span>,
+        <span class="sig-arg">isLikelyChimeric</span>,
+        <span class="sig-arg">fileName</span>=<span class="sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="sig-arg">ignoreContigLengths</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">plotCentroid</span>=<span class="sig-default">True</span>,
+        <span class="sig-arg">ET</span>=<span class="sig-default">None</span>,
+        <span class="sig-arg">printID</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">plotColorbar</span>=<span class="sig-default">True</span>,
+        <span class="sig-arg">extents</span>=<span class="sig-default">None</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.bin-pysrc.html#Bin.plotOnAx">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Plot a bin in a given subplot</p>
+  <p>If you pass through an EllipsoidTool then it will plot the minimum 
+  bounding ellipsoid as well!</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="plotMersOnAx"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">plotMersOnAx</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">ax</span>,
+        <span class="sig-arg">kPCA1</span>,
+        <span class="sig-arg">kPCA2</span>,
+        <span class="sig-arg">contigGCs</span>,
+        <span class="sig-arg">contigLengths</span>,
+        <span class="sig-arg">colorMapGC</span>,
+        <span class="sig-arg">fileName</span>=<span class="sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="sig-arg">ET</span>=<span class="sig-default">None</span>,
+        <span class="sig-arg">printID</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">plotColorbar</span>=<span class="sig-default">True</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.bin-pysrc.html#Bin.plotMersOnAx">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Plot a bins kmer sig PCAs in a given subplot</p>
+  <p>If you pass through an EllipsoidTool then it will plot the minimum 
+  bounding ellipse as well!</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<br />
+<!-- ==================== NAVIGATION BAR ==================== -->
+<table class="navbar" border="0" width="100%" cellpadding="0"
+       bgcolor="#a0c0ff" cellspacing="0">
+  <tr valign="middle">
+  <!-- Home link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="groopm-module.html">Home</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Tree link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="module-tree.html">Trees</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Index link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="identifier-index.html">Indices</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Help link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Project homepage -->
+      <th class="navbar" align="right" width="100%">
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr><th class="navbar" align="center"
+            ><a class="navbar" target="_top" href="http://minillinim.github.io/GroopM/">GroopM</a></th>
+          </tr></table></th>
+  </tr>
+</table>
+<table border="0" cellpadding="0" cellspacing="0" width="100%%">
+  <tr>
+    <td align="left" class="footer">
+    Generated by Epydoc 3.0.1 on Thu Dec 19 23:19:18 2013
+    </td>
+    <td align="right" class="footer">
+      <a target="mainFrame" href="http://epydoc.sourceforge.net"
+        >http://epydoc.sourceforge.net</a>
+    </td>
+  </tr>
+</table>
+
+<script type="text/javascript">
+  <!--
+  // Private objects are initially displayed (because if
+  // javascript is turned off then we want them to be
+  // visible); but by default, we want to hide them.  So hide
+  // them unless we have a cookie that says to show them.
+  checkCookie();
+  // -->
+</script>
+</body>
+</html>

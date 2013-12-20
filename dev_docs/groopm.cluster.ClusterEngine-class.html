@@ -1,0 +1,794 @@
+<?xml version="1.0" encoding="ascii"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+          "DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>groopm.cluster.ClusterEngine</title>
+  <link rel="stylesheet" href="epydoc.css" type="text/css" />
+  <script type="text/javascript" src="epydoc.js"></script>
+</head>
+
+<body bgcolor="white" text="black" link="blue" vlink="#204080"
+      alink="#204080">
+<!-- ==================== NAVIGATION BAR ==================== -->
+<table class="navbar" border="0" width="100%" cellpadding="0"
+       bgcolor="#a0c0ff" cellspacing="0">
+  <tr valign="middle">
+  <!-- Home link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="groopm-module.html">Home</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Tree link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="module-tree.html">Trees</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Index link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="identifier-index.html">Indices</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Help link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Project homepage -->
+      <th class="navbar" align="right" width="100%">
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr><th class="navbar" align="center"
+            ><a class="navbar" target="_top" href="http://minillinim.github.io/GroopM/">GroopM</a></th>
+          </tr></table></th>
+  </tr>
+</table>
+<table width="100%" cellpadding="0" cellspacing="0">
+  <tr valign="top">
+    <td width="100%">
+      <span class="breadcrumbs">
+        <a href="groopm-module.html">Package&nbsp;groopm</a> ::
+        <a href="groopm.cluster-module.html">Module&nbsp;cluster</a> ::
+        Class&nbsp;ClusterEngine
+      </span>
+    </td>
+    <td>
+      <table cellpadding="0" cellspacing="0">
+        <!-- hide/show private -->
+        <tr><td align="right"><span class="options">[<a href="javascript:void(0);" class="privatelink"
+    onclick="toggle_private();">hide&nbsp;private</a>]</span></td></tr>
+        <tr><td align="right"><span class="options"
+            >[<a href="frames.html" target="_top">frames</a
+            >]&nbsp;|&nbsp;<a href="groopm.cluster.ClusterEngine-class.html"
+            target="_top">no&nbsp;frames</a>]</span></td></tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- ==================== CLASS DESCRIPTION ==================== -->
+<h1 class="epydoc">Class ClusterEngine</h1><p class="nomargin-top"><span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine">source&nbsp;code</a></span></p>
+<p>Top level interface for clustering contigs</p>
+
+<!-- ==================== INSTANCE METHODS ==================== -->
+<a name="section-InstanceMethods"></a>
+<table class="summary" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Instance Methods</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-InstanceMethods"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="__init__"></a><span class="summary-sig-name">__init__</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">timer</span>,
+        <span class="summary-sig-arg">plot</span>=<span class="summary-sig-default">0</span>,
+        <span class="summary-sig-arg">finalPlot</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">force</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">numImgMaps</span>=<span class="summary-sig-default">1</span>,
+        <span class="summary-sig-arg">minSize</span>=<span class="summary-sig-default">5</span>,
+        <span class="summary-sig-arg">minVol</span>=<span class="summary-sig-default">1000000</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.__init__">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="promptOnOverwrite"></a><span class="summary-sig-name">promptOnOverwrite</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">minimal</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Check that the user is ok with possibly overwriting the DB</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.promptOnOverwrite">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="makeCores"></a><span class="summary-sig-name">makeCores</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">coreCut</span>,
+        <span class="summary-sig-arg">gf</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">kmerThreshold</span>=<span class="summary-sig-default">0.2</span>,
+        <span class="summary-sig-arg">coverageThreshold</span>=<span class="summary-sig-default">0.05</span>)</span><br />
+      Cluster the contigs to make bin cores</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.makeCores">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="initialiseCores"></a><span class="summary-sig-name">initialiseCores</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">kmerThreshold</span>,
+        <span class="summary-sig-arg">coverageThreshold</span>)</span><br />
+      Process contigs and form CORE bins</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.initialiseCores">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="findNewClusterCenters"></a><span class="summary-sig-name">findNewClusterCenters</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">kmerThreshold</span>,
+        <span class="summary-sig-arg">coverageThreshold</span>)</span><br />
+      Find a putative cluster</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.findNewClusterCenters">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="twoWayContraction"></a><span class="summary-sig-name">twoWayContraction</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">rowIndices</span>,
+        <span class="summary-sig-arg">positionInPlane</span>,
+        <span class="summary-sig-arg">kmerThreshold</span>,
+        <span class="summary-sig-arg">coverageThreshold</span>)</span><br />
+      Partition a collection of contigs into 'core' groups</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.twoWayContraction">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="populateImageMaps"></a><span class="summary-sig-name">populateImageMaps</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Load the transformed data into the main image maps</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.populateImageMaps">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="incrementViaRowIndex"></a><span class="summary-sig-name">incrementViaRowIndex</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">rowIndex</span>,
+        <span class="summary-sig-arg">point</span>=<span class="summary-sig-default">None</span>)</span><br />
+      Wrapper to increment about point</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.incrementViaRowIndex">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="decrementViaRowIndex"></a><span class="summary-sig-name">decrementViaRowIndex</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">rowIndex</span>,
+        <span class="summary-sig-arg">point</span>=<span class="summary-sig-default">None</span>)</span><br />
+      Wrapper to decrement about point</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.decrementViaRowIndex">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.cluster.ClusterEngine-class.html#incrementAboutPoint" class="summary-sig-name">incrementAboutPoint</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">view_index</span>,
+        <span class="summary-sig-arg">px</span>,
+        <span class="summary-sig-arg">py</span>,
+        <span class="summary-sig-arg">valP</span>=<span class="summary-sig-default">1</span>,
+        <span class="summary-sig-arg">valS</span>=<span class="summary-sig-default">0.6</span>,
+        <span class="summary-sig-arg">valC</span>=<span class="summary-sig-default">0.2</span>,
+        <span class="summary-sig-arg">multiplier</span>=<span class="summary-sig-default">1</span>)</span><br />
+      Increment value at a point in the 2D image maps</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.incrementAboutPoint">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.cluster.ClusterEngine-class.html#decrementAboutPoint" class="summary-sig-name">decrementAboutPoint</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">view_index</span>,
+        <span class="summary-sig-arg">px</span>,
+        <span class="summary-sig-arg">py</span>,
+        <span class="summary-sig-arg">valP</span>=<span class="summary-sig-default">1</span>,
+        <span class="summary-sig-arg">valS</span>=<span class="summary-sig-default">0.6</span>,
+        <span class="summary-sig-arg">valC</span>=<span class="summary-sig-default">0.2</span>,
+        <span class="summary-sig-arg">multiplier</span>=<span class="summary-sig-default">1</span>)</span><br />
+      Decrement value at a point in the 2D image maps</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.decrementAboutPoint">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="safeDecrement"></a><span class="summary-sig-name">safeDecrement</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">map</span>,
+        <span class="summary-sig-arg">px</span>,
+        <span class="summary-sig-arg">py</span>,
+        <span class="summary-sig-arg">value</span>)</span><br />
+      Decrement a value and make sure it's not negative or something shitty</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.safeDecrement">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.cluster.ClusterEngine-class.html#incrementAboutPoint3D" class="summary-sig-name">incrementAboutPoint3D</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">workingBlock</span>,
+        <span class="summary-sig-arg">px</span>,
+        <span class="summary-sig-arg">py</span>,
+        <span class="summary-sig-arg">pz</span>,
+        <span class="summary-sig-arg">vals</span>=<span class="summary-sig-default"><code class="variable-group">(</code>6.4<code class="variable-op">, </code>4.9<code class="variable-op">, </code>2.5<code class="variable-op">, </code>1.6<code class="variable-group">)</code></span>,
+        <span class="summary-sig-arg">multiplier</span>=<span class="summary-sig-default">1</span>)</span><br />
+      Increment a point found in a 3D column</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.incrementAboutPoint3D">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.cluster.ClusterEngine-class.html#subIncrement3D" class="summary-sig-name">subIncrement3D</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">workingBlock</span>,
+        <span class="summary-sig-arg">px</span>,
+        <span class="summary-sig-arg">py</span>,
+        <span class="summary-sig-arg">pz</span>,
+        <span class="summary-sig-arg">vals</span>,
+        <span class="summary-sig-arg">offset</span>)</span><br />
+      AUX: Called from incrementAboutPoint3D does but one slice</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.subIncrement3D">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="blurMaps"></a><span class="summary-sig-name">blurMaps</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Blur the 2D image maps</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.blurMaps">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="makeCoordRanges"></a><span class="summary-sig-name">makeCoordRanges</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">pos</span>,
+        <span class="summary-sig-arg">span</span>)</span><br />
+      Make search ranges which won't go out of bounds</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.makeCoordRanges">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="updatePostBin"></a><span class="summary-sig-name">updatePostBin</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">bin</span>)</span><br />
+      Update data structures after assigning contigs to a new bin</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.updatePostBin">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.cluster.ClusterEngine-class.html#setRowIndexAssigned" class="summary-sig-name">setRowIndexAssigned</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">rowIndex</span>)</span><br />
+      fix the data structures to indicate that rowIndex belongs to a bin</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.setRowIndexAssigned">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.cluster.ClusterEngine-class.html#setRowIndexUnassigned" class="summary-sig-name">setRowIndexUnassigned</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">rowIndex</span>)</span><br />
+      fix the data structures to indicate that rowIndex no longer belongs 
+      to a bin</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.setRowIndexUnassigned">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="restrictRowIndices"></a><span class="summary-sig-name">restrictRowIndices</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">indices</span>)</span><br />
+      Add these indices to the restricted list</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.restrictRowIndices">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="plotIndices"></a><span class="summary-sig-name">plotIndices</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">rowIndices</span>,
+        <span class="summary-sig-arg">fileName</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>)</span><br />
+      Plot these contigs in transformed space</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.plotIndices">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="plotRegion"></a><span class="summary-sig-name">plotRegion</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">px</span>,
+        <span class="summary-sig-arg">py</span>,
+        <span class="summary-sig-arg">pz</span>,
+        <span class="summary-sig-arg">fileName</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">tag</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">column</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Plot the region surrounding a point</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.plotRegion">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.cluster.ClusterEngine-class.html#plotHeat" class="summary-sig-name">plotHeat</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">fileName</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">x</span>=<span class="summary-sig-default">-1</span>,
+        <span class="summary-sig-arg">y</span>=<span class="summary-sig-default">-1</span>)</span><br />
+      Print the main heat maps</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.plotHeat">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+</table>
+<!-- ==================== METHOD DETAILS ==================== -->
+<a name="section-MethodDetails"></a>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Method Details</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-MethodDetails"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+</table>
+<a name="incrementAboutPoint"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">incrementAboutPoint</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">view_index</span>,
+        <span class="sig-arg">px</span>,
+        <span class="sig-arg">py</span>,
+        <span class="sig-arg">valP</span>=<span class="sig-default">1</span>,
+        <span class="sig-arg">valS</span>=<span class="sig-default">0.6</span>,
+        <span class="sig-arg">valC</span>=<span class="sig-default">0.2</span>,
+        <span class="sig-arg">multiplier</span>=<span class="sig-default">1</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.incrementAboutPoint">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Increment value at a point in the 2D image maps</p>
+  <p>Increment point by valP, increment neighbouring points at the sides 
+  and corners of the target point by valS and valC</p>
+  <p>multiplier is proportional to the contigs length</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="decrementAboutPoint"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">decrementAboutPoint</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">view_index</span>,
+        <span class="sig-arg">px</span>,
+        <span class="sig-arg">py</span>,
+        <span class="sig-arg">valP</span>=<span class="sig-default">1</span>,
+        <span class="sig-arg">valS</span>=<span class="sig-default">0.6</span>,
+        <span class="sig-arg">valC</span>=<span class="sig-default">0.2</span>,
+        <span class="sig-arg">multiplier</span>=<span class="sig-default">1</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.decrementAboutPoint">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Decrement value at a point in the 2D image maps</p>
+  <p>multiplier is proportional to the contigs length</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="incrementAboutPoint3D"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">incrementAboutPoint3D</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">workingBlock</span>,
+        <span class="sig-arg">px</span>,
+        <span class="sig-arg">py</span>,
+        <span class="sig-arg">pz</span>,
+        <span class="sig-arg">vals</span>=<span class="sig-default"><code class="variable-group">(</code>6.4<code class="variable-op">, </code>4.9<code class="variable-op">, </code>2.5<code class="variable-op">, </code>1.6<code class="variable-group">)</code></span>,
+        <span class="sig-arg">multiplier</span>=<span class="sig-default">1</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.incrementAboutPoint3D">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Increment a point found in a 3D column</p>
+  <p>used when finding the centroid of a hot area update the 26 points 
+  which surround the centre point z spans the height of the entire column, 
+  x and y have been offset to match the column subspace</p>
+  <p>multiplier is proportional to the contigs length</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="subIncrement3D"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">subIncrement3D</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">workingBlock</span>,
+        <span class="sig-arg">px</span>,
+        <span class="sig-arg">py</span>,
+        <span class="sig-arg">pz</span>,
+        <span class="sig-arg">vals</span>,
+        <span class="sig-arg">offset</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.subIncrement3D">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>AUX: Called from incrementAboutPoint3D does but one slice</p>
+  <p>multiplier is proportional to the contigs length</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="setRowIndexAssigned"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">setRowIndexAssigned</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">rowIndex</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.setRowIndexAssigned">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>fix the data structures to indicate that rowIndex belongs to a bin</p>
+  <p>Use only during initial core creation</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="setRowIndexUnassigned"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">setRowIndexUnassigned</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">rowIndex</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.setRowIndexUnassigned">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>fix the data structures to indicate that rowIndex no longer belongs to
+  a bin</p>
+  <p>Use only during initial core creation</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="plotHeat"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">plotHeat</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">fileName</span>=<span class="sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="sig-arg">x</span>=<span class="sig-default">-1</span>,
+        <span class="sig-arg">y</span>=<span class="sig-default">-1</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.cluster-pysrc.html#ClusterEngine.plotHeat">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Print the main heat maps</p>
+  <p>Useful for debugging</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<br />
+<!-- ==================== NAVIGATION BAR ==================== -->
+<table class="navbar" border="0" width="100%" cellpadding="0"
+       bgcolor="#a0c0ff" cellspacing="0">
+  <tr valign="middle">
+  <!-- Home link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="groopm-module.html">Home</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Tree link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="module-tree.html">Trees</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Index link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="identifier-index.html">Indices</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Help link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Project homepage -->
+      <th class="navbar" align="right" width="100%">
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr><th class="navbar" align="center"
+            ><a class="navbar" target="_top" href="http://minillinim.github.io/GroopM/">GroopM</a></th>
+          </tr></table></th>
+  </tr>
+</table>
+<table border="0" cellpadding="0" cellspacing="0" width="100%%">
+  <tr>
+    <td align="left" class="footer">
+    Generated by Epydoc 3.0.1 on Thu Dec 19 23:19:18 2013
+    </td>
+    <td align="right" class="footer">
+      <a target="mainFrame" href="http://epydoc.sourceforge.net"
+        >http://epydoc.sourceforge.net</a>
+    </td>
+  </tr>
+</table>
+
+<script type="text/javascript">
+  <!--
+  // Private objects are initially displayed (because if
+  // javascript is turned off then we want them to be
+  // visible); but by default, we want to hide them.  So hide
+  // them unless we have a cookie that says to show them.
+  checkCookie();
+  // -->
+</script>
+</body>
+</html>

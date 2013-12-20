@@ -1,0 +1,760 @@
+<?xml version="1.0" encoding="ascii"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+          "DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>groopm.profileManager.ProfileManager</title>
+  <link rel="stylesheet" href="epydoc.css" type="text/css" />
+  <script type="text/javascript" src="epydoc.js"></script>
+</head>
+
+<body bgcolor="white" text="black" link="blue" vlink="#204080"
+      alink="#204080">
+<!-- ==================== NAVIGATION BAR ==================== -->
+<table class="navbar" border="0" width="100%" cellpadding="0"
+       bgcolor="#a0c0ff" cellspacing="0">
+  <tr valign="middle">
+  <!-- Home link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="groopm-module.html">Home</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Tree link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="module-tree.html">Trees</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Index link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="identifier-index.html">Indices</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Help link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Project homepage -->
+      <th class="navbar" align="right" width="100%">
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr><th class="navbar" align="center"
+            ><a class="navbar" target="_top" href="http://minillinim.github.io/GroopM/">GroopM</a></th>
+          </tr></table></th>
+  </tr>
+</table>
+<table width="100%" cellpadding="0" cellspacing="0">
+  <tr valign="top">
+    <td width="100%">
+      <span class="breadcrumbs">
+        <a href="groopm-module.html">Package&nbsp;groopm</a> ::
+        <a href="groopm.profileManager-module.html">Module&nbsp;profileManager</a> ::
+        Class&nbsp;ProfileManager
+      </span>
+    </td>
+    <td>
+      <table cellpadding="0" cellspacing="0">
+        <!-- hide/show private -->
+        <tr><td align="right"><span class="options">[<a href="javascript:void(0);" class="privatelink"
+    onclick="toggle_private();">hide&nbsp;private</a>]</span></td></tr>
+        <tr><td align="right"><span class="options"
+            >[<a href="frames.html" target="_top">frames</a
+            >]&nbsp;|&nbsp;<a href="groopm.profileManager.ProfileManager-class.html"
+            target="_top">no&nbsp;frames</a>]</span></td></tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- ==================== CLASS DESCRIPTION ==================== -->
+<h1 class="epydoc">Class ProfileManager</h1><p class="nomargin-top"><span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager">source&nbsp;code</a></span></p>
+<p>Interacts with the groopm DataManager and local data fields</p>
+  <p>Mostly a wrapper around a group of numpy arrays and a pytables 
+  quagmire</p>
+
+<!-- ==================== INSTANCE METHODS ==================== -->
+<a name="section-InstanceMethods"></a>
+<table class="summary" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Instance Methods</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-InstanceMethods"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="__init__"></a><span class="summary-sig-name">__init__</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">force</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">scaleFactor</span>=<span class="summary-sig-default">1000</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.__init__">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="loadData"></a><span class="summary-sig-name">loadData</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">timer</span>,
+        <span class="summary-sig-arg">condition</span>,
+        <span class="summary-sig-arg">bids</span>=<span class="summary-sig-default"><code class="variable-group">[</code><code class="variable-group">]</code></span>,
+        <span class="summary-sig-arg">verbose</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">silent</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">loadCovProfiles</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">loadKmerPCs</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">loadKmerVarPC</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">loadRawKmers</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">makeColors</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">loadContigNames</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">loadContigLengths</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">loadContigGCs</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">loadBins</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">loadLinks</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Load pre-parsed data</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.loadData">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.profileManager.ProfileManager-class.html#reduceIndices" class="summary-sig-name">reduceIndices</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">deadRowIndices</span>)</span><br />
+      purge indices from the data structures</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.reduceIndices">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getNumStoits"></a><span class="summary-sig-name">getNumStoits</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      return the value of numStoits in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.getNumStoits">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getMerColNames"></a><span class="summary-sig-name">getMerColNames</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      return the value of merColNames in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.getMerColNames">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getMerSize"></a><span class="summary-sig-name">getMerSize</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      return the value of merSize in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.getMerSize">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getNumMers"></a><span class="summary-sig-name">getNumMers</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      return the value of numMers in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.getNumMers">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getNumBins"></a><span class="summary-sig-name">getNumBins</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      return the value of numBins in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.getNumBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="setNumBins"></a><span class="summary-sig-name">setNumBins</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">numBins</span>)</span><br />
+      set the number of bins</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.setNumBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getStoitColNames"></a><span class="summary-sig-name">getStoitColNames</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      return the value of stoitColNames in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.getStoitColNames">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="isClustered"></a><span class="summary-sig-name">isClustered</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Has the data been clustered already</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.isClustered">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="setClustered"></a><span class="summary-sig-name">setClustered</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Save that the db has been clustered</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.setClustered">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="isComplete"></a><span class="summary-sig-name">isComplete</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Has the data been *completely* clustered already</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.isComplete">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="setComplete"></a><span class="summary-sig-name">setComplete</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Save that the db has been completely clustered</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.setComplete">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getBinStats"></a><span class="summary-sig-name">getBinStats</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Go through all the &quot;bins&quot; array and make a list of unique 
+      bin ids vs number of contigs</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.getBinStats">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.profileManager.ProfileManager-class.html#setBinStats" class="summary-sig-name">setBinStats</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">binStats</span>)</span><br />
+      Store the valid bin Ids and number of members</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.setBinStats">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="setBinAssignments"></a><span class="summary-sig-name">setBinAssignments</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">assignments</span>,
+        <span class="summary-sig-arg">nuke</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Save our bins into the DB</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.setBinAssignments">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="loadLinks"></a><span class="summary-sig-name">loadLinks</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Extra wrapper 'cause I am dumb</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.loadLinks">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getLinks"></a><span class="summary-sig-name">getLinks</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Get contig links</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.getLinks">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getAverageCoverage"></a><span class="summary-sig-name">getAverageCoverage</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">rowIndex</span>)</span><br />
+      Return the average coverage for this contig across all stoits</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.getAverageCoverage">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="shuffleBAMs"></a><span class="summary-sig-name">shuffleBAMs</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Make the data transformation deterministic by reordering the bams</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.shuffleBAMs">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="transformCP"></a><span class="summary-sig-name">transformCP</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">timer</span>,
+        <span class="summary-sig-arg">silent</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">nolog</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Do the main transformation on the coverage profile data</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.transformCP">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="rewriteBins"></a><span class="summary-sig-name">rewriteBins</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      rewrite the bins table in hdf5 based on numbers in meta-contigs</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.rewriteBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="createColorMapHSV"></a><span class="summary-sig-name">createColorMapHSV</span>(<span class="summary-sig-arg">self</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.createColorMapHSV">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="setColorMap"></a><span class="summary-sig-name">setColorMap</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">colorMapStr</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.setColorMap">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="plotStoitNames"></a><span class="summary-sig-name">plotStoitNames</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">ax</span>)</span><br />
+      Plot stoit names on an existing axes</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.plotStoitNames">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="plotUnbinned"></a><span class="summary-sig-name">plotUnbinned</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">timer</span>,
+        <span class="summary-sig-arg">coreCut</span>,
+        <span class="summary-sig-arg">transform</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">ignoreContigLengths</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Plot all contigs over a certain length which are unbinned</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.plotUnbinned">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="plotAll"></a><span class="summary-sig-name">plotAll</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">timer</span>,
+        <span class="summary-sig-arg">coreCut</span>,
+        <span class="summary-sig-arg">transform</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">ignoreContigLengths</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Plot all contigs over a certain length which are unbinned</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.plotAll">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="plotTransViews"></a><span class="summary-sig-name">plotTransViews</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">tag</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string">fordens</code><code class="variable-quote">'</code></span>)</span><br />
+      Plot top, side and front views of the transformed data</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.plotTransViews">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="renderTransCPData"></a><span class="summary-sig-name">renderTransCPData</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">fileName</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">show</span>=<span class="summary-sig-default">True</span>,
+        <span class="summary-sig-arg">elev</span>=<span class="summary-sig-default">45</span>,
+        <span class="summary-sig-arg">azim</span>=<span class="summary-sig-default">45</span>,
+        <span class="summary-sig-arg">all</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">showAxis</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">primaryWidth</span>=<span class="summary-sig-default">12</span>,
+        <span class="summary-sig-arg">primarySpace</span>=<span class="summary-sig-default">3</span>,
+        <span class="summary-sig-arg">dpi</span>=<span class="summary-sig-default">300</span>,
+        <span class="summary-sig-arg">format</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string">png</code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">fig</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">highlight</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">restrictedBids</span>=<span class="summary-sig-default"><code class="variable-group">[</code><code class="variable-group">]</code></span>,
+        <span class="summary-sig-arg">alpha</span>=<span class="summary-sig-default">1</span>)</span><br />
+      Plot transformed data in 3D</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.renderTransCPData">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+</table>
+<!-- ==================== METHOD DETAILS ==================== -->
+<a name="section-MethodDetails"></a>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Method Details</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-MethodDetails"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+</table>
+<a name="reduceIndices"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">reduceIndices</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">deadRowIndices</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.reduceIndices">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>purge indices from the data structures</p>
+  <p>Be sure that deadRowIndices are sorted ascending</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="setBinStats"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">setBinStats</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">binStats</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.profileManager-pysrc.html#ProfileManager.setBinStats">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Store the valid bin Ids and number of members</p>
+  <p>binStats is a list of tuples which looks like: [ (bid, numMembers, 
+  isLikelyChimeric) ] Note that this call effectively nukes the existing 
+  table</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<br />
+<!-- ==================== NAVIGATION BAR ==================== -->
+<table class="navbar" border="0" width="100%" cellpadding="0"
+       bgcolor="#a0c0ff" cellspacing="0">
+  <tr valign="middle">
+  <!-- Home link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="groopm-module.html">Home</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Tree link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="module-tree.html">Trees</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Index link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="identifier-index.html">Indices</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Help link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Project homepage -->
+      <th class="navbar" align="right" width="100%">
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr><th class="navbar" align="center"
+            ><a class="navbar" target="_top" href="http://minillinim.github.io/GroopM/">GroopM</a></th>
+          </tr></table></th>
+  </tr>
+</table>
+<table border="0" cellpadding="0" cellspacing="0" width="100%%">
+  <tr>
+    <td align="left" class="footer">
+    Generated by Epydoc 3.0.1 on Thu Dec 19 23:19:18 2013
+    </td>
+    <td align="right" class="footer">
+      <a target="mainFrame" href="http://epydoc.sourceforge.net"
+        >http://epydoc.sourceforge.net</a>
+    </td>
+  </tr>
+</table>
+
+<script type="text/javascript">
+  <!--
+  // Private objects are initially displayed (because if
+  // javascript is turned off then we want them to be
+  // visible); but by default, we want to hide them.  So hide
+  // them unless we have a cookie that says to show them.
+  checkCookie();
+  // -->
+</script>
+</body>
+</html>

@@ -1,0 +1,1168 @@
+<?xml version="1.0" encoding="ascii"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+          "DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>groopm.mstore.GMDataManager</title>
+  <link rel="stylesheet" href="epydoc.css" type="text/css" />
+  <script type="text/javascript" src="epydoc.js"></script>
+</head>
+
+<body bgcolor="white" text="black" link="blue" vlink="#204080"
+      alink="#204080">
+<!-- ==================== NAVIGATION BAR ==================== -->
+<table class="navbar" border="0" width="100%" cellpadding="0"
+       bgcolor="#a0c0ff" cellspacing="0">
+  <tr valign="middle">
+  <!-- Home link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="groopm-module.html">Home</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Tree link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="module-tree.html">Trees</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Index link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="identifier-index.html">Indices</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Help link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Project homepage -->
+      <th class="navbar" align="right" width="100%">
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr><th class="navbar" align="center"
+            ><a class="navbar" target="_top" href="http://minillinim.github.io/GroopM/">GroopM</a></th>
+          </tr></table></th>
+  </tr>
+</table>
+<table width="100%" cellpadding="0" cellspacing="0">
+  <tr valign="top">
+    <td width="100%">
+      <span class="breadcrumbs">
+        <a href="groopm-module.html">Package&nbsp;groopm</a> ::
+        <a href="groopm.mstore-module.html">Module&nbsp;mstore</a> ::
+        Class&nbsp;GMDataManager
+      </span>
+    </td>
+    <td>
+      <table cellpadding="0" cellspacing="0">
+        <!-- hide/show private -->
+        <tr><td align="right"><span class="options">[<a href="javascript:void(0);" class="privatelink"
+    onclick="toggle_private();">hide&nbsp;private</a>]</span></td></tr>
+        <tr><td align="right"><span class="options"
+            >[<a href="frames.html" target="_top">frames</a
+            >]&nbsp;|&nbsp;<a href="groopm.mstore.GMDataManager-class.html"
+            target="_top">no&nbsp;frames</a>]</span></td></tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- ==================== CLASS DESCRIPTION ==================== -->
+<h1 class="epydoc">Class GMDataManager</h1><p class="nomargin-top"><span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager">source&nbsp;code</a></span></p>
+<pre class="literalblock">
+Top level class for manipulating GroopM data
+
+Use this class for parsing in raw data into a hdf DB and
+for reading from and updating same DB
+
+NOTE: All tables are kept in the same order indexed by the contig ID
+Tables managed by this class are listed below
+
+------------------------
+ PROFILES
+group = '/profile'
+------------------------
+**Kmer Signature**
+table = 'kms'
+'mer1' : tables.FloatCol(pos=0)
+'mer2' : tables.FloatCol(pos=1)
+'mer3' : tables.FloatCol(pos=2)
+...
+
+**Kmer Vals**
+table = 'kpca'
+'pc1' : tables.FloatCol(pos=0)
+'pc2' : tables.FloatCol(pos=1)
+'pc3' : tables.FloatCol(pos=2)
+...
+
+**Coverage profile**
+table = 'coverage'
+'stoit1' : tables.FloatCol(pos=0)
+'stoit2' : tables.FloatCol(pos=1)
+'stoit3' : tables.FloatCol(pos=2)
+...
+
+**Transformed coverage profile**
+table = 'transCoverage'
+'x' : tables.FloatCol(pos=0)
+'y' : tables.FloatCol(pos=1)
+'z' : tables.FloatCol(pos=2)
+
+**Normalised coverage profile**
+table = 'normCoverage'
+'normCov' : tables.FloatCol(pos=0)
+
+------------------------
+ LINKS
+group = '/links'
+------------------------
+** Links **
+table = 'links'
+'contig1'    : tables.Int32Col(pos=0)            # reference to index in meta/contigs
+'contig2'    : tables.Int32Col(pos=1)            # reference to index in meta/contigs
+'numReads'   : tables.Int32Col(pos=2)            # number of reads supporting this link
+'linkType'   : tables.Int32Col(pos=3)            # the type of the link (SS, SE, ES, EE)
+'gap'        : tables.Int32Col(pos=4)            # the estimated gap between the contigs
+
+------------------------
+ METADATA
+group = '/meta'
+------------------------
+** Metadata **
+table = 'meta'
+'stoitColNames' : tables.StringCol(512, pos=0)
+'numStoits'     : tables.Int32Col(pos=1)
+'merColNames'   : tables.StringCol(4096,pos=2)
+'merSize'       : tables.Int32Col(pos=3)
+'numMers'       : tables.Int32Col(pos=4)
+'numCons'       : tables.Int32Col(pos=5)
+'numBins'       : tables.Int32Col(pos=6)
+'clustered'     : tables.BoolCol(pos=7)           # set to true after clustering is complete
+'complete'      : tables.BoolCol(pos=8)           # set to true after clustering finishing is complete
+'formatVersion' : tables.Int32Col(pos=9)          # groopm file version
+
+**PC variance**
+table = 'kpca_variance'
+'pc1_var' : tables.FloatCol(pos=0)
+'pc2_var' : tables.FloatCol(pos=1)
+'pc3_var' : tables.FloatCol(pos=2)
+...
+
+** Contigs **
+table = 'contigs'
+'cid'    : tables.StringCol(512, pos=0)
+'bid'    : tables.Int32Col(pos=1)
+'length' : tables.Int32Col(pos=2)
+'gc'     : tables.FloatCol(pos=3)
+
+** Bins **
+table = 'bins'
+'bid'        : tables.Int32Col(pos=0)
+'numMembers' : tables.Int32Col(pos=1)
+'isLikelyChimeric' : tables.BoolCol(pos=2)
+
+**Transformed coverage corners**
+table = 'transCoverageCorners'
+'x' : tables.FloatCol(pos=0)
+'y' : tables.FloatCol(pos=1)
+'z' : tables.FloatCol(pos=2)
+
+</pre>
+
+<!-- ==================== INSTANCE METHODS ==================== -->
+<a name="section-InstanceMethods"></a>
+<table class="summary" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Instance Methods</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-InstanceMethods"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="__init__"></a><span class="summary-sig-name">__init__</span>(<span class="summary-sig-arg">self</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.__init__">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="createDB"></a><span class="summary-sig-name">createDB</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">bamFiles</span>,
+        <span class="summary-sig-arg">contigs</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">timer</span>,
+        <span class="summary-sig-arg">kmerSize</span>=<span class="summary-sig-default">4</span>,
+        <span class="summary-sig-arg">force</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Main wrapper for parsing all input files</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.createDB">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="promptOnOverwrite"></a><span class="summary-sig-name">promptOnOverwrite</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">minimal</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Check that the user is ok with overwriting the db</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.promptOnOverwrite">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="checkAndUpgradeDB"></a><span class="summary-sig-name">checkAndUpgradeDB</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">silent</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Check the DB and upgrade if necessary</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.checkAndUpgradeDB">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="upgradeDB_0_to_1"></a><span class="summary-sig-name">upgradeDB_0_to_1</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      Upgrade a GM db from version 0 to version 1</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.upgradeDB_0_to_1">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="upgradeDB_1_to_2"></a><span class="summary-sig-name">upgradeDB_1_to_2</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      Upgrade a GM db from version 1 to version 2</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.upgradeDB_1_to_2">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="upgradeDB_2_to_3"></a><span class="summary-sig-name">upgradeDB_2_to_3</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      Upgrade a GM db from version 2 to version 3</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.upgradeDB_2_to_3">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="upgradeDB_3_to_4"></a><span class="summary-sig-name">upgradeDB_3_to_4</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      Upgrade a GM db from version 3 to version 4</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.upgradeDB_3_to_4">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="upgradeDB_4_to_5"></a><span class="summary-sig-name">upgradeDB_4_to_5</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      Upgrade a GM db from version 4 to version 5</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.upgradeDB_4_to_5">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="restoreLinks"></a><span class="summary-sig-name">restoreLinks</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">indices</span>=<span class="summary-sig-default"><code class="variable-group">[</code><code class="variable-group">]</code></span>,
+        <span class="summary-sig-arg">silent</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Restore the links hash for a given set of indices</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.restoreLinks">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getConditionalIndices"></a><span class="summary-sig-name">getConditionalIndices</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">condition</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">silent</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">checkUpgrade</span>=<span class="summary-sig-default">True</span>)</span><br />
+      return the indices into the db which meet the condition</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getConditionalIndices">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getCoverageProfiles"></a><span class="summary-sig-name">getCoverageProfiles</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">condition</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">indices</span>=<span class="summary-sig-default">array([], dtype=float64)</span>)</span><br />
+      Load coverage profiles</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getCoverageProfiles">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getTransformedCoverageProfiles"></a><span class="summary-sig-name">getTransformedCoverageProfiles</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">condition</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">indices</span>=<span class="summary-sig-default">array([], dtype=float64)</span>)</span><br />
+      Load transformed coverage profiles</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getTransformedCoverageProfiles">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getNormalisedCoverageProfiles"></a><span class="summary-sig-name">getNormalisedCoverageProfiles</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">condition</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">indices</span>=<span class="summary-sig-default">array([], dtype=float64)</span>)</span><br />
+      Load normalised coverage profiles</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getNormalisedCoverageProfiles">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="nukeBins"></a><span class="summary-sig-name">nukeBins</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      Reset all bin information, completely</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.nukeBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.mstore.GMDataManager-class.html#setBinStats" class="summary-sig-name">setBinStats</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">updates</span>,
+        <span class="summary-sig-arg">firstWrite</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Set bins table</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.setBinStats">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.mstore.GMDataManager-class.html#getBinStats" class="summary-sig-name">getBinStats</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      Load data from bins table</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getBinStats">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getBins"></a><span class="summary-sig-name">getBins</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">condition</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">indices</span>=<span class="summary-sig-default">array([], dtype=float64)</span>)</span><br />
+      Load per-contig bins</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.mstore.GMDataManager-class.html#setBinAssignments" class="summary-sig-name">setBinAssignments</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">storage</span>,
+        <span class="summary-sig-arg">updates</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">image</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">nuke</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Set per-contig bins</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.setBinAssignments">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getContigNames"></a><span class="summary-sig-name">getContigNames</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">condition</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">indices</span>=<span class="summary-sig-default">array([], dtype=float64)</span>)</span><br />
+      Load contig names</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getContigNames">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getContigLengths"></a><span class="summary-sig-name">getContigLengths</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">condition</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">indices</span>=<span class="summary-sig-default">array([], dtype=float64)</span>)</span><br />
+      Load contig lengths</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getContigLengths">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getContigGCs"></a><span class="summary-sig-name">getContigGCs</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">condition</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">indices</span>=<span class="summary-sig-default">array([], dtype=float64)</span>)</span><br />
+      Load contig gcs</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getContigGCs">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getKmerSigs"></a><span class="summary-sig-name">getKmerSigs</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">condition</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">indices</span>=<span class="summary-sig-default">array([], dtype=float64)</span>)</span><br />
+      Load kmer sigs</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getKmerSigs">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getKmerPCAs"></a><span class="summary-sig-name">getKmerPCAs</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">condition</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">indices</span>=<span class="summary-sig-default">array([], dtype=float64)</span>)</span><br />
+      Load kmer sig PCAs</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getKmerPCAs">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getKmerVarPC"></a><span class="summary-sig-name">getKmerVarPC</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">condition</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">indices</span>=<span class="summary-sig-default">array([], dtype=float64)</span>)</span><br />
+      Load variance of kmer sig PCAs</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getKmerVarPC">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getTransformedCoverageCorners"></a><span class="summary-sig-name">getTransformedCoverageCorners</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      Load transformed coverage corners</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getTransformedCoverageCorners">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="groopm.mstore.GMDataManager-class.html#setMeta" class="summary-sig-name">setMeta</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">h5file</span>,
+        <span class="summary-sig-arg">metaData</span>,
+        <span class="summary-sig-arg">overwrite</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Write metadata into the table</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.setMeta">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getMetaField"></a><span class="summary-sig-name">getMetaField</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">fieldName</span>)</span><br />
+      return the value of fieldName in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getMetaField">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="setGMDBFormat"></a><span class="summary-sig-name">setGMDBFormat</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">version</span>)</span><br />
+      Update the GMDB format version</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.setGMDBFormat">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getGMDBFormat"></a><span class="summary-sig-name">getGMDBFormat</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      return the format version of this GM file</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getGMDBFormat">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getNumStoits"></a><span class="summary-sig-name">getNumStoits</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      return the value of numStoits in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getNumStoits">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getMerColNames"></a><span class="summary-sig-name">getMerColNames</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      return the value of merColNames in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getMerColNames">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getMerSize"></a><span class="summary-sig-name">getMerSize</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      return the value of merSize in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getMerSize">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getNumMers"></a><span class="summary-sig-name">getNumMers</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      return the value of numMers in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getNumMers">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getNumCons"></a><span class="summary-sig-name">getNumCons</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      return the value of numCons in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getNumCons">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="setNumBins"></a><span class="summary-sig-name">setNumBins</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">numBins</span>)</span><br />
+      set the number of bins</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.setNumBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getNumBins"></a><span class="summary-sig-name">getNumBins</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      return the value of numBins in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getNumBins">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="getStoitColNames"></a><span class="summary-sig-name">getStoitColNames</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      return the value of stoitColNames in the metadata tables</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getStoitColNames">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="isClustered"></a><span class="summary-sig-name">isClustered</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      Has this data set been clustered?</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.isClustered">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="setClustered"></a><span class="summary-sig-name">setClustered</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">state</span>)</span><br />
+      Set the state of clustering</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.setClustered">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="isComplete"></a><span class="summary-sig-name">isComplete</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>)</span><br />
+      Has this data set been *completely* clustered?</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.isComplete">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="setComplete"></a><span class="summary-sig-name">setComplete</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">state</span>)</span><br />
+      Set the state of completion</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.setComplete">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="dumpData"></a><span class="summary-sig-name">dumpData</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dbFileName</span>,
+        <span class="summary-sig-arg">fields</span>,
+        <span class="summary-sig-arg">outFile</span>,
+        <span class="summary-sig-arg">separator</span>,
+        <span class="summary-sig-arg">useHeaders</span>)</span><br />
+      Dump data to file</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.dumpData">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+</table>
+<!-- ==================== METHOD DETAILS ==================== -->
+<a name="section-MethodDetails"></a>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Method Details</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-MethodDetails"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+</table>
+<a name="setBinStats"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">setBinStats</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">dbFileName</span>,
+        <span class="sig-arg">updates</span>,
+        <span class="sig-arg">firstWrite</span>=<span class="sig-default">False</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.setBinStats">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Set bins table</p>
+  <p>updates is a list of tuples which looks like: [ (bid, numMembers, 
+  isLikelyChimeric) ]</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="getBinStats"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">getBinStats</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">dbFileName</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.getBinStats">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Load data from bins table</p>
+  <p>Returns a dict of type: { bid : [numMembers, isLikelyChimeric] }</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="setBinAssignments"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">setBinAssignments</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">storage</span>,
+        <span class="sig-arg">updates</span>=<span class="sig-default">None</span>,
+        <span class="sig-arg">image</span>=<span class="sig-default">None</span>,
+        <span class="sig-arg">nuke</span>=<span class="sig-default">False</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.setBinAssignments">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Set per-contig bins</p>
+  <p>updates is a dictionary which looks like: { tableRow : binValue } if 
+  updates is set then storage is the path to the hdf file</p>
+  <p>image is a list of tuples which look like: [(cid, bid, len, gc)] if 
+  image is set then storage is a tuple of type: (h5file, group)</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="setMeta"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">setMeta</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">h5file</span>,
+        <span class="sig-arg">metaData</span>,
+        <span class="sig-arg">overwrite</span>=<span class="sig-default">False</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.mstore-pysrc.html#GMDataManager.setMeta">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Write metadata into the table</p>
+  <p>metaData should be a tuple of values</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<br />
+<!-- ==================== NAVIGATION BAR ==================== -->
+<table class="navbar" border="0" width="100%" cellpadding="0"
+       bgcolor="#a0c0ff" cellspacing="0">
+  <tr valign="middle">
+  <!-- Home link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="groopm-module.html">Home</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Tree link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="module-tree.html">Trees</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Index link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="identifier-index.html">Indices</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Help link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Project homepage -->
+      <th class="navbar" align="right" width="100%">
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr><th class="navbar" align="center"
+            ><a class="navbar" target="_top" href="http://minillinim.github.io/GroopM/">GroopM</a></th>
+          </tr></table></th>
+  </tr>
+</table>
+<table border="0" cellpadding="0" cellspacing="0" width="100%%">
+  <tr>
+    <td align="left" class="footer">
+    Generated by Epydoc 3.0.1 on Thu Dec 19 23:19:18 2013
+    </td>
+    <td align="right" class="footer">
+      <a target="mainFrame" href="http://epydoc.sourceforge.net"
+        >http://epydoc.sourceforge.net</a>
+    </td>
+  </tr>
+</table>
+
+<script type="text/javascript">
+  <!--
+  // Private objects are initially displayed (because if
+  // javascript is turned off then we want them to be
+  // visible); but by default, we want to hide them.  So hide
+  // them unless we have a cookie that says to show them.
+  checkCookie();
+  // -->
+</script>
+</body>
+</html>
