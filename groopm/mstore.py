@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.3.6.3"
+__version__ = "0.3.7"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -1834,6 +1834,7 @@ class CoverageTransformer:
 
     def shuffleBAMs(self, ordering=None):
         """Make the data transformation deterministic by reordering the bams"""
+        # As Ben pointed out. This is basically the travelling salesman.
         if ordering is None:
             # we will need to deduce the ordering of the contigs
             # first we should make a subset of the total data
@@ -1859,6 +1860,9 @@ class CoverageTransformer:
             sq_dists = cdist(sub_covs,sub_covs,'cityblock')
             dists = squareform(sq_dists)
 
+            # we have an all vs all distance matrix. Time to do some dodgy optimization.
+            # For this case, we only require locally optimal paths. So we can get away with
+            # simply choosing the shortest edges in the list
             # initialise a list of left, right neighbours
             lr_dict = {}
             for i in range(self.numStoits):
@@ -1890,18 +1894,50 @@ class CoverageTransformer:
                 sq_dists[i,j] = too_big
                 dists = squareform(sq_dists)
 
-            # now make the ordering
-            ordering = [0, lr_dict[0][0]]
-            done = 2
-            while done < self.numStoits:
-                last = ordering[done-1]
-                if lr_dict[last][0] == ordering[done-2]:
-                    ordering.append(lr_dict[last][1])
-                    last = lr_dict[last][1]
-                else:
-                    ordering.append(lr_dict[last][0])
-                    last = lr_dict[last][0]
-                done+=1
+            # now everyone should have two neighbours ( but not always )
+            # The global path may be separated into several disjoint rings.
+            # so we need to make sure that we get all the nodes in the ordering list
+            trier = 0   # start of a new disjoint ring
+            ordering = [trier]
+            while len(ordering) < len(lr_dict.keys()):
+                try:
+                    adding_index = lr_dict[trier][0]    # ok IF this guy has a registered neighbour
+                    if adding_index in ordering:        # NOT ok if the neighbour is already in the list
+                        raise IndexError()
+                    ordering.append(adding_index)
+                    while len(ordering) < len(lr_dict.keys()):  # try consume the entire ring
+                        # len(ordering) >= 2
+                        last = ordering[-1]
+                        if lr_dict[last][0] == ordering[-2]:    # bi-directionality means this will always work
+                            try:
+                                adding_index = lr_dict[last][1] # ok IF this guy has two neighbours
+                                if adding_index in ordering:    # NOT ok if the neighbour is already in the list
+                                    raise IndexError()
+                                ordering.append(adding_index)
+                            except IndexError:                  # only one neighbour
+                                # stick (2 city system)
+                                while(trier in ordering):       # find the next index NOT in the ordering
+                                    trier += 1
+                                if trier < len(lr_dict.keys()): # make sure it makes sense
+                                    ordering.append(trier)
+                                break
+                        else:
+                            adding_index = lr_dict[last][0]
+                            if adding_index in ordering:
+                                raise IndexError()
+                            ordering.append(adding_index)
+                except IndexError:                  # start a new disjoint ring
+                    # single point
+                    while(trier in ordering):
+                        trier += 1
+                    if trier < len(lr_dict.keys()): # make sure it makes sense
+                        ordering.append(trier)
+
+        # sanity check
+        if len(ordering) != self.numStoits:
+            print "WATTUP, ordering is looking wrong!"
+            print ordering
+            print lr_dict
 
         # reshuffle the contig order!
         # yay for bubble sort!
