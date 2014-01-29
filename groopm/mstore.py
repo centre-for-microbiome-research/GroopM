@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.3.7"
+__version__ = "0.3.8"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -626,7 +626,7 @@ class GMDataManager:
                 with open(contigFile, "r") as f:
                     try:
                         contigInfo = {}
-                        for cid,seq,qual in conParser.readfq(f):
+                        for cid,seq,qual in conParser.readFasta(f):
                             contigInfo[cid] = (len(seq), conParser.calculateGC(seq))
 
                         # sort the contig names here once!
@@ -1580,7 +1580,7 @@ class ContigParser:
     def getWantedSeqs(self, contigFile, wanted, storage={}):
         """Do the heavy lifting of parsing"""
         print "Parsing contigs"
-        for cid,seq,qual in self.readfq(contigFile):
+        for cid,seq,qual in self.readFasta(contigFile):
             if(cid in wanted):
                 storage[cid] = seq
         return storage
