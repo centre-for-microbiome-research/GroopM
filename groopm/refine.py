@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.8"
+__version__ = "0.2.9"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -2391,7 +2391,18 @@ class GrubbsTester:
         if len(compVals) - 1 > 1000 use the 1000 cutoff anyway
         """
         # get Z score for the maxValue
-        v = (maxVal - np_mean(compVals+[maxVal]))/np_std(compVals+[maxVal], ddof=1)
+        try:
+            mm = np_mean(compVals+[maxVal])
+            ss = np_std(compVals+[maxVal])
+        except FloatingPointError:
+            return False
+
+        try:
+            v = (maxVal - mm)/ss
+        except FloatingPointError:
+            # ss == 0
+            return False
+
         idx = len(compVals) - 1
 
         if idx > 999:

@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -189,7 +189,7 @@ class EllipsoidTool:
         try:
             if np.dot(p_c.T, np.dot(A, p_c)) <= 1:
                 return True
-        except TypeError:
+        except (TypeError, ValueError):
                 return False
 
         if A == None or B == None: # degenerate ellipse that can't be processed
