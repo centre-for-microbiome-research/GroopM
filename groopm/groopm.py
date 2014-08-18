@@ -103,10 +103,15 @@ class GroopMOptionsParser():
             print "*******************************************************************************"
             print " [[GroopM %s]] Running in data parsing mode..." % self.GMVersion
             print "*******************************************************************************"
+            # check this here:
+            if len(options.bamfiles) < 3:
+                print "Sorry, You must supply at least 3 bamFiles to use GroopM. (You supplied %d)\n Exiting..." % len(options.bamfiles)
+                return
             GMdata = mstore.GMDataManager()
             success = GMdata.createDB(options.bamfiles,
                                       options.reference,
                                       options.dbname,
+                                      options.cutoff,
                                       timer,
                                       force=options.force)
             if not success:

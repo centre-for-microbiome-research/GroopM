@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/srv/sw/python/2.7.4/bin/python
 ###############################################################################
 #                                                                             #
 #    groopm                                                                   #
@@ -124,6 +124,7 @@ if __name__ == '__main__':
     file_parser.add_argument('reference', help="fasta file containing bam reference sequences")
     file_parser.add_argument('bamfiles', nargs='+', help="bam files to parse")
     file_parser.add_argument('-f', '--force', action="store_true", default=False, help="overwrite existing DB file without prompting")
+    file_parser.add_argument('-c', '--cutoff', type=int, default=500, help="cutoff contig size during parsing")
 
     #-------------------------------------------------
     # load saved data and make bin cores

@@ -678,7 +678,7 @@ class ProfileManager:
                              )
 
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
-        #self.plotStoitNames(ax1)
+        self.plotStoitNames(ax1)
 
         cbar = plt.colorbar(sc, shrink=0.5)
         cbar.ax.tick_params()
