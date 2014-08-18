@@ -373,20 +373,48 @@ class BinExplorer:
         col = idx - (row*side)
         return (row,col)
 
-    def plotFlyOver(self, timer, fps=10.0, totalTime=120.0):
+    def splitCeil(self, seq, m):
+        """Distribute the seq elements in lists in m groups
+           according to quasi equitative distribution (decreasing order):
+
+               splitCeil(range(13), 4) --> seq = range(13), m=4
+
+               result : [[0, 1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]
+        """
+        n,b,newseq=len(seq),0,[]
+        for k in range(m):
+            q,r=divmod(n-k,m)
+            a, b = b, b + q + (r!=0)
+            newseq.append(seq[a:b])
+        return newseq
+
+    def plotFlyOver(self,
+                    timer,
+                    fps=10.0,
+                    totalTime=120.0,
+                    percentFade=0.05,
+                    coreCut=0,
+                    prefix="file",
+                    title="",
+                    showColorbar=False,
+                    format="jpeg",
+                    ):
         """Plot a flyover of the data with bins being removed"""
         self.BM.loadBins(timer,
                          makeBins=True,
                          silent=False,
                          bids=self.bids,
-                         loadContigLengths=False,
+                         loadContigLengths=True,
                          loadContigNames=False,
-                         transform = self.transform)
+                         transform = self.transform,
+                         cutOff=coreCut,
+                         getUnbinned=True,)
         if len(self.BM.bins) == 0:
             print "Sorry, no bins to plot"
         else:
             print "Plotting flyover"
-            self.BM.setColorMap(self.cmString)
+
+            import itertools
             all_bids = self.BM.getBids()
 
             # control image form and output
@@ -394,40 +422,85 @@ class BinExplorer:
             current_elev = 0.0
             current_frame = 0.0
             total_frames = fps * totalTime
-            total_azim_shift = 720.0
-            total_elev_shift = 360.0
+            total_azim_shift = 360.0
+            total_elev_shift = 180.0
             azim_increment = total_azim_shift / total_frames
             elev_increment = total_elev_shift / total_frames
+            self.BM.setColorMap(self.cmString)
 
             print "Need",total_frames,"frames:"
-            # we need to know when to remove each bin
-            bid_remove_rate = float(len(all_bids)) / total_frames
-            bids_removed = 0
-            current_bid_index = 0
-            current_bid = all_bids[current_bid_index]
-            restricted_bids = []
+
+            """
+            Handle taking out bins as "fade packets", assign indices to a list
+            of lists, the first guy in the list get continually faded out until its
+            all done. Manage this using a fade schedule...
+            """
+            # first fade goes for the given percent of frames and fades out unbinned contigs
+            fade_schedules = [int(total_frames*percentFade)]    # how long to fade each group
+            fade_groups = []                                    # groups of indices
+
+            # we need to manage which indices are in bins
+            bids2Indices = {0: []}
+            included = {}
+            for bid in self.BM.getBids():
+                fade_groups.append(self.BM.bins[bid].rowIndices)
+                for row_index in self.BM.bins[bid].rowIndices:
+                    included[row_index] = True
+                    try:
+                        bids2Indices[bid].append(row_index)
+                    except KeyError:
+                        bids2Indices[bid] = [row_index]
+
+            # we need to get all the unbinned guys
+            tmp = []
+            for row_index in range(len(self.PM.indices)):
+                try:
+                    included[row_index]
+                except KeyError:
+                    tmp.append(row_index)
+            fade_groups = [tmp] + fade_groups
+
+            # make the fade schedule for the remaining bins
+            remaining_frames = float(total_frames - fade_schedules[0])
+            num_fade_gs = float(len(fade_groups) - 1)
+            fade_schedules += [len(i) for i in self.splitCeil(range(int(remaining_frames)), int(num_fade_gs))]
+            alpha_steps = [1./float(i) for i in fade_schedules]
+
+            if False:
+                print len(self.BM.getBids()), num_fade_gs
+                print fade_groups
+                print fade_schedules
+                print alpha_steps
+
+            # plot all contigs first and then fade out
             fig = plt.figure()
-            while(current_frame < total_frames):
-                print "Frame",int(current_frame)
-                file_name = "%04d" % current_frame +".jpg"
-                self.PM.renderTransCPData(fileName=file_name,
-                                             elev=current_elev,
-                                             azim=current_azim,
-                                             primaryWidth=6,
-                                             dpi=200,
-                                             showAxis=True,
-                                             format='jpeg',
-                                             fig=fig,
-                                             restrictedBids = restricted_bids
-                                             )
-                current_frame += 1
-                current_azim += azim_increment
-                current_elev += elev_increment
-                print bid_remove_rate*current_frame, current_frame, "BR:",bids_removed, int(bid_remove_rate*current_frame)
-                while bids_removed < int(bid_remove_rate*current_frame):
-                    restricted_bids.append(all_bids[current_bid_index])
-                    current_bid_index += 1
-                    bids_removed += 1
+            while len(fade_groups) >= 1:
+                print "Rendering frame: %d of: %d" % (int(current_frame),int(total_frames))
+                # get the next fade group and fade schedule
+                faders = fade_groups.pop(0)
+                fade_schedule = fade_schedules.pop(0)
+                alpha_step = alpha_steps.pop(0)
+                fade_count = 0.
+                while(fade_count < fade_schedule):
+                    file_name = "%s_%04d.%s" % (prefix, current_frame, format)
+                    self.PM.r2nderTransCPData(fig,
+                                              alphaIndices=faders,
+                                              visibleIndices=list(itertools.chain(*fade_groups)),
+                                              alpha=(1.-(alpha_step*fade_count)),
+                                              ignoreContigLengths=self.ignoreContigLengths,
+                                              elev=current_elev,
+                                              azim=current_azim,
+                                              fileName=file_name,
+                                              dpi=300,
+                                              format=format,
+                                              title=title,
+                                              showAxis=True,
+                                              showColorbar=showColorbar)
+                    current_frame += 1
+                    fade_count += 1.
+                    current_azim += azim_increment
+                    current_elev += elev_increment
+
             del fig
 
     def plotBinProfiles(self, timer):

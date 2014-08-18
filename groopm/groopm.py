@@ -269,8 +269,6 @@ class GroopMOptionsParser():
                 BE.plotUnbinned(timer, coreCut=options.cutoff)
             elif(options.mode == 'binnedcontigs'):
                 BE.plotContigs(timer, coreCut=options.cutoff)
-            elif(options.mode == 'flyover'):
-                BE.plotFlyOver(timer)
             elif(options.mode == 'binassignments'):
                 BE.plotBinAssignents(timer, coreCut=options.cutoff)
             elif(options.mode == 'compare'):
@@ -281,6 +279,28 @@ class GroopMOptionsParser():
                 BE.plotSideBySide(timer, coreCut=options.cutoff)
             else:
                 print "**Error: unknown mode:",options.mode
+
+        elif(options.subparser_name == 'flyover'):
+            # make bin cores
+            print "*******************************************************************************"
+            print " [[GroopM %s]] Making a flyover..." % self.GMVersion
+            print "*******************************************************************************"
+            bids = []
+            if options.bids is not None:
+                bids = options.bids
+            BE = groopmUtils.BinExplorer(options.dbname,
+                                         bids=bids,
+                                         transform=True,
+                                         ignoreContigLengths=options.points)
+            BE.plotFlyOver(timer,
+                           fps=options.fps,
+                           totalTime=options.totalTime,
+                           percentFade=options.firstFade,
+                           prefix=options.prefix,
+                           showColorbar=options.colorbar,
+                           title=options.title,
+                           coreCut=options.cutoff,
+                           format=options.format)
 
         elif(options.subparser_name == 'highlight'):
             # make bin cores
