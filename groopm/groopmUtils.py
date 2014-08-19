@@ -464,13 +464,11 @@ class BinExplorer:
             remaining_frames = float(total_frames - fade_schedules[0])
             num_fade_gs = float(len(fade_groups) - 1)
             fade_schedules += [len(i) for i in self.splitCeil(range(int(remaining_frames)), int(num_fade_gs))]
-            alpha_steps = [1./float(i) for i in fade_schedules]
 
             if False:
                 print len(self.BM.getBids()), num_fade_gs
                 print fade_groups
                 print fade_schedules
-                print alpha_steps
 
             # plot all contigs first and then fade out
             fig = plt.figure()
@@ -479,14 +477,14 @@ class BinExplorer:
                 # get the next fade group and fade schedule
                 faders = fade_groups.pop(0)
                 fade_schedule = fade_schedules.pop(0)
-                alpha_step = alpha_steps.pop(0)
-                fade_count = 0.
+                fade_count = 0
+                alphas = [1.-(float(i)/fade_schedule)**2 for i in range(int(fade_schedule)+1)]
                 while(fade_count < fade_schedule):
                     file_name = "%s_%04d.%s" % (prefix, current_frame, format)
                     self.PM.r2nderTransCPData(fig,
                                               alphaIndices=faders,
                                               visibleIndices=list(itertools.chain(*fade_groups)),
-                                              alpha=(1.-(alpha_step*fade_count)),
+                                              alpha=alphas[fade_count],
                                               ignoreContigLengths=self.ignoreContigLengths,
                                               elev=current_elev,
                                               azim=current_azim,
@@ -497,10 +495,9 @@ class BinExplorer:
                                               showAxis=True,
                                               showColorbar=showColorbar)
                     current_frame += 1
-                    fade_count += 1.
+                    fade_count += 1
                     current_azim += azim_increment
                     current_elev += elev_increment
-
             del fig
 
     def plotBinProfiles(self, timer):
