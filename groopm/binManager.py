@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.7"
+__version__ = "0.2.8"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -143,7 +143,7 @@ class BinManager:
                  transform=True):
         """Load data and make bin objects"""
         # build the condition
-        
+
         if getUnbinned:
             # get everything
             condition = "(length >= %d) " % cutOff
@@ -454,7 +454,7 @@ class BinManager:
 
     def split(self, bid, n, mode='kmer', auto=False, saveBins=False, verbose=False, printInstructions=True, use_elipses=True):
         """split a bin into n parts
-        
+
         if auto == True, then just railroad the split
         if test == True, then test via merging
         if savebins == True, save the split (if you will do it)
@@ -685,7 +685,7 @@ class BinManager:
         if(newBid):
             # we need to make this into a new bin
             parent_bin = self.makeNewBin()
-            
+
             # now merge it with the first in the new list
             dead_bin = self.getBin(bids[0])
             for row_index in dead_bin.rowIndices:
@@ -695,8 +695,8 @@ class BinManager:
         else:
             # just use the first given as the parent
             parent_bin = self.getBin(bids[0])
-            
-        # a merged bin specified by the user should not be considered chimeric since 
+
+        # a merged bin specified by the user should not be considered chimeric since
         # they are indicating both original bins were reasonable
         if manual:
             self.PM.isLikelyChimeric[parent_bin.id] = False
@@ -784,7 +784,7 @@ class BinManager:
         for bid in self.bins:
             if not self.PM.isLikelyChimeric[bid]:
                 bids.append(bid)
-        
+
         return bids
 
     def deleteBins(self, bids, force=False, freeBinnedRowIndices=False, saveBins=False):
@@ -1288,13 +1288,36 @@ class BinManager:
                 sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
                 plot_num += 1
-                
-            cbar = plt.colorbar(sc, shrink=0.5)
-            cbar.ax.tick_params()
-            cbar.ax.set_title("% GC", size=10)
-            cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
-            cbar.ax.set_ylim([0.15, 0.85])
-            cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+
+            special = False
+            if special:
+                # make a plot for a background etc
+                ax.azim = -127
+                ax.elev = 4
+
+                # strip all background
+                ax.set_xlim3d(0,self.PM.scaleFactor)
+                ax.set_ylim3d(0,self.PM.scaleFactor)
+                ax.set_zlim3d(0,self.PM.scaleFactor)
+                ax.set_xticklabels([])
+                ax.set_yticklabels([])
+                ax.set_zticklabels([])
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.set_zticks([])
+                plt.tight_layout()
+                ax.set_axis_off()
+
+                fig.set_size_inches(10,10)
+                plt.savefig("coal_5K_rings2.png",dpi=300,format="png")
+
+            else:
+                cbar = plt.colorbar(sc, shrink=0.5)
+                cbar.ax.tick_params()
+                cbar.ax.set_title("% GC", size=10)
+                cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+                cbar.ax.set_ylim([0.15, 0.85])
+                cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
         else:
             # plot all separately
             # we need to work out how to shape the plots
@@ -1362,30 +1385,30 @@ class BinManager:
                     self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
                                               self.PM.contigLengths, self.PM.colorMapGC, self.PM.isLikelyChimeric,
                                               fileName=FNPrefix+"_"+str(bid), ignoreContigLengths=ignoreContigLengths, ET=ET)
-                    
+
     def plotBinCoverage(self, plotEllipses=False, plotContigLengs=False, printID=False):
         """Make plots of all the bins"""
 
         print "Plotting first 3 stoits in untransformed coverage space"
-         
+
         # plot contigs in coverage space
         fig = plt.figure()
-  
+
         if plotContigLengs:
             disp_lens = np_sqrt(self.PM.contigLengths)
         else:
             disp_lens = 30
-            
+
         # plot contigs in kmer space
         ax = fig.add_subplot(121, projection='3d')
         ax.set_xlabel('kmer PC1')
         ax.set_ylabel('kmer PC2')
         ax.set_zlabel('kmer PC3')
         ax.set_title('kmer space')
-        
+
         sc = ax.scatter(self.PM.kmerPCs[:,0], self.PM.kmerPCs[:,1], self.PM.kmerPCs[:,2], edgecolors='k', c=self.PM.contigGCs, cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens)
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
-        
+
         if plotEllipses:
             ET = EllipsoidTool()
             for bid in self.getBids():
@@ -1397,17 +1420,17 @@ class BinManager:
                     ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color, label=self.id)
                 else:
                     ET.plotEllipsoid(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color)
-        
+
         # plot contigs in untransformed coverage space
         ax = fig.add_subplot(122, projection='3d')
         ax.set_xlabel('coverage 1')
         ax.set_ylabel('coverage 2')
         ax.set_zlabel('coverage 3')
         ax.set_title('coverage space')
-        
+
         sc = ax.scatter(self.PM.covProfiles[:,0], self.PM.covProfiles[:,1], self.PM.covProfiles[:,2], edgecolors='k', c=self.PM.contigGCs, cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens)
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
-        
+
         cbar = plt.colorbar(sc, shrink=0.5)
         cbar.ax.tick_params()
         cbar.ax.set_title("% GC", size=10)
@@ -1433,9 +1456,9 @@ class BinManager:
         except:
             print "Error showing image", exc_info()[0]
             raise
-        
+
         del fig
-            
+
     def plotSideBySide(self, bids, fileName="", tag="", use_elipses=True, ignoreContigLengths=False):
         """Plot two bins side by side in 3d"""
         if use_elipses:

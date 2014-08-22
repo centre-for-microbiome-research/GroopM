@@ -412,7 +412,6 @@ class ClusterEngine:
 
     def twoWayContraction(self, rowIndices, positionInPlane, kmerThreshold, coverageThreshold):
         """Partition a collection of contigs into 'core' groups"""
-
         # sanity check that there is enough data here to try a determine 'core' groups
         total_BP = np_sum(self.PM.contigLengths[rowIndices])
         if not self.BM.isGoodBin(total_BP, len(rowIndices), ms=5): # Can we trust very small bins?.
@@ -422,68 +421,16 @@ class ClusterEngine:
 
         # make a copy of the data we'll be munging
         k_dat = np_copy(self.PM.kmerPCs[rowIndices])
-        #c_dat = np_copy(self.PM.covProfiles[rowIndices])
         c_dat = np_copy(self.PM.transformedCP[rowIndices])
         l_dat = np_copy(self.PM.contigLengths[rowIndices])
+
         if self.debugPlots >= 2:
             n_dat = np_copy(self.PM.contigNames[rowIndices])
 
         row_indices = np_copy(rowIndices)
 
-        # calculate shortest distance to a corner (this isn't currently used)
-        #min_dist_to_corner = 1e9
-        #for corner in self.PM.corners:
-        #    dist = cityblock(corner[:,[0,1]], positionInPlane)
-        #   min_dist_to_corner = min(dist, min_dist_to_corner)
-
         # calculate radius threshold in whitened transformed coverage space
-        #eps_neighbours = np_max([0.05 * len(rowIndices), np_min([10, len(rowIndices)-1])])
         eps_neighbours = np_min([10, int(len(rowIndices)/2)])
-
-        # calculate mean and std in coverage space for whitening data
-        c_mean = np_mean(c_dat, axis=0)
-        c_std = np_std(c_dat, axis=0)
-        c_std += np_where(c_std == 0, 1, 0) # make sure std dev is never zero
-        c_whiten_dat = (c_dat-c_mean) / c_std
-        c_whiten_dist = pdist(c_whiten_dat, 'cityblock')
-
-        try:
-            c_dist_matrix = squareform(c_whiten_dist)
-        except MemoryError:
-            print "\n"
-            print '*******************************************************************************'
-            print '*********************************    ERROR    *********************************'
-            print '*******************************************************************************'
-            print 'GroopM is attempting to do some maths on a putative bin which contains:'
-            print
-            print '\t\t%d contigs'  % (len(rowIndices))
-            print
-            print 'This has caused your machine to run out of memory.'
-            print 'The most likely cause is that your samples are very different from each other.'
-            print 'You can confirm this by running:'
-            print
-            print '\t\tgroopm explore -m allcontigs %s' % self.PM.dbFileName
-            print
-            print 'If you notice only vertical "spears" of contigs at the corners of the plot then'
-            print 'this means that your samples are very different and you are not getting a good'
-            print 'mapping from all samples to all contigs. You may get more mileage by assembling'
-            print 'and binning your samples separately.'
-            print
-            print 'If you notice "clouds" of contigs then congratulations! You have found a bug.'
-            print 'Please let me know at mike@mikeimelfort.com or via github.com/minillinim/GroopM'
-            print
-            print 'GroopM is aborting... sorry'
-            print
-            print '*******************************************************************************'
-            print "\n"
-            exit(-1)
-
-        c_radius = np_median(np_sort(c_dist_matrix)[:,eps_neighbours])
-
-        # calculate radius threshold in kmer space
-        k_dist = pdist(k_dat, 'cityblock')
-        k_dist_matrix = squareform(k_dist)
-        k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours])
 
         # calculate convergence criteria
         k_converged = kmerThreshold * 30.0 #5e-2 * np_mean(k_dist)
@@ -541,9 +488,45 @@ class ClusterEngine:
                 plt.close(fig)
                 del fig
 
-            # calculate distance matrices
-            c_dist_matrix = squareform(pdist(c_whiten_dat, 'cityblock'))
-            k_dist_matrix = squareform(pdist(k_dat, 'cityblock'))
+            c_mean = np_mean(c_dat, axis=0)
+            c_std = np_std(c_dat, axis=0)
+            c_std += np_where(c_std == 0, 1, 0) # make sure std dev is never zero
+            c_whiten_dat = (c_dat-c_mean) / c_std
+
+            try:
+                # calculate distance matrices
+                c_dist_matrix = squareform(pdist(c_whiten_dat, 'cityblock'))
+                c_radius = np_median(np_sort(c_dist_matrix)[:,eps_neighbours])
+                k_dist_matrix = squareform(pdist(k_dat, 'cityblock'))
+                k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours])
+            except MemoryError:
+                print "\n"
+                print '*******************************************************************************'
+                print '*********************************    ERROR    *********************************'
+                print '*******************************************************************************'
+                print 'GroopM is attempting to do some maths on a putative bin which contains:'
+                print
+                print '\t\t%d contigs'  % (len(rowIndices))
+                print
+                print 'This has caused your machine to run out of memory.'
+                print 'The most likely cause is that your samples are very different from each other.'
+                print 'You can confirm this by running:'
+                print
+                print '\t\tgroopm explore -m allcontigs %s' % self.PM.dbFileName
+                print
+                print 'If you notice only vertical "spears" of contigs at the corners of the plot then'
+                print 'this means that your samples are very different and you are not getting a good'
+                print 'mapping from all samples to all contigs. You may get more mileage by assembling'
+                print 'and binning your samples separately.'
+                print
+                print 'If you notice "clouds" of contigs then congratulations! You have found a bug.'
+                print 'Please let me know at "%s or via github.com/minillinim/GroopM' % __email__
+                print
+                print 'GroopM is aborting... sorry'
+                print
+                print '*******************************************************************************'
+                print "\n"
+                exit(-1)
 
             # find nearest neighbours to each point in whitened coverage space,
             # and use this to converage a point's kmer profile
@@ -630,9 +613,6 @@ class ClusterEngine:
                     #print "Noise deleting_%d_%d:\n" % (self.cluster_num, iter), n_dat[noise]
                     n_dat = np_delete(n_dat, noise, axis = 0)
 
-            # get whitened version of modified coverage data (using original transformation)
-            c_whiten_dat = (c_dat-c_mean) / c_std
-
             if len(row_indices) == 0:
                 return None
 
@@ -696,6 +676,7 @@ class ClusterEngine:
 
         partitions = []
         k_sizes = [len(p) for p in k_partitions]
+
 
         #-----------------------
         # GRID
@@ -1357,11 +1338,15 @@ class HoughPartitioner:
             diffs /= np_max(diffs)
         except FloatingPointError:
             pass
-        diffs *= len(diffs)
+        ###MMM FIX
+        #diffs *= len(diffs)
+        diffs *= (len(diffs)-1)
 
         # make it 2D
         t_data = np_array(zip(diffs, np_arange(d_len)))
-        im_shape = (int(np_max(t_data, axis=0)[0]+1), d_len)
+        ###MMM FIX
+        #im_shape = (int(np_max(t_data, axis=0)[0]+1), d_len)
+        im_shape = (d_len, d_len)
 
         #----------------------------------------------------------------------
         # Apply hough transformation and find the most prominent line
@@ -1560,7 +1545,6 @@ class HoughPartitioner:
             accumulator *= 255
 
             imsave("%d_%s_%s_%d.png" % (self.hc, imgTag, side, level), np_concatenate([accumulator,fff]))
-            print "%d_%s_%s_%d.png" % (self.hc, imgTag, side, level)
 
         # see which points lie on the line
         # we need to protect against the data line crossing
@@ -1746,7 +1730,36 @@ class HoughPartitioner:
         Rs = np_array(np_sum(np_reshape([p * cos_sin_array for p in data], (d_len*cols,2)),
                              axis=1)/dr).astype('int') + half_rows
         Cs = np_array(range(cols)*d_len)
-        flat_indices = Rs * cols + Cs
+
+        try:
+            flat_indices = Rs * cols + Cs
+        except ValueError:
+            print "\n"
+            print '*******************************************************************************'
+            print '*********************************    ERROR    *********************************'
+            print '*******************************************************************************'
+            print 'GroopM is attempting to do some maths on a putative bin which contains'
+            print 'too many contigs.'
+            print
+            print 'This has resulted in a buffer overflow in the numpy library... oops.'
+            print 'The most likely cause is that your samples are very different from each other.'
+            print 'You can confirm this by running:'
+            print
+            print '\t\tgroopm explore -c 0 -m allcontigs <dbfilename>'
+            print
+            print 'If you notice only vertical "spears" of contigs at the corners of the plot then'
+            print 'this means that your samples are very different and you are not getting a good'
+            print 'mapping from all samples to all contigs. You may get more mileage by assembling'
+            print 'and binning your samples separately.'
+            print
+            print 'If you notice "clouds" of contigs then congratulations! You have found a bug.'
+            print 'Please let me know at "%s or via github.com/minillinim/GroopM' % __email__
+            print
+            print 'GroopM is aborting... sorry'
+            print
+            print '*******************************************************************************'
+            print "\n"
+            exit(-1)
 
         # update the accumulator with integer decrements
         decrements = np_bincount(flat_indices.astype('int'))

@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.10.11"
+__version__ = "0.2.10.12"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -103,10 +103,15 @@ class GroopMOptionsParser():
             print "*******************************************************************************"
             print " [[GroopM %s]] Running in data parsing mode..." % self.GMVersion
             print "*******************************************************************************"
+            # check this here:
+            if len(options.bamfiles) < 3:
+                print "Sorry, You must supply at least 3 bamFiles to use GroopM. (You supplied %d)\n Exiting..." % len(options.bamfiles)
+                return
             GMdata = mstore.GMDataManager()
             success = GMdata.createDB(options.bamfiles,
                                       options.reference,
                                       options.dbname,
+                                      options.cutoff,
                                       timer,
                                       force=options.force)
             if not success:
@@ -264,8 +269,6 @@ class GroopMOptionsParser():
                 BE.plotUnbinned(timer, coreCut=options.cutoff)
             elif(options.mode == 'binnedcontigs'):
                 BE.plotContigs(timer, coreCut=options.cutoff)
-            elif(options.mode == 'flyover'):
-                BE.plotFlyOver(timer)
             elif(options.mode == 'binassignments'):
                 BE.plotBinAssignents(timer, coreCut=options.cutoff)
             elif(options.mode == 'compare'):
@@ -276,6 +279,28 @@ class GroopMOptionsParser():
                 BE.plotSideBySide(timer, coreCut=options.cutoff)
             else:
                 print "**Error: unknown mode:",options.mode
+
+        elif(options.subparser_name == 'flyover'):
+            # make bin cores
+            print "*******************************************************************************"
+            print " [[GroopM %s]] Making a flyover..." % self.GMVersion
+            print "*******************************************************************************"
+            bids = []
+            if options.bids is not None:
+                bids = options.bids
+            BE = groopmUtils.BinExplorer(options.dbname,
+                                         bids=bids,
+                                         transform=True,
+                                         ignoreContigLengths=options.points)
+            BE.plotFlyOver(timer,
+                           fps=options.fps,
+                           totalTime=options.totalTime,
+                           percentFade=options.firstFade,
+                           prefix=options.prefix,
+                           showColorbar=options.colorbar,
+                           title=options.title,
+                           coreCut=options.cutoff,
+                           format=options.format)
 
         elif(options.subparser_name == 'highlight'):
             # make bin cores

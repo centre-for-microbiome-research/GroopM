@@ -177,7 +177,7 @@ class GMDataManager:
 #------------------------------------------------------------------------------
 # DB CREATION / INITIALISATION  - PROFILES
 
-    def createDB(self, bamFiles, contigs, dbFileName, timer, kmerSize=4, force=False):
+    def createDB(self, bamFiles, contigs, dbFileName, cutoff, timer, kmerSize=4, force=False):
         """Main wrapper for parsing all input files"""
         # load all the passed vars
         dbFileName = dbFileName
@@ -235,7 +235,7 @@ class GMDataManager:
                 try:
                     with GM_open(contigsFile, "r") as f:
                         try:
-                            (con_names, con_gcs, con_lengths, con_ksigs) = conParser.parse(f, kse)
+                            (con_names, con_gcs, con_lengths, con_ksigs) = conParser.parse(f, cutoff, kse)
                             num_cons = len(con_names)
                             cid_2_indices = dict(zip(con_names, range(num_cons)))
                         except:
@@ -1533,12 +1533,13 @@ class ContigParser:
                 yield header, "".join(seq)
             break
 
-    def parse(self, contigFile, kse):
+    def parse(self, contigFile, cutoff, kse):
         """Do the heavy lifting of parsing"""
         print "Parsing contigs"
         contigInfo = {} # save everything here first so we can sort accordingly
         for cid,seq in self.readFasta(contigFile):
-            contigInfo[cid] = (kse.getKSig(seq.upper()), len(seq), self.calculateGC(seq))
+            if len(seq) >= cutoff:
+                contigInfo[cid] = (kse.getKSig(seq.upper()), len(seq), self.calculateGC(seq))
 
         # sort the contig names here once!
         con_names = np.array(sorted(contigInfo.keys()))

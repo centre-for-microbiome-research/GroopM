@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.6"
+__version__ = "0.2.7"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -678,7 +678,7 @@ class ProfileManager:
                              )
 
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
-        #self.plotStoitNames(ax1)
+        self.plotStoitNames(ax1)
 
         cbar = plt.colorbar(sc, shrink=0.5)
         cbar.ax.tick_params()
@@ -716,7 +716,8 @@ class ProfileManager:
                           fig=None,
                           highlight=None,
                           restrictedBids=[],
-                          alpha=1):
+                          alpha=1,
+                          ignoreContigLengths=False):
         """Plot transformed data in 3D"""
         del_fig = False
         if(fig is None):
@@ -800,51 +801,101 @@ class ProfileManager:
             ax = fig.add_subplot(111, projection='3d')
             if len(restrictedBids) == 0:
                 if highlight is None:
-                    sc = ax.scatter(self.transformedCP[:,0],
-                               self.transformedCP[:,1],
-                               self.transformedCP[:,2],
-                               edgecolors='none',
-                               c=self.contigGCs,
-                               cmap=self.colorMapGC,
-                               vmin=0.0,
-                               vmax=1.0,
-                               s=np_sqrt(self.contigLengths),
-                               marker='.')
+                    print "BF:", np_shape(self.transformedCP)
+                    if ignoreContigLengths:
+                        sc = ax.scatter(self.transformedCP[:,0],
+                                   self.transformedCP[:,1],
+                                   self.transformedCP[:,2],
+                                   edgecolors='none',
+                                   c=self.contigGCs,
+                                   cmap=self.colorMapGC,
+                                   s=10.,
+                                   vmin=0.0,
+                                   vmax=1.0,
+                                   marker='.')
+                    else:
+                        sc = ax.scatter(self.transformedCP[:,0],
+                                   self.transformedCP[:,1],
+                                   self.transformedCP[:,2],
+                                   edgecolors='none',
+                                   c=self.contigGCs,
+                                   cmap=self.colorMapGC,
+                                   vmin=0.0,
+                                   vmax=1.0,
+                                   s=np_sqrt(self.contigLengths),
+                                   marker='.')
                     sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
                 else:
-                    #draw the opague guys first
+                    #draw the opaque guys first
+                    """
                     sc = ax.scatter(self.transformedCP[:,0],
-                               self.transformedCP[:,1],
-                               self.transformedCP[:,2],
-                               edgecolors='none',
-                               c=self.contigGCs,
-                               cmap=self.colorMapGC,
-                               vmin=0.0,
-                               vmax=1.0,
-                               s=10,
-                               marker='.',
-                               alpha=alpha)
+                                    self.transformedCP[:,1],
+                                    self.transformedCP[:,2],
+                                    edgecolors='none',
+                                    c=self.contigGCs,
+                                    cmap=self.colorMapGC,
+                                    vmin=0.0,
+                                    vmax=1.0,
+                                    s=100.,
+                                    marker='s',
+                                    alpha=alpha)
                     sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
-
+                    """
                     # now replot the highlighted guys
                     disp_vals = np_array([])
+                    disp_GCs = np_array([])
+
+                    thrower = {}
+                    hide_vals = np_array([])
+                    hide_GCs = np_array([])
+
                     num_points = 0
                     for bin in highlight:
                         for row_index in bin.rowIndices:
                             num_points += 1
                             disp_vals = np_append(disp_vals, self.transformedCP[row_index])
-
+                            disp_GCs = np_append(disp_GCs, self.contigGCs[row_index])
+                            thrower[row_index] = False
                     # reshape
                     disp_vals = np_reshape(disp_vals, (num_points, 3))
-                    sc = ax.scatter(disp_vals[:,0],
-                               disp_vals[:,1],
-                               disp_vals[:,2],
-                               edgecolors='none',
-                               c=self.contigGCs[bin.rowIndices],
-                               cmap=self.colorMapGc,
-                               s=10,
-                               marker='.')
+
+                    num_points = 0
+                    for i in range(len(self.indices)):
+                        try:
+                            thrower[i]
+                        except KeyError:
+                            num_points += 1
+                            hide_vals = np_append(hide_vals, self.transformedCP[i])
+                            hide_GCs = np_append(hide_GCs, self.contigGCs[i])
+                    # reshape
+                    hide_vals = np_reshape(hide_vals, (num_points, 3))
+
+                    sc = ax.scatter(hide_vals[:,0],
+                                    hide_vals[:,1],
+                                    hide_vals[:,2],
+                                    edgecolors='none',
+                                    c=hide_GCs,
+                                    cmap=self.colorMapGC,
+                                    vmin=0.0,
+                                    vmax=1.0,
+                                    s=100.,
+                                    marker='s',
+                                    alpha=alpha)
                     sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+
+                    sc = ax.scatter(disp_vals[:,0],
+                                    disp_vals[:,1],
+                                    disp_vals[:,2],
+                                    edgecolors='none',
+                                    c=disp_GCs,
+                                    cmap=self.colorMapGC,
+                                    vmin=0.0,
+                                    vmax=1.0,
+                                    s=10.,
+                                    marker='.')
+                    sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+
+                    print np_shape(disp_vals), np_shape(hide_vals), np_shape(self.transformedCP)
 
                 # render color bar
                 cbar = plt.colorbar(sc, shrink=0.5)
@@ -860,12 +911,31 @@ class ProfileManager:
                 for i in range(len(self.indices)):
                     if self.binIds[i] not in restrictedBids:
                         r_trans = np_append(r_trans, self.transformedCP[i])
-                        r_cols = np_append(r_cols, self.colorMapGC(self.contigGCs[i]))
+                        r_cols = np_append(r_cols, self.contigGCs[i])
                         num_added += 1
                 r_trans = np_reshape(r_trans, (num_added,3))
-                r_cols = np_reshape(r_cols, (num_added,3))
-                sc = ax.scatter(r_trans[:,0], r_trans[:,1], r_trans[:,2], edgecolors='none', c=r_cols, s=10, marker='.')
+                print np_shape(r_trans)
+                #r_cols = np_reshape(r_cols, (num_added,3))
+                sc = ax.scatter(r_trans[:,0],
+                                r_trans[:,1],
+                                r_trans[:,2],
+                                edgecolors='none',
+                                c=r_cols,
+                                cmap=self.colorMapGC,
+                                s=10.,
+                                vmin=0.0,
+                                vmax=1.0,
+                                marker='.')
                 sc.set_edgecolors = sc.set_facecolors = lambda *args:None  # disable depth transparency effect
+
+                # render color bar
+                cbar = plt.colorbar(sc, shrink=0.5)
+                cbar.ax.tick_params()
+                cbar.ax.set_title("% GC", size=10)
+                cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+                cbar.ax.set_ylim([0.15, 0.85])
+                cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+
             ax.azim = azim
             ax.elev = elev
             ax.set_xlim3d(0,self.scaleFactor)
@@ -899,6 +969,120 @@ class ProfileManager:
         if del_fig:
             plt.close(fig)
             del fig
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
+    def r2nderTransCPData(self,
+                          fig,
+                          alphaIndices=[],
+                          visibleIndices=[],
+                          alpha=1,
+                          ignoreContigLengths=False,
+                          elev=45,
+                          azim=45,
+                          fileName="",
+                          dpi=300,
+                          format='png',
+                          primaryWidth=6,
+                          title="",
+                          showAxis=False,
+                          showColorbar=True,):
+        """Plot transformed data in 3D"""
+        # clear any existing plot
+        plt.clf()
+        ax = fig.add_subplot(111, projection='3d')
+
+        # work out the coords an colours based on indices
+        alpha_coords = self.transformedCP[alphaIndices]
+        alpha_GCs = self.contigGCs[alphaIndices]
+        visible_coords = self.transformedCP[visibleIndices]
+        visible_GCs = self.contigGCs[visibleIndices]
+
+        # lengths if needed
+        if not ignoreContigLengths:
+            alpha_lengths = self.contigLengths[alphaIndices]
+            visible_lengths = self.contigLengths[visibleIndices]
+        else:
+            alpha_lengths = 10.
+            visible_lengths = 10.
+
+        # first plot alpha points
+        if len(alpha_GCs) > 0:
+            sc = ax.scatter(alpha_coords[:,0],
+                            alpha_coords[:,1],
+                            alpha_coords[:,2],
+                            edgecolors='none',
+                            c=alpha_GCs,
+                            cmap=self.colorMapGC,
+                            vmin=0.0,
+                            vmax=1.0,
+                            s=alpha_lengths,
+                            marker='.',
+                            alpha=alpha)
+            sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+
+        # then plot full visible points
+        if len(visible_GCs) > 0:
+            sc = ax.scatter(visible_coords[:,0],
+                            visible_coords[:,1],
+                            visible_coords[:,2],
+                            edgecolors='none',
+                            c=visible_GCs,
+                            cmap=self.colorMapGC,
+                            s=visible_lengths,
+                            vmin=0.0,
+                            vmax=1.0,
+                            marker='.')
+            sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+
+        # render color bar
+        if showColorbar:
+            cbar = plt.colorbar(sc, shrink=0.5)
+            cbar.ax.tick_params()
+            cbar.ax.set_title("% GC", size=10)
+            cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+            cbar.ax.set_ylim([0.15, 0.85])
+            cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+
+        # set aspect
+        ax.azim = azim
+        ax.elev = elev
+
+        # make it purdy
+        ax.set_xlim3d(0,self.scaleFactor)
+        ax.set_ylim3d(0,self.scaleFactor)
+        ax.set_zlim3d(0,self.scaleFactor)
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_zticklabels([])
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_zticks([])
+
+        plt.tight_layout()
+
+        if title != "":
+            plt.title(title)
+
+        if(not showAxis):
+            ax.set_axis_off()
+
+        if(fileName != ""):
+            try:
+                fig.set_size_inches(primaryWidth,primaryWidth)
+                plt.savefig(fileName,dpi=dpi,format=format)
+            except:
+                print "Error saving image",fileName, exc_info()[0]
+                raise
+        else:
+            try:
+                plt.show()
+            except:
+                print "Error showing image", exc_info()[0]
+                raise
 
 ###############################################################################
 ###############################################################################

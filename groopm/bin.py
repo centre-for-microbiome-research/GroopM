@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -248,7 +248,7 @@ class Bin:
     def getCentroidStats(self, profile):
         """Calculate the centroids of the profile"""
         working_list = profile[self.rowIndices]
-        
+
         # return the mean and stdev
         # we divide by std so we need to make sure it's never 0
         tmp_stds = np_std(working_list, axis=0)
@@ -258,7 +258,7 @@ class Bin:
         except:
             std = mean_std
         return (np_median(working_list,axis=0), std)
-    
+
     def getkmerValDist(self, kmerNormPC1):
         """Return an array of kmer vals for this bin"""
         return np.array([kmerNormPC1[i] for i in self.rowIndices])
@@ -286,7 +286,7 @@ class Bin:
             dists = [np.abs(self.gcMedian - profile[i]) for i in self.rowIndices]
         else:
             raise ModeNotAppropriateException("Mode",mode,"unknown")
-        
+
         dist_range = np.max(np.array(dists)) - np.min(np.array(dists))
         return (np.mean(np.array(dists)), np.std(np.array(dists)), dist_range)
 
@@ -574,7 +574,7 @@ class Bin:
         if ignoreContigLengths:
             sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='none', c=contigGCs[self.rowIndices], cmap=colorMapGC, vmin=0.0, vmax=1.0, s=10, marker='.')
         else:
-            sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', c=contigGCs[self.rowIndices], cmap=colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens, marker='.')            
+            sc = ax.scatter(disp_vals[:,0], disp_vals[:,1], disp_vals[:,2], edgecolors='k', c=contigGCs[self.rowIndices], cmap=colorMapGC, vmin=0.0, vmax=1.0, s=disp_lens, marker='.')
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
         ax.set_xlabel('x coverage')
