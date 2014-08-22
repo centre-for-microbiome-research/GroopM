@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.7"
+__version__ = "0.2.8"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -1289,12 +1289,35 @@ class BinManager:
 
                 plot_num += 1
 
-            cbar = plt.colorbar(sc, shrink=0.5)
-            cbar.ax.tick_params()
-            cbar.ax.set_title("% GC", size=10)
-            cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
-            cbar.ax.set_ylim([0.15, 0.85])
-            cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+            special = False
+            if special:
+                # make a plot for a background etc
+                ax.azim = -127
+                ax.elev = 4
+
+                # strip all background
+                ax.set_xlim3d(0,self.PM.scaleFactor)
+                ax.set_ylim3d(0,self.PM.scaleFactor)
+                ax.set_zlim3d(0,self.PM.scaleFactor)
+                ax.set_xticklabels([])
+                ax.set_yticklabels([])
+                ax.set_zticklabels([])
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.set_zticks([])
+                plt.tight_layout()
+                ax.set_axis_off()
+
+                fig.set_size_inches(10,10)
+                plt.savefig("coal_5K_rings2.png",dpi=300,format="png")
+
+            else:
+                cbar = plt.colorbar(sc, shrink=0.5)
+                cbar.ax.tick_params()
+                cbar.ax.set_title("% GC", size=10)
+                cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+                cbar.ax.set_ylim([0.15, 0.85])
+                cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
         else:
             # plot all separately
             # we need to work out how to shape the plots

@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.10.14"
+__version__ = "0.2.10.15"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -497,7 +497,7 @@ class BinExplorer:
                     current_frame += 1
                     fade_count += 1
                     current_azim += azim_increment
-                    current_elev += elev_increment
+                    current_elev -= elev_increment
             del fig
 
     def plotBinProfiles(self, timer):
