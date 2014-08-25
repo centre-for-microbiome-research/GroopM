@@ -30,12 +30,7 @@
       <th>&nbsp;&nbsp;&nbsp;<a
         href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
 
-  <!-- Project homepage -->
-      <th class="navbar" align="right" width="100%">
-        <table border="0" cellpadding="0" cellspacing="0">
-          <tr><th class="navbar" align="center"
-            ><a class="navbar" target="_top" href="http://minillinim.github.io/GroopM/">GroopM</a></th>
-          </tr></table></th>
+      <th class="navbar" width="100%"></th>
   </tr>
 </table>
 <table width="100%" cellpadding="0" cellspacing="0">
@@ -156,10 +151,36 @@
     </td><td class="summary">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
+          <td><span class="summary-sig"><a href="groopm.groopmUtils.BinExplorer-class.html#splitCeil" class="summary-sig-name">splitCeil</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">seq</span>,
+        <span class="summary-sig-arg">m</span>)</span><br />
+      Distribute the seq elements in lists in m groups
+according to quasi equitative distribution (decreasing order):</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="groopm.groopmUtils-pysrc.html#BinExplorer.splitCeil">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
           <td><span class="summary-sig"><a name="plotFlyOver"></a><span class="summary-sig-name">plotFlyOver</span>(<span class="summary-sig-arg">self</span>,
         <span class="summary-sig-arg">timer</span>,
         <span class="summary-sig-arg">fps</span>=<span class="summary-sig-default">10.0</span>,
-        <span class="summary-sig-arg">totalTime</span>=<span class="summary-sig-default">120.0</span>)</span><br />
+        <span class="summary-sig-arg">totalTime</span>=<span class="summary-sig-default">120.0</span>,
+        <span class="summary-sig-arg">percentFade</span>=<span class="summary-sig-default">0.05</span>,
+        <span class="summary-sig-arg">coreCut</span>=<span class="summary-sig-default">0</span>,
+        <span class="summary-sig-arg">prefix</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string">file</code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">title</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">showColorbar</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">format</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string">jpeg</code><code class="variable-quote">'</code></span>)</span><br />
       Plot a flyover of the data with bins being removed</td>
           <td align="right" valign="top">
             <span class="codelink"><a href="groopm.groopmUtils-pysrc.html#BinExplorer.plotFlyOver">source&nbsp;code</a></span>
@@ -383,6 +404,35 @@
   </td>
 </tr>
 </table>
+<a name="splitCeil"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">splitCeil</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">seq</span>,
+        <span class="sig-arg">m</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.groopmUtils-pysrc.html#BinExplorer.splitCeil">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <pre class="literalblock">
+Distribute the seq elements in lists in m groups
+according to quasi equitative distribution (decreasing order):
+
+    splitCeil(range(13), 4) --&gt; seq = range(13), m=4
+
+    result : [[0, 1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]
+
+</pre>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
 <a name="plotIds"></a>
 <div>
 <table class="details" border="1" cellpadding="3"
@@ -425,18 +475,13 @@
       <th>&nbsp;&nbsp;&nbsp;<a
         href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
 
-  <!-- Project homepage -->
-      <th class="navbar" align="right" width="100%">
-        <table border="0" cellpadding="0" cellspacing="0">
-          <tr><th class="navbar" align="center"
-            ><a class="navbar" target="_top" href="http://minillinim.github.io/GroopM/">GroopM</a></th>
-          </tr></table></th>
+      <th class="navbar" width="100%"></th>
   </tr>
 </table>
 <table border="0" cellpadding="0" cellspacing="0" width="100%%">
   <tr>
     <td align="left" class="footer">
-    Generated by Epydoc 3.0.1 on Thu Dec 19 23:19:18 2013
+    Generated by Epydoc 3.0.1 on Tue Aug 26 02:47:25 2014
     </td>
     <td align="right" class="footer">
       <a target="mainFrame" href="http://epydoc.sourceforge.net"

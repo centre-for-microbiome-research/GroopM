@@ -250,9 +250,10 @@ groopm.groopmUtils.BinExplorer.plotBinAssignents	groopm.groopmUtils.BinExplorer-
 groopm.groopmUtils.BinExplorer.flat2square	groopm.groopmUtils.BinExplorer-class.html#flat2square
 groopm.groopmUtils.BinExplorer.plotTogether	groopm.groopmUtils.BinExplorer-class.html#plotTogether
 groopm.groopmUtils.BinExplorer.plotCompare	groopm.groopmUtils.BinExplorer-class.html#plotCompare
+groopm.groopmUtils.BinExplorer.__init__	groopm.groopmUtils.BinExplorer-class.html#__init__
 groopm.groopmUtils.BinExplorer.plotFlyOver	groopm.groopmUtils.BinExplorer-class.html#plotFlyOver
 groopm.groopmUtils.BinExplorer.plotSideBySide	groopm.groopmUtils.BinExplorer-class.html#plotSideBySide
-groopm.groopmUtils.BinExplorer.__init__	groopm.groopmUtils.BinExplorer-class.html#__init__
+groopm.groopmUtils.BinExplorer.splitCeil	groopm.groopmUtils.BinExplorer-class.html#splitCeil
 groopm.groopmUtils.BinExplorer.plotCoresVsContigs	groopm.groopmUtils.BinExplorer-class.html#plotCoresVsContigs
 groopm.groopmUtils.BinExplorer.plotBinProfiles	groopm.groopmUtils.BinExplorer-class.html#plotBinProfiles
 groopm.groopmUtils.BinExplorer.plotIds	groopm.groopmUtils.BinExplorer-class.html#plotIds
@@ -287,7 +288,7 @@ groopm.mstore.ContigParser.calculateGC	groopm.mstore.ContigParser-class.html#cal
 groopm.mstore.ContigParser.getWantedSeqs	groopm.mstore.ContigParser-class.html#getWantedSeqs
 groopm.mstore.ContigParser.PCAKSigs	groopm.mstore.ContigParser-class.html#PCAKSigs
 groopm.mstore.ContigParser.parse	groopm.mstore.ContigParser-class.html#parse
-groopm.mstore.ContigParser.readfq	groopm.mstore.ContigParser-class.html#readfq
+groopm.mstore.ContigParser.readFasta	groopm.mstore.ContigParser-class.html#readFasta
 groopm.mstore.ContigParser.__init__	groopm.mstore.ContigParser-class.html#__init__
 groopm.mstore.CoverageTransformer	groopm.mstore.CoverageTransformer-class.html
 groopm.mstore.CoverageTransformer.small2indices	groopm.mstore.CoverageTransformer-class.html#small2indices
@@ -375,6 +376,7 @@ groopm.profileManager.ProfileManager.setBinAssignments	groopm.profileManager.Pro
 groopm.profileManager.ProfileManager.getNumMers	groopm.profileManager.ProfileManager-class.html#getNumMers
 groopm.profileManager.ProfileManager.plotTransViews	groopm.profileManager.ProfileManager-class.html#plotTransViews
 groopm.profileManager.ProfileManager.getMerSize	groopm.profileManager.ProfileManager-class.html#getMerSize
+groopm.profileManager.ProfileManager.r2nderTransCPData	groopm.profileManager.ProfileManager-class.html#r2nderTransCPData
 groopm.profileManager.ProfileManager.loadData	groopm.profileManager.ProfileManager-class.html#loadData
 groopm.profileManager.ProfileManager.getBinStats	groopm.profileManager.ProfileManager-class.html#getBinStats
 groopm.rainbow.Rainbow	groopm.rainbow.Rainbow-class.html
