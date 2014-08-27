@@ -45,6 +45,6 @@ Licence and referencing
 
 Project home page, info on the source tree, documentation, issues and how to contribute, see http://github.com/minillinim/GroopM
 
-This software is currently unpublished but a manuscript is being prepared. Please contact me at m_dot_imelfort_at_uq_dot_edu_dot_au for more information about referencing this software.
+If you use this software then we'd love you to cite us. Our paper is available as a preprint at https://peerj.com/preprints/409v1/. The DOI is "10.7287/peerj.preprints.409v1"
 
-Copyright © 2012 Michael Imelfort. See LICENSE.txt for further details.
+Copyright © 2012-2014 Michael Imelfort. See LICENSE.txt for further details.
