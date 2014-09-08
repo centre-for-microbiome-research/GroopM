@@ -9,12 +9,12 @@
  */
 
 @font-face {
-    font-family: Vemana;
-    src: url("http://minillinim.github.io/GroopM/fonts/Vemana.eot") /* EOT file for IE */
+    font-family: 'Vemana';
+    src: url("./fonts/Vemana.eot") /* EOT file for IE */
 }
 @font-face {
-    font-family: Vemana;
-    src: url("http://minillinim.github.io/GroopM/fonts/Vemana.ttf") /* TTF file for CSS3 browsers */
+    font-family: 'Vemana';
+    src: url("./fonts/Vemana.ttf") /* TTF file for CSS3 browsers */
 }
 
 article,
