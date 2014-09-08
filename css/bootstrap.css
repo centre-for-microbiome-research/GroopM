@@ -1,4 +1,4 @@
-@import url(https://fonts.googleapis.com/css?family=Ubuntu);
+@import url(https://fonts.googleapis.com/css?family=Vemana);
 /*!
  * Bootstrap v2.1.1
  *
@@ -8,6 +8,16 @@
  *
  * Designed and built with all the love in the world @twitter by @mdo and @fat.
  */
+
+@font-face {
+    font-family: Vemana;
+    src: url("../fonts/Vemana.eot") /* EOT file for IE */
+}
+@font-face {
+    font-family: Vemana;
+    src: url("../fonts/Vemana.ttf") /* TTF file for CSS3 browsers */
+}
+
 article,
 aside,
 details,
@@ -144,7 +154,7 @@ textarea {
 }
 body {
   margin: 0;
-  font-family: 'Ubuntu', Tahoma, sans-serif;
+  font-family: 'Vemana', Tahoma, sans-serif;
   font-size: 14px;
   line-height: 20px;
   color: #333333;
@@ -780,7 +790,7 @@ input,
 button,
 select,
 textarea {
-  font-family: 'Ubuntu', Tahoma, sans-serif;
+  font-family: 'Vemana', Tahoma, sans-serif;
 }
 label {
   display: block;
@@ -3597,7 +3607,7 @@ input[type="submit"].btn.btn-mini {
 .navbar-search .search-query {
   margin-bottom: 0;
   padding: 4px 14px;
-  font-family: 'Ubuntu', Tahoma, sans-serif;
+  font-family: 'Vemana', Tahoma, sans-serif;
   font-size: 13px;
   font-weight: normal;
   line-height: 1;
