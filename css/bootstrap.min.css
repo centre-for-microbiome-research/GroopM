@@ -531,12 +531,8 @@ h3,
 h4,
 h5,
 h6 {
-  margin: 10px 0;
-<<<<<<< HEAD
+  margin: 10px 0
   font-family: 'DejaVuSans', sans-serif;
-=======
-  font-family: Vemana, sans-serif;
->>>>>>> bfd8c278d9307b378fcdcefab127689eb1efdb43
   font-weight: bold;
   line-height: 1;
   color: inherit;
