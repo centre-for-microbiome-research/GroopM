@@ -10,11 +10,11 @@
 
 @font-face {
     font-family: 'DejaVuSans';
-    src: url('http://minillinim.github.io/GroopM/fonts/DejaVuSans.eot') /* EOT file for IE */
+    src: url('../fonts/DejaVuSans.eot') /* EOT file for IE */
 }
 @font-face {
     font-family: 'DejaVuSans';
-    src: url('http://minillinim.github.io/GroopM/fonts/DejaVuSans.ttf') /* TTF file for CSS3 browsers */
+    src: url('../fonts/DejaVuSans.ttf') /* TTF file for CSS3 browsers */
 }
 
 article,
@@ -531,7 +531,7 @@ h3,
 h4,
 h5,
 h6 {
-  margin: 10px 0
+  margin: 10px 0;
   font-family: 'DejaVuSans', sans-serif;
   font-weight: bold;
   line-height: 1;
