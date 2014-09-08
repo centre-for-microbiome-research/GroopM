@@ -1,4 +1,3 @@
-@import url(https://fonts.googleapis.com/css?family=Vemana);
 /*!
  * Bootstrap v2.1.1
  *
@@ -11,11 +10,11 @@
 
 @font-face {
     font-family: Vemana;
-    src: url("../fonts/Vemana.eot") /* EOT file for IE */
+    src: url("./fonts/Vemana.eot") /* EOT file for IE */
 }
 @font-face {
     font-family: Vemana;
-    src: url("../fonts/Vemana.ttf") /* TTF file for CSS3 browsers */
+    src: url("./fonts/Vemana.ttf") /* TTF file for CSS3 browsers */
 }
 
 article,
