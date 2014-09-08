@@ -9,12 +9,12 @@
  */
 
 @font-face {
-    font-family: 'Vemana';
-    src: url('http://minillinim.github.io/GroopM/fonts/Vemana.eot') /* EOT file for IE */
+    font-family: 'DejaVuSans';
+    src: url('http://minillinim.github.io/GroopM/fonts/DejaVuSans.eot') /* EOT file for IE */
 }
 @font-face {
-    font-family: 'Vemana';
-    src: url('http://minillinim.github.io/GroopM/fonts/Vemana.ttf') /* TTF file for CSS3 browsers */
+    font-family: 'DejaVuSans';
+    src: url('http://minillinim.github.io/GroopM/fonts/DejaVuSans.ttf') /* TTF file for CSS3 browsers */
 }
 
 article,
@@ -532,7 +532,7 @@ h4,
 h5,
 h6 {
   margin: 10px 0;
-  font-family: 'Vemana', sans-serif;
+  font-family: 'DejaVuSans', sans-serif;
   font-weight: bold;
   line-height: 1;
   color: inherit;
@@ -789,7 +789,7 @@ input,
 button,
 select,
 textarea {
-  font-family: 'Vemana', Tahoma, sans-serif;
+  font-family: 'DejaVuSans', Tahoma, sans-serif;
 }
 label {
   display: block;
@@ -3606,7 +3606,7 @@ input[type="submit"].btn.btn-mini {
 .navbar-search .search-query {
   margin-bottom: 0;
   padding: 4px 14px;
-  font-family: 'Vemana', Tahoma, sans-serif;
+  font-family: 'DejaVuSans', Tahoma, sans-serif;
   font-size: 13px;
   font-weight: normal;
   line-height: 1;
