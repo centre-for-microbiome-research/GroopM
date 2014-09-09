@@ -762,8 +762,17 @@ class BinExplorer:
             sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
             ax2 = fig.add_subplot(122, projection='3d')
-            sc = ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColors, c=binCentroidColors)
-            sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
+            outer_index = 0
+            for bid in self.BM.getBids():
+                ax2.text(binCentroidPoints[outer_index,0],
+                         binCentroidPoints[outer_index,1],
+                         binCentroidPoints[outer_index,2],
+                         str(int(bid)),
+                         color=binCentroidColors[outer_index]
+                         )
+                outer_index += 1
+            #sc = ax2.scatter(binCentroidPoints[:,0], binCentroidPoints[:,1], binCentroidPoints[:,2], edgecolors=binCentroidColors, c=binCentroidColors)
+            #sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
             ax2.set_xlim(ax1.get_xlim())
             ax2.set_ylim(ax1.get_ylim())

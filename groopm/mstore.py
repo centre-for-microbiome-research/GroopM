@@ -177,7 +177,7 @@ class GMDataManager:
 #------------------------------------------------------------------------------
 # DB CREATION / INITIALISATION  - PROFILES
 
-    def createDB(self, bamFiles, contigs, dbFileName, cutoff, timer, kmerSize=4, force=False):
+    def createDB(self, bamFiles, contigs, dbFileName, cutoff, timer, kmerSize=4, force=False, threads=1):
         """Main wrapper for parsing all input files"""
         # load all the passed vars
         dbFileName = dbFileName
@@ -248,10 +248,10 @@ class GMDataManager:
                 #------------------------
                 # parse bam files
                 #------------------------
-                (rowwise_links, cov_profiles) = bamParser.parse(bamFiles,
-                                                                con_names,
-                                                                cid_2_indices)
-
+                (ordered_bamFiles, rowwise_links, cov_profiles) = bamParser.parse(bamFiles,
+                                                                                  con_names,
+                                                                                  cid_2_indices,
+                                                                                  threads)
                 tot_cov = [sum(profile) for profile in cov_profiles]
                 good_indices = np.nonzero(tot_cov)[0]
                 bad_indices = [i for i in range(num_cons) if i not in good_indices]
@@ -318,7 +318,7 @@ class GMDataManager:
                 # write cov profiles
                 #------------------------
                 # build a table template based on the number of bamfiles we have
-                for i, bf in enumerate(bamFiles):
+                for i, bf in enumerate(ordered_bamFiles):
                     # assume the file is called something like "fred.bam"
                     # we want to rip off the ".bam" part
                     bam_desc = getBamDescriptor(bf, i + 1)
@@ -1683,41 +1683,37 @@ class BamParser:
 
     def __init__(self): pass
 
-    def parse(self, bamFiles, contigNames, cid2Indices):
+    def parse(self, bamFiles, contigNames, cid2Indices, threads):
         """Parse multiple bam files and store the results in the main DB"""
-        print "Importing BAM files"
-        from bamtyper.utilities import BamParser as BTBP
-        BP = BTBP()
-        (links, ref_lengths, coverages) = BP.getLinks(bamFiles, full=False, verbose=True, doCoverage=True, minJoin=5)
+        print "Importing BAM files using %d threads" % threads
 
-        # go through all the contigs sorted by name.
-        # we want to make an array of tuples of coverage sigs
+        from bamm.bamParser import BamParser as BMBP
+        BP = BMBP(coverageMode='outlier')
+        BP.parseBams(bamFiles, doLinks=True, doTypes=True, doCovs=True, threads=threads, verbose=True)
+
+        dodgy_lookup = dict(zip(BP.BFI.contigNames, range(len(BP.BFI.contigNames))))
         cov_sigs = []
-        bam_range = range(len(bamFiles))
         for cid in contigNames:
-            tmp_cov = []
-            for i in bam_range:
-                try:
-                    tmp_cov.append(coverages[i][cid])
-                except KeyError:
-                    # may be no coverage for this contig
-                    tmp_cov.append(0.0)
-            cov_sigs.append(tuple(tmp_cov))
+            cov_sigs.append(tuple(BP.BFI.coverages[dodgy_lookup[cid]]))
 
         # transform the links into something a little easier to parse later
         rowwise_links = []
-        for cid in links:
-            for link in links[cid]:
-                try:
-                    rowwise_links.append((cid2Indices[cid],          # contig 1
-                                          cid2Indices[link[0]],      # contig 2
-                                          int(link[1]),               # numReads
-                                          int(link[2]),               # linkType
-                                          int(link[3])                # gap
-                                          ))
-                except KeyError:
-                    pass
-        return (rowwise_links, np.array(cov_sigs))
+        do_old = False
+        if do_old:
+            for cid in links:
+                for link in links[cid]:
+                    try:
+                        rowwise_links.append((cid2Indices[cid],          # contig 1
+                                              cid2Indices[link[0]],      # contig 2
+                                              int(link[1]),               # numReads
+                                              int(link[2]),               # linkType
+                                              int(link[3])                # gap
+                                              ))
+                    except KeyError:
+                        pass
+        return ([BP.BFI.bamFiles[i].fileName for i in range(len(bamFiles))],
+                rowwise_links,
+                np.array(cov_sigs))
 
 def getBamDescriptor(fullPath, index_num):
     """AUX: Reduce a full path to just the file name minus extension"""
