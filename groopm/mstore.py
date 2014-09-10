@@ -1685,29 +1685,32 @@ class BamParser:
 
     def parse(self, bamFiles, contigNames, cid2Indices, threads):
         """Parse multiple bam files and store the results in the main DB"""
-        print "Importing BAM files using %d threads" % threads
+        print "Parsing BAM files using %d threads" % threads
 
         from bamm.bamParser import BamParser as BMBP
         BP = BMBP(coverageMode='outlier')
         BP.parseBams(bamFiles, doLinks=True, doTypes=True, doCovs=True, threads=threads, verbose=True)
 
+        # we need to make sure that the ordering of contig names is consistent
         dodgy_lookup = dict(zip(BP.BFI.contigNames, range(len(BP.BFI.contigNames))))
         cov_sigs = []
         for cid in contigNames:
             cov_sigs.append(tuple(BP.BFI.coverages[dodgy_lookup[cid]]))
 
+        #############################################################################
+        # LINKS ARE DISABLED UNTIL STOREM COMES ONLINE
+        #############################################################################
         # transform the links into something a little easier to parse later
         rowwise_links = []
-        do_old = False
-        if do_old:
+        if False:
             for cid in links:
                 for link in links[cid]:
                     try:
                         rowwise_links.append((cid2Indices[cid],          # contig 1
                                               cid2Indices[link[0]],      # contig 2
-                                              int(link[1]),               # numReads
-                                              int(link[2]),               # linkType
-                                              int(link[3])                # gap
+                                              int(link[1]),              # numReads
+                                              int(link[2]),              # linkType
+                                              int(link[3])               # gap
                                               ))
                     except KeyError:
                         pass
