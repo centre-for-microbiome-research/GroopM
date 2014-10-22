@@ -39,10 +39,10 @@
 ###############################################################################
 
 __author__ = "Michael Imelfort"
-__copyright__ = "Copyright 2012/2013"
+__copyright__ = "Copyright 2012-2014"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.3.9"
+__version__ = "0.3.10"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -57,10 +57,14 @@ from string import maketrans as s_maketrans
 import tables
 import numpy as np
 from scipy.spatial.distance import cdist, squareform
-import pysam
 
 # GroopM imports
 from PCA import PCA, Center
+
+# BamM imports
+from bamm.bamParser import BamParser as BMBP
+from bamm.cWrapper import CT
+from bamm.bamFile import BM_coverageType as BMCT
 
 np.seterr(all='raise')
 
@@ -1687,30 +1691,45 @@ class BamParser:
         """Parse multiple bam files and store the results in the main DB"""
         print "Parsing BAM files using %d threads" % threads
 
-        from bamm.bamParser import BamParser as BMBP
-        BP = BMBP(coverageMode='outlier')
-        BP.parseBams(bamFiles, doLinks=True, doTypes=True, doCovs=True, threads=threads, verbose=True)
+        BP = BMBP(BMCT(CT.P_MEAN_OUTLIER, 1))
+        BP.parseBams(bamFiles,
+                     doLinks=False,
+                     doCovs=True,
+                     threads=threads,
+                     verbose=True)
 
         # we need to make sure that the ordering of contig names is consistent
-        dodgy_lookup = dict(zip(BP.BFI.contigNames, range(len(BP.BFI.contigNames))))
+        # first we get a dict that connects a contig name to the index in
+        # the coverages array
+        con_name_lookup = dict(zip(BP.BFI.contigNames,
+                                   range(len(BP.BFI.contigNames))))
+
+        # Next we build the cov_sigs array by appending the coverage
+        # profiles in the same order. We need to handle the case where
+        # there is no applicable contig in the BamM-derived coverages
         cov_sigs = []
         for cid in contigNames:
-            cov_sigs.append(tuple(BP.BFI.coverages[dodgy_lookup[cid]]))
+            try:
+                cov_sigs.append(tuple(BP.BFI.coverages[con_name_lookup[cid]]))
+            except KeyError:
+                # when a contig is missing from the BAM we just give it 0
+                # coverage. It will be removed later with a warning then
+                cov_sigs.append(tuple([0.]*len(bamFiles)))
 
-        #############################################################################
+        #######################################################################
         # LINKS ARE DISABLED UNTIL STOREM COMES ONLINE
-        #############################################################################
+        #######################################################################
         # transform the links into something a little easier to parse later
         rowwise_links = []
         if False:
             for cid in links:
                 for link in links[cid]:
                     try:
-                        rowwise_links.append((cid2Indices[cid],          # contig 1
-                                              cid2Indices[link[0]],      # contig 2
-                                              int(link[1]),              # numReads
-                                              int(link[2]),              # linkType
-                                              int(link[3])               # gap
+                        rowwise_links.append((cid2Indices[cid],     # contig 1
+                                              cid2Indices[link[0]], # contig 2
+                                              int(link[1]),         # numReads
+                                              int(link[2]),         # linkType
+                                              int(link[3])          # gap
                                               ))
                     except KeyError:
                         pass

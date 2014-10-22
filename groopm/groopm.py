@@ -39,10 +39,10 @@
 ###############################################################################
 
 __author__ = "Michael Imelfort"
-__copyright__ = "Copyright 2012/2013"
+__copyright__ = "Copyright 2012-2014"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.10.12"
+__version__ = "0.2.11"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -191,15 +191,32 @@ class GroopMOptionsParser():
                 bids = options.bids
             BX = groopmUtils.GMExtractor(options.dbname,
                                           bids=bids,
-                                          folder=options.outfolder
+                                          folder=options.out_folder
                                           )
             if(options.mode=='contigs'):
-                BX.extractContigs(timer, fasta=options.data, cutoff=options.cutoff)
+                BX.extractContigs(timer,
+                                  fasta=options.data,
+                                  cutoff=options.cutoff)
+
             elif(options.mode=='reads'):
-                BX.extractReads(timer, bams=options.data)
+                BX.extractReads(timer,
+                                bams=options.data,
+                                prefix=options.prefix,
+                                mixBams=options.mix_bams,
+                                mixGroups=options.mix_groups,
+                                mixReads=options.mix_reads,
+                                interleaved=options.interleave,
+                                bigFile=options.no_gzip,
+                                headersOnly=options.headers_only,
+                                minMapQual=options.mapping_quality,
+                                maxMisMatches=options.max_distance,
+                                useSuppAlignments=options.use_supplementary,
+                                useSecondaryAlignments=options.use_secondary,
+                                verbose=options.verbose,
+                                threads=options.threads)
+
             else:
                 raise ExtractModeNotAppropriateException("mode: "+ options.mode + " is unknown")
-
         elif(options.subparser_name == 'merge'):
             # make bin cores
             print "*******************************************************************************"

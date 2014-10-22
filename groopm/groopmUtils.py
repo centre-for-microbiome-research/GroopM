@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.10.15"
+__version__ = "0.2.11"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -54,10 +54,11 @@ import errno
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D, axes3d, proj3d
-
 from colorsys import hsv_to_rgb as htr
 
 import numpy as np
+np.seterr(all='raise')
+
 from scipy.spatial.distance import cdist, squareform
 
 # GroopM imports
@@ -65,8 +66,7 @@ import binManager
 import mstore
 
 # other local imports
-from bamtyper.utilities import BamParser as BTBP
-np.seterr(all='raise')
+from bamm.bamExtractor import BamExtractor as BMBE
 
 ###############################################################################
 ###############################################################################
@@ -132,8 +132,25 @@ class GMExtractor:
                 print "Could not open file for writing:",file_name,sys.exc_info()[0]
                 raise
 
-    def  extractReads(self, timer, bams=[]):
-        """Extract reads from sam files and write to file"""
+    def extractReads(self,
+                     timer,
+                     bams=[],
+                     prefix="",
+                     mixBams=False,
+                     mixGroups=False,
+                     mixReads=False,
+                     interleaved=False,
+                     bigFile=False,
+                     headersOnly=False,
+                     minMapQual=0,
+                     maxMisMatches=1000,
+                     useSuppAlignments=False,
+                     useSecondaryAlignments=False,
+                     threads=1,
+                     verbose=False):
+        """Extract reads from bam files and write to file
+
+        All logic is handled by BamM <- soon to be wrapped by StoreM"""
         # load data
         self.BM = binManager.BinManager(dbFileName=self.dbFileName)   # bins
         self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids)
@@ -142,24 +159,33 @@ class GMExtractor:
         print "Extracting reads"
 
         # work out a set of targets to pass to the parser
-        targets = {}
+        targets = []
+        group_names = []
         bids = self.BM.getBids()
         for bid in bids:
+            group_names.append("BIN_%d" % bid)
             bin = self.BM.getBin(bid)
-            for row_index in bin.rowIndices:
-                targets[self.PM.contigNames[row_index]] = bid
+            targets.append(list(self.PM.contigNames[bin.rowIndices]))
 
         # get something to parse the bams with
-        bam_parser = BTBP()
-        bam_parser.extractReads(bams,
-                                '',
-                                targets,
-                                combineBams=False,
-                                headersOnly = True,
-                                dontTrustSamFlags=False,
-                                folder=self.outDir,
-                                verbose=True
-                                )
+        bam_parser = BMBE(targets,
+                          bams,
+                          groupNames=group_names,
+                          prefix=prefix,
+                          outFolder=self.outDir,
+                          mixBams=mixBams,
+                          mixGroups=mixGroups,
+                          mixReads=mixReads,
+                          interleaved=interleaved,
+                          bigFile=bigFile,
+                          headersOnly=headersOnly,
+                          minMapQual=minMapQual,
+                          maxMisMatches=maxMisMatches,
+                          useSuppAlignments=useSuppAlignments,
+                          useSecondaryAlignments=useSecondaryAlignments)
+
+        bam_parser.extract(threads=threads,
+                           verbose=verbose)
 
 def makeSurePathExists(path):
     try:
