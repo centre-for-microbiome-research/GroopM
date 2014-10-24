@@ -62,13 +62,13 @@ from groopm import groopm
 def printHelp():
     print '''\
 
-               ...::: GroopM :::...
+                             ...::: GroopM :::...
 
-       Automagical metagenomic binning FTW!
+                     Automagical metagenomic binning FTW!
 
-    -----------------------------------------
-                 version: %s
-    -----------------------------------------
+   -------------------------------------------------------------------------
+                                  version: %s
+   -------------------------------------------------------------------------
 
     Typical workflow:
 
@@ -97,7 +97,6 @@ def printHelp():
         Import, export:
 
     groopm dump         -> Write database fields to csv
-
 
     USE: groopm OPTION -h to see detailed options
     ''' % __version__
@@ -345,10 +344,18 @@ if __name__ == '__main__':
     if(len(sys.argv) == 1):
         printHelp()
         sys.exit(0)
-    elif(sys.argv[1] == '-v' or sys.argv[1] == '--version'):
-        print "GroopM: version %s %s %s" % (__version__, __copyright__, __author__)
+    elif(sys.argv[1] == '-v' or \
+         sys.argv[1] == '--v' or \
+         sys.argv[1] == '-version' or \
+         sys.argv[1] == '--version'):
+        print "GroopM: version %s %s %s" % (__version__,
+                                            __copyright__,
+                                            __author__)
         sys.exit(0)
-    elif(sys.argv[1] == '-h' or sys.argv[1] == '--help'):
+    elif(sys.argv[1] == '-h' or \
+         sys.argv[1] == '--h' or \
+         sys.argv[1] == '-help' or \
+         sys.argv[1] == '--help'):
         printHelp()
         sys.exit(0)
     else:
