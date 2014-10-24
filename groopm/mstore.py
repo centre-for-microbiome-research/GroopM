@@ -42,7 +42,7 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012-2014"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.3.10"
+__version__ = "0.3.11"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
 __status__ = "Released"
@@ -62,9 +62,24 @@ from scipy.spatial.distance import cdist, squareform
 from PCA import PCA, Center
 
 # BamM imports
-from bamm.bamParser import BamParser as BMBP
-from bamm.cWrapper import CT
-from bamm.bamFile import BM_coverageType as BMCT
+try:
+    from bamm.bamParser import BamParser as BMBP
+    from bamm.cWrapper import *
+    from bamm.bamFile import BM_coverageType as BMCT
+except ImportError:
+    print """ERROR: There was an error importing BamM. This probably means that
+BamM is not installed properly or not in your PYTHONPATH. Installation
+instructions for BamM are located at:
+
+    http://minillinim.github.io/BamM
+
+If you're sure that BamM is installed (properly) then check your PYTHONPATH. If
+you still encounter this error. Please lodge a bug report at:
+
+    http://githum.com/minillinim/BamM/issues
+
+Exiting..."""
+    sys.exit(-1)
 
 np.seterr(all='raise')
 
