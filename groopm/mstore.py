@@ -78,7 +78,10 @@ you still encounter this error. Please lodge a bug report at:
 
     http://githum.com/minillinim/BamM/issues
 
-Exiting..."""
+Exiting...
+--------------------------------------------------------------------------------
+"""
+    import sys
     sys.exit(-1)
 
 np.seterr(all='raise')
