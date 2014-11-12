@@ -196,6 +196,7 @@ class GroopMOptionsParser():
             if(options.mode=='contigs'):
                 BX.extractContigs(timer,
                                   fasta=options.data,
+                                  prefix=options.prefix,
                                   cutoff=options.cutoff)
 
             elif(options.mode=='reads'):

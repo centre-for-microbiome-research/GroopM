@@ -95,19 +95,40 @@ class GMExtractor:
         # make the dir if need be
         makeSurePathExists(self.outDir)
 
-    def extractContigs(self, timer, fasta=[], cutoff=0):
+    def extractContigs(self,
+                       timer,
+                       fasta=[],
+                       prefix='',
+                       cutoff=0):
         """Extract contigs and write to file"""
         self.BM = binManager.BinManager(dbFileName=self.dbFileName)   # bins
         self.BM.loadBins(timer, makeBins=True,silent=False,bids=self.bids, cutOff=cutoff)
         self.PM = self.BM.PM
+        if prefix != '':
+            self.prefix = prefix
+        else:
+            self.prefix=os.path.basename(self.dbFileName) \
+                            .replace(".gm", "") \
+                            .replace(".sm", "")
 
         # load all the contigs which have been assigned to bins
         CP = mstore.ContigParser()
         # contigs looks like cid->seq
         contigs = {}
+        import mimetypes
         try:
             for file_name in fasta:
-                with open(file_name, "r") as f:
+                GM_open = open
+                try:
+                    # handle gzipped files
+                    mime = mimetypes.guess_type(file_name)
+                    if mime[1] == 'gzip':
+                        import gzip
+                        GM_open = gzip.open
+                except:
+                    print "Error when guessing contig file mimetype"
+                    raise
+                with GM_open(file_name, "r") as f:
                     contigs = CP.getWantedSeqs(f, self.PM.contigNames, storage=contigs)
         except:
             print "Could not parse contig file:",fasta[0],sys.exc_info()[0]
@@ -117,9 +138,9 @@ class GMExtractor:
         print "Writing files"
         for bid in self.BM.getBids():
             if self.BM.PM.isLikelyChimeric[bid]:
-                file_name = os.path.join(self.outDir, "BIN_%d.chimeric.fa" % bid)
+                file_name = os.path.join(self.outDir, "%s_bin_%d.chimeric.fna" % (self.prefix, bid))
             else:
-                file_name = os.path.join(self.outDir, "BIN_%d.fa" % bid)
+                file_name = os.path.join(self.outDir, "%s_bin_%d.fna" % (self.prefix, bid))
             try:
                 with open(file_name, 'w') as f:
                     for row_index in self.BM.getBin(bid).rowIndices:
