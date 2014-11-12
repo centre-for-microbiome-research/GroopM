@@ -34,12 +34,21 @@
 <section id="theboss">
   <!-- Headings & Paragraph Copy -->
   <div class="row">
+    <div class="span12">
+      <hr>
+      <h1>NEWS / UPDATES:</h1>
+        <p>2014-11-12</p>
+        <p>Since publication we've been recieving may feature requests and bug reports.So far we've been concentrating on the latter and it's now time to start concentrating on the former.</p>
+        <p>The first major round of fixes are now in the main distribution version 0.3.0! One major change is a switch away from using pytables to parse BAM files and instead using a new tool called <a href="https://minillinim.github.io/BamM">BamM</a>. This makes the parse and extraction steps much much much faster.</p>
+        <p>We've had a few very dedicated beta testers try the new version out but as always we can't test all systems. If you find a bug, please let me know.</p>
+    </div>
     <div class="span4">
         <hr>
         <h1>Get GroopM</h1>
         <p>I use and love Linux and GroopM has been developed to work on a Linux system. I'm not saying it won't work elsewhere, but I haven't tried. YMMV. People have successfully used GroopM on many different flavours of Linux as well as on Mavericks 10.9. If you try it somewhere else then let me know. I'd like to keep this list up to date.</p>
         <h3>Use pip</h3>
         <p>This is the recommended method as it will automaticaly install all of GroopM's dependencies. You'll need to have <a href="http://pypi.python.org/pypi">pip</a> installed on your system. Also you should try to install <a href="http://www.pytables.org/moin">pytables</a> yourself first as an error installing one of it's dependencies (numexpr) can hamper your fun installation experience. </p>
+        <p>GroopM now uses <a href="https://minillinim.github.io/BamM">BamM</a> to parse BAM files and produce coverage profiles. This is not available on pip so it will be need to be installed separately. Instructions are <a href="https://minillinim.github.io/BamM">here</a></p>
         <p>Of course you can just try and see ;) Open a temrinal and type: </p>
         <p>$ sudo pip install GroopM</p>
         <h3>From source on github</h3>
@@ -48,10 +57,9 @@
           <li>numpy >= 1.6.1</li>
           <li>scipy >= 0.10.1</li>
           <li>matplotlib >= 1.1.0</li>
-          <li>pytables >= 2.3</li>
           <li>pysam >= 0.3</li>
           <li>PIL >= 1.1.7</li>
-          <li>BamTyper >= 0.2.0</li>
+          <li>BamM >= 1.3.0</li>
           <li>Cython</li>
           <li>GTK or TK dev packages installed on your machine</li>
         </ul>

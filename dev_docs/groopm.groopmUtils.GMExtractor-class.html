@@ -104,6 +104,7 @@
           <td><span class="summary-sig"><a name="extractContigs"></a><span class="summary-sig-name">extractContigs</span>(<span class="summary-sig-arg">self</span>,
         <span class="summary-sig-arg">timer</span>,
         <span class="summary-sig-arg">fasta</span>=<span class="summary-sig-default"><code class="variable-group">[</code><code class="variable-group">]</code></span>,
+        <span class="summary-sig-arg">prefix</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
         <span class="summary-sig-arg">cutoff</span>=<span class="summary-sig-default">0</span>)</span><br />
       Extract contigs and write to file</td>
           <td align="right" valign="top">
@@ -121,10 +122,23 @@
     </td><td class="summary">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td><span class="summary-sig"><a name="extractReads"></a><span class="summary-sig-name">extractReads</span>(<span class="summary-sig-arg">self</span>,
+          <td><span class="summary-sig"><a href="groopm.groopmUtils.GMExtractor-class.html#extractReads" class="summary-sig-name">extractReads</a>(<span class="summary-sig-arg">self</span>,
         <span class="summary-sig-arg">timer</span>,
-        <span class="summary-sig-arg">bams</span>=<span class="summary-sig-default"><code class="variable-group">[</code><code class="variable-group">]</code></span>)</span><br />
-      Extract reads from sam files and write to file</td>
+        <span class="summary-sig-arg">bams</span>=<span class="summary-sig-default"><code class="variable-group">[</code><code class="variable-group">]</code></span>,
+        <span class="summary-sig-arg">prefix</span>=<span class="summary-sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="summary-sig-arg">mixBams</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">mixGroups</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">mixReads</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">interleaved</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">bigFile</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">headersOnly</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">minMapQual</span>=<span class="summary-sig-default">0</span>,
+        <span class="summary-sig-arg">maxMisMatches</span>=<span class="summary-sig-default">1000</span>,
+        <span class="summary-sig-arg">useSuppAlignments</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">useSecondaryAlignments</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">threads</span>=<span class="summary-sig-default">1</span>,
+        <span class="summary-sig-arg">verbose</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Extract reads from bam files and write to file</td>
           <td align="right" valign="top">
             <span class="codelink"><a href="groopm.groopmUtils-pysrc.html#GMExtractor.extractReads">source&nbsp;code</a></span>
             
@@ -135,6 +149,60 @@
     </td>
   </tr>
 </table>
+<!-- ==================== METHOD DETAILS ==================== -->
+<a name="section-MethodDetails"></a>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Method Details</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-MethodDetails"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+</table>
+<a name="extractReads"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">extractReads</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">timer</span>,
+        <span class="sig-arg">bams</span>=<span class="sig-default"><code class="variable-group">[</code><code class="variable-group">]</code></span>,
+        <span class="sig-arg">prefix</span>=<span class="sig-default"><code class="variable-quote">'</code><code class="variable-string"></code><code class="variable-quote">'</code></span>,
+        <span class="sig-arg">mixBams</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">mixGroups</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">mixReads</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">interleaved</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">bigFile</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">headersOnly</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">minMapQual</span>=<span class="sig-default">0</span>,
+        <span class="sig-arg">maxMisMatches</span>=<span class="sig-default">1000</span>,
+        <span class="sig-arg">useSuppAlignments</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">useSecondaryAlignments</span>=<span class="sig-default">False</span>,
+        <span class="sig-arg">threads</span>=<span class="sig-default">1</span>,
+        <span class="sig-arg">verbose</span>=<span class="sig-default">False</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="groopm.groopmUtils-pysrc.html#GMExtractor.extractReads">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Extract reads from bam files and write to file</p>
+  <p>All logic is handled by BamM &lt;- soon to be wrapped by StoreM</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<br />
 <!-- ==================== NAVIGATION BAR ==================== -->
 <table class="navbar" border="0" width="100%" cellpadding="0"
        bgcolor="#a0c0ff" cellspacing="0">
@@ -161,7 +229,7 @@
 <table border="0" cellpadding="0" cellspacing="0" width="100%%">
   <tr>
     <td align="left" class="footer">
-    Generated by Epydoc 3.0.1 on Tue Aug 26 02:47:25 2014
+    Generated by Epydoc 3.0.1 on Wed Nov 12 12:41:15 2014
     </td>
     <td align="right" class="footer">
       <a target="mainFrame" href="http://epydoc.sourceforge.net"
