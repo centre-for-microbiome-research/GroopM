@@ -44,13 +44,19 @@
     </div>
     <div class="span4">
         <hr>
-        <h1>Get GroopM</h1>
+        <h1>Install GroopM</h1>
         <p>I use and love Linux and GroopM has been developed to work on a Linux system. I'm not saying it won't work elsewhere, but I haven't tried. YMMV. People have successfully used GroopM on many different flavours of Linux as well as on Mavericks 10.9. If you try it somewhere else then let me know. I'd like to keep this list up to date.</p>
-        <h3>Use pip</h3>
-        <p>This is the recommended method as it will automaticaly install all of GroopM's dependencies. You'll need to have <a href="http://pypi.python.org/pypi">pip</a> installed on your system. Also you should try to install <a href="http://www.pytables.org/moin">pytables</a> yourself first as an error installing one of it's dependencies (numexpr) can hamper your fun installation experience. </p>
+        <p>using PIP is the recommended method as it will automaticaly install many but not all of GroopM's dependencies.<p>
+        <h3>Install dependencies and use pip as much as possible</h3>
+        <p>This guide assumes you're starting from a completely blank system, so it seems like there are a lot of packages to install. If you're installing this on a running bioinformatics system then many of these will already be installed. The following s what I'd type on a fresh ubuntu install</p>
+        <code>$ sudo apt-get -y install git build-essential zlib1g-dev python-numpy python-pip python-dev cython libhdf5-dev libfreetype6-dev libpng-dev python-pillow python-matplotlib libblas-dev liblapack-dev gfortran</code>
         <p>GroopM now uses <a href="https://minillinim.github.io/BamM">BamM</a> to parse BAM files and produce coverage profiles. This is not available on pip so it will be need to be installed separately. Instructions are <a href="https://minillinim.github.io/BamM">here</a></p>
-        <p>Of course you can just try and see ;) Open a temrinal and type: </p>
-        <p>$ sudo pip install GroopM</p>
+        <p>Next you need to install <a href="https://code.google.com/p/numexpr/">numexpr</a>. This is straightforward if the above dependencies have been met.</p>
+        <p>Install pytables</p>
+        <code>$ sudo pip install git+https://github.com/PyTables/PyTables.git@v.3.1.1#egg=tables</code>
+        <p>Finally, install GroopM</p>
+        <code>$ sudo pip install GroopM</code>
+
         <h3>From source on github</h3>
         <p>If you prefer this type of thing you can always try install from source directly. You will need the following dependencies:</p>
         <ul>
