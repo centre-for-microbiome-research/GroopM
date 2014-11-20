@@ -15,6 +15,6 @@ setup(
         "numpy >= 1.6.1",
         "scipy >= 0.10.1",
         "matplotlib >= 1.1.0",
-        "tables >= 2.3",
+        "tables >= 2.3"
     ],
 )
