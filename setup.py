@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='GroopM',
-    version='0.3.0',
+    version='0.3.2',
     author='Michael Imelfort',
     author_email='mike@mikeimelfort.com',
     packages=['groopm'],
@@ -16,7 +16,5 @@ setup(
         "scipy >= 0.10.1",
         "matplotlib >= 1.1.0",
         "tables >= 2.3",
-        "PIL >= 1.1.7",
-        "BamM >= 1.3.0"
     ],
 )
