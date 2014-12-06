@@ -1727,7 +1727,7 @@ class BamParser:
         """Parse multiple bam files and store the results in the main DB"""
         print "Parsing BAM files using %d threads" % threads
 
-        BP = BMBP(BMCT(CT.P_MEAN_OUTLIER, 1, 1))
+        BP = BMBP(BMCT(CT.P_MEAN_TRIMMED, 1, 1))
         BP.parseBams(bamFiles,
                      doLinks=False,
                      doCovs=True,
@@ -1769,6 +1769,7 @@ class BamParser:
                                               ))
                     except KeyError:
                         pass
+
         return ([BP.BFI.bamFiles[i].fileName for i in range(len(bamFiles))],
                 rowwise_links,
                 np.array(cov_sigs))
