@@ -39,13 +39,12 @@
 ###############################################################################
 
 __author__ = "Michael Imelfort"
-__copyright__ = "Copyright 2012-2014"
+__copyright__ = "Copyright 2012-2015"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.3.11"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
-__status__ = "Released"
+
 __current_GMDB_version__ = 5
 
 ###############################################################################
@@ -1260,7 +1259,7 @@ class GMDataManager:
         """Load variance of kmer sig PCAs"""
         try:
             with tables.openFile(dbFileName, mode='r') as h5file:
-              return np.array(h5file.root.meta.kpca_variance)[0]
+                return np.array(list(h5file.root.meta.kpca_variance[0]))
         except:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise

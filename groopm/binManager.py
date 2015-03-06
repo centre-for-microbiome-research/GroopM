@@ -42,10 +42,8 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.8"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
-__status__ = "Released"
 
 ###############################################################################
 from os.path import join as osp_join
@@ -88,7 +86,7 @@ from scipy.cluster.vq import kmeans,vq
 
 # GroopM imports
 from profileManager import ProfileManager
-from bin import Bin
+from bin import Bin, mungeCbar
 import groopmExceptions as ge
 from groopmUtils import makeSurePathExists
 from ellipsoid import EllipsoidTool
@@ -1317,7 +1315,7 @@ class BinManager:
                 cbar.ax.set_title("% GC", size=10)
                 cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
                 cbar.ax.set_ylim([0.15, 0.85])
-                cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+                mungeCbar(cbar)
         else:
             # plot all separately
             # we need to work out how to shape the plots
@@ -1436,7 +1434,7 @@ class BinManager:
         cbar.ax.set_title("% GC", size=10)
         cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
         cbar.ax.set_ylim([0.15, 0.85])
-        cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+        mungeCbar(cbar)
 
         if plotEllipses:
             ET = EllipsoidTool()
@@ -1575,7 +1573,7 @@ class BinManager:
             cbar.ax.set_title("% GC", size=10)
             cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
             cbar.ax.set_ylim([0.15, 0.85])
-            cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+            mungeCbar(cbar)
 
         ax.set_xlabel('x coverage')
         ax.set_ylabel('y coverage')

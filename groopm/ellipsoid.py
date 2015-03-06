@@ -42,10 +42,8 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.1.3"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
-__status__ = "Released"
 
 ###############################################################################
 
@@ -148,7 +146,7 @@ class EllipsoidTool:
                     return (None, center, radii, rotation)
                 else:
                     return (center, radii, rotation)
-            
+
             # Get the values we'd like to return
             try:
                 U, s, rotation = linalg.svd(A)
@@ -160,7 +158,7 @@ class EllipsoidTool:
         else:
             # hack -> better than crashing...
             rotation = np.eye(3)
-            radii = np.ones(3)            
+            radii = np.ones(3)
         if retA:
             return (A, center, radii, rotation)
         else:
@@ -192,7 +190,7 @@ class EllipsoidTool:
         except (TypeError, ValueError):
                 return False
 
-        if A == None or B == None: # degenerate ellipse that can't be processed
+        if A is None or B is None: # degenerate ellipse that can't be processed
             return False
 
         U, s, rotation = linalg.svd(B)

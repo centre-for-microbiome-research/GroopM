@@ -42,10 +42,8 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.5"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
-__status__ = "Released"
 
 ###############################################################################
 
@@ -65,6 +63,25 @@ from ellipsoid import EllipsoidTool
 from groopmExceptions import ModeNotAppropriateException
 
 np.seterr(all='raise')
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
+# matplotlib hates me
+
+def mungeCbar(cbar):
+    '''Set dims of the colorbar by hacking the mainframe and coping with
+    different matplotlib versions'''
+    try:
+        # older matplotlib
+        cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+    except AttributeError:
+        # matplotlib 1.4.x
+        tmp_xy = cbar.outline.get_xy()
+        tmp_xy[:,1] = np_array(([0.15] * 2 + [0.85] * 4 + [0.15] * 3))
+        cbar.outline.set_xy(tmp_xy)
 
 ###############################################################################
 ###############################################################################
@@ -586,7 +603,7 @@ class Bin:
             cbar.ax.set_title("% GC", size=10)
             cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
             cbar.ax.set_ylim([0.15, 0.85])
-            cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+            mungeCbar(cbar)
 
         if ET != None:
             (center, radii, rotation) = self.getBoundingEllipsoid(transformedCP, ET=ET)
@@ -636,7 +653,7 @@ class Bin:
             cbar.ax.set_title("% GC", size=10)
             cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
             cbar.ax.set_ylim([0.15, 0.85])
-            cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+            mungeCbar(cbar)
 
         if ET != None:
             (center, radii, rotation) = ET.getMinVolEllipse(disp_vals)

@@ -42,10 +42,8 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.7"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
-__status__ = "Released"
 
 ###############################################################################
 
@@ -83,6 +81,7 @@ from numpy import (abs as np_abs,
                    seterr as np_seterr,
                    shape as np_shape,
                    sin as np_sin,
+                   sum as np_sum,
                    size as np_size,
                    sort as np_sort,
                    sqrt as np_sqrt,
@@ -99,7 +98,7 @@ from scipy.stats import f_oneway, distributions
 # GroopM imports
 from PCA import PCA, Center
 from mstore import GMDataManager
-from bin import Bin
+from bin import Bin, mungeCbar
 import groopmExceptions as ge
 
 np_seterr(all='raise')
@@ -227,7 +226,7 @@ class ProfileManager:
                 self.kmerVarPC = self.dataManager.getKmerVarPC(self.dbFileName, indices=self.indices)
 
                 if(verbose):
-                    print "    Loading PCA kmer variance (total variance: %.2f" % sum(self.kmerVarPC) + ")"
+                    print "    Loading PCA kmer variance (total variance: %.2f" % np_sum(self.kmerVarPC) + ")"
 
             if(loadContigNames):
                 if(verbose):
@@ -684,8 +683,9 @@ class ProfileManager:
         cbar.ax.tick_params()
         cbar.ax.set_title("% GC", size=10)
         cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+        #import IPython; IPython.embed()
         cbar.ax.set_ylim([0.15, 0.85])
-        cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+        mungeCbar(cbar)
 
         try:
             plt.show()
@@ -903,7 +903,7 @@ class ProfileManager:
                 cbar.ax.set_title("% GC", size=10)
                 cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
                 cbar.ax.set_ylim([0.15, 0.85])
-                cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+                mungeCbar(cbar)
             else:
                 r_trans = np_array([])
                 r_cols=np_array([])
@@ -934,7 +934,7 @@ class ProfileManager:
                 cbar.ax.set_title("% GC", size=10)
                 cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
                 cbar.ax.set_ylim([0.15, 0.85])
-                cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+                mungeCbar(cbar)
 
             ax.azim = azim
             ax.elev = elev
@@ -1045,7 +1045,7 @@ class ProfileManager:
             cbar.ax.set_title("% GC", size=10)
             cbar.set_ticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
             cbar.ax.set_ylim([0.15, 0.85])
-            cbar.outline.set_ydata([0.15] * 2 + [0.85] * 4 + [0.15] * 3)
+            mungeCbar(cbar)
 
         # set aspect
         ax.azim = azim

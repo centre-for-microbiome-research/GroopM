@@ -42,10 +42,8 @@ __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
 __license__ = "GPL3"
-__version__ = "0.2.10.13"
 __maintainer__ = "Michael Imelfort"
 __email__ = "mike@mikeimelfort.com"
-__status__ = "Released"
 
 ###############################################################################
 
@@ -405,7 +403,7 @@ class ClusterEngine:
                                                            [max_x, max_y],
                                                            kmerThreshold,
                                                            coverageThreshold)
-                if putative_clusters == None:
+                if putative_clusters is None:
                     return None
 
                 return [putative_clusters, ret_values]
