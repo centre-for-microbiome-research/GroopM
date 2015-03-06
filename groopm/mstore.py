@@ -434,7 +434,7 @@ class GMDataManager:
                 #------------------------
                 # Add a table for the bins
                 #------------------------
-                self.setBinStats(dbFileName, [], firstWrite=True)
+                self.initBinStats((h5file, meta_group))
 
                 print "    %s" % timer.getTimeStamp()
 
@@ -1011,7 +1011,30 @@ class GMDataManager:
         self.setNumBins(dbFileName, 0)
         self.setBinAssignments(dbFileName, updates={}, nuke=True)
 
-    def setBinStats(self, dbFileName, updates, firstWrite=False):
+    def initBinStats(self, storage):
+        '''Initialise the bins table
+
+        Inputs:
+         storage - (hdf5 file handle, hdf5 node), open db and node to write to
+
+        Outputs:
+         None
+        '''
+        db_desc = [('bid', int),
+                   ('numMembers', int),
+                   ('isLikelyChimeric', bool)]
+        bd = np.array([], dtype=db_desc)
+
+        h5file = storage[0]
+        meta_group = storage[1]
+
+        h5file.createTable(meta_group,
+                           'bins',
+                           bd,
+                           title="Bin information",
+                           expectedrows=1)
+
+    def setBinStats(self, dbFileName, updates):
         """Set bins table
 
         updates is a list of tuples which looks like:
@@ -1026,19 +1049,15 @@ class GMDataManager:
         try:
             with tables.openFile(dbFileName, mode='a', rootUEP="/") as h5file:
                 mg = h5file.getNode('/', name='meta')
-                if not firstWrite:
-                    t_name = 'tmp_bins'
-                    # nuke any previous failed attempts
-                    try:
-                        h5file.removeNode(mg, 'tmp_bins')
-                    except:
-                        pass
-                else:
-                    t_name = 'bins'
+                # nuke any previous failed attempts
+                try:
+                    h5file.removeNode(mg, 'tmp_bins')
+                except:
+                    pass
 
                 try:
                     h5file.createTable(mg,
-                                       t_name,
+                                       'tmp_bins',
                                        bd,
                                        title="Bin information",
                                        expectedrows=1)
@@ -1046,9 +1065,8 @@ class GMDataManager:
                     print "Error creating META table:", exc_info()[0]
                     raise
 
-                if not firstWrite:
-                    # rename the tmp table to overwrite
-                    h5file.renameNode(mg, 'bins', 'tmp_bins', overwrite=True)
+                # rename the tmp table to overwrite
+                h5file.renameNode(mg, 'bins', 'tmp_bins', overwrite=True)
         except:
             print "Error opening DB:",dbFileName, exc_info()[0]
             raise
@@ -1709,7 +1727,7 @@ class BamParser:
         """Parse multiple bam files and store the results in the main DB"""
         print "Parsing BAM files using %d threads" % threads
 
-        BP = BMBP(BMCT(CT.P_MEAN_TRIMMED, 10, 10))
+        BP = BMBP(BMCT(CT.P_MEAN_TRIMMED, 5, 5))
         BP.parseBams(bamFiles,
                      doLinks=False,
                      doCovs=True,
@@ -1751,6 +1769,7 @@ class BamParser:
                                               ))
                     except KeyError:
                         pass
+
         return ([BP.BFI.bamFiles[i].fileName for i in range(len(bamFiles))],
                 rowwise_links,
                 np.array(cov_sigs))
