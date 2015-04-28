@@ -39,7 +39,7 @@ Licence and referencing
 Project home page, info on the source tree, documentation, issues and how to contribute, see http://github.com/minillinim/GroopM
 
 If you use this software then we'd love you to cite us.
-Our paper is now available as a preprint at https://peerj.com/articles/603. The DOI is http://dx.doi.org/10.7717/peerj.603
+Our paper is now available at https://peerj.com/articles/603. The DOI is http://dx.doi.org/10.7717/peerj.603
 
 Copyright © 2012-2014 Michael Imelfort.
 
