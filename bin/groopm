@@ -171,30 +171,43 @@ if __name__ == '__main__':
     bin_extractor = subparsers.add_parser('extract',
                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                         help='extract contigs or reads based on bin affiliations',
-                                        description='Extract contigs or reads based on bin affiliations')
+                                        description='Extract contigs or reads based on bin affiliations',
+                                        epilog='''Example usage:
+
+ Extract contigs from bin 33:
+
+  $ groopm extract my_db.gm my_contigs.fasta --bids 33
+  
+ Extract reads from bin 35:
+  
+  $ groopm extract my_db.gm my.bam -bids 33 --mode reads
+  
+''')
     bin_extractor.add_argument('dbname', help="name of the database to open")
     bin_extractor.add_argument('data', nargs='+', help="data file(s) to extract from, bam or fasta")
     bin_extractor.add_argument('-b', '--bids', nargs='+', type=int, default=None, help="bin ids to use (None for all)")
-    bin_extractor.add_argument('-m', '--mode', default="contigs", help="what to extract [reads, contigs]")
+    bin_extractor.add_argument('-m', '--mode', default="contigs", help="what to extract [reads, contigs]", choices=('contigs','reads'))
     bin_extractor.add_argument('-o', '--out_folder', default="", help="write to this folder (None for current dir)")
     bin_extractor.add_argument('-p', '--prefix', default="", help="prefix to apply to output files")
 
-    bin_extractor.add_argument('-c', '--cutoff', type=int, default=0, help=">>CONTIG MODE ONLY<< cutoff contig size (0 for no cutoff)")
+    contig_extraction_options=bin_extractor.add_argument_group('Contig extraction options')
+    contig_extraction_options.add_argument('-c', '--cutoff', type=int, default=0, help="cutoff contig size (0 for no cutoff)")
 
-    bin_extractor.add_argument('--mix_bams', action="store_true", default=False, help=">>READ MODE ONLY<< use the same file for multiple bam files")
-    bin_extractor.add_argument('--mix_groups', action="store_true", default=False, help=">>READ MODE ONLY<< use the same files for multiple group groups")
-    bin_extractor.add_argument('--mix_reads', action="store_true", default=False, help=">>READ MODE ONLY<< use the same files for paired/unpaired reads")
-    bin_extractor.add_argument('--interleave', action="store_true", default=False, help=">>READ MODE ONLY<< interleave paired reads in ouput files")
-    bin_extractor.add_argument('--headers_only', action="store_true", default=False, help=">>READ MODE ONLY<< extract only (unique) headers")
-    bin_extractor.add_argument('--no_gzip', action="store_true", default=False, help="do not gzip output files")
+    read_extraction_options=bin_extractor.add_argument_group('Read extraction options')
+    read_extraction_options.add_argument('--mix_bams', action="store_true", default=False, help="use the same file for multiple bam files")
+    read_extraction_options.add_argument('--mix_groups', action="store_true", default=False, help="use the same files for multiple group groups")
+    read_extraction_options.add_argument('--mix_reads', action="store_true", default=False, help="use the same files for paired/unpaired reads")
+    read_extraction_options.add_argument('--interleave', action="store_true", default=False, help="interleave paired reads in ouput files")
+    read_extraction_options.add_argument('--headers_only', action="store_true", default=False, help="extract only (unique) headers")
+    read_extraction_options.add_argument('--no_gzip', action="store_true", default=False, help="do not gzip output files")
 
-    bin_extractor.add_argument('--mapping_quality', type=int, default=0, help=">>READ MODE ONLY<< mapping quality threshold")
-    bin_extractor.add_argument('--use_secondary', action="store_true", default=False, help=">>READ MODE ONLY<< use reads marked with the secondary flag")
-    bin_extractor.add_argument('--use_supplementary', action="store_true", default=False, help=">>READ MODE ONLY<< use reads marked with the supplementary flag")
-    bin_extractor.add_argument('--max_distance', type=int, default=1000, help=">>READ MODE ONLY<< maximum allowable edit distance from query to reference")
+    read_extraction_options.add_argument('--mapping_quality', type=int, default=0, help="mapping quality threshold")
+    read_extraction_options.add_argument('--use_secondary', action="store_true", default=False, help="use reads marked with the secondary flag")
+    read_extraction_options.add_argument('--use_supplementary', action="store_true", default=False, help="use reads marked with the supplementary flag")
+    read_extraction_options.add_argument('--max_distance', type=int, default=1000, help="maximum allowable edit distance from query to reference")
 
-    bin_extractor.add_argument('-v', '--verbose', action="store_true", default=False, help=">>READ MODE ONLY<< be verbose")
-    bin_extractor.add_argument('-t', '--threads', type=int, default=1, help=">>READ MODE ONLY<< maximum number of threads to use")
+    read_extraction_options.add_argument('-v', '--verbose', action="store_true", default=False, help="be verbose")
+    read_extraction_options.add_argument('-t', '--threads', type=int, default=1, help="maximum number of threads to use")
 
     ##################################################
     # Utilities
