@@ -51,7 +51,6 @@ __status__ = "Released"
 
 import argparse
 import sys
-import re
 from groopm import groopm
 
 ###############################################################################
