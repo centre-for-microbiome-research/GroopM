@@ -1727,7 +1727,7 @@ class HoughPartitioner:
                                      [np_cos(dth * theta_index) for theta_index in range(cols)]))
         Rs = np_array(np_sum(np_reshape([p * cos_sin_array for p in data], (d_len*cols,2)),
                              axis=1)/dr).astype('int') + half_rows
-        Cs = np_array(range(cols)*d_len)
+        Cs = np_reshape([range(cols)]*d_len, d_len*cols)
 
         try:
             flat_indices = Rs * cols + Cs
@@ -1760,11 +1760,17 @@ class HoughPartitioner:
             exit(-1)
 
         # update the accumulator with integer decrements
-        decrements = np_bincount(flat_indices.astype('int'))
-        index = 0
-        for d in decrements:
-            accumulator[index] -= d
-            index += 1
+        # work around numpy bincount bug
+        flat_indices = flat_indices.astype('int')
+        last_index=0
+        while last_index < len(flat_indices):
+            decrements = np_bincount(flat_indices[last_index:last_index+pow(2,31)-1])
+            last_index+=pow(2,31)-1
+
+            index = 0
+            for d in decrements:
+                accumulator[index] -= d
+                index += 1
 
         minindex = accumulator.argmin()
 
