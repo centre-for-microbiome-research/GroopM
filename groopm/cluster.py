@@ -68,7 +68,6 @@ from numpy import (abs as np_abs,
                    finfo as np_finfo,
                    hypot as np_hypot,
                    inf as np_inf,
-                   log as np_log,
                    log10 as np_log10,
                    max as np_max,
                    mean as np_mean,
@@ -76,7 +75,6 @@ from numpy import (abs as np_abs,
                    min as np_min,
                    ones as np_ones,
                    pi as np_pi,
-                   prod as np_prod,
                    reshape as np_reshape,
                    seterr as np_seterr,
                    shape as np_shape,
@@ -518,7 +516,7 @@ class ClusterEngine:
                 print 'and binning your samples separately.'
                 print
                 print 'If you notice "clouds" of contigs then congratulations! You have found a bug.'
-                print 'Please let me know at "%s or via github.com/minillinim/GroopM' % __email__
+                print 'Please let me know at "%s or via github.com/ecogenomics/GroopM' % __email__
                 print
                 print 'GroopM is aborting... sorry'
                 print
@@ -1751,7 +1749,7 @@ class HoughPartitioner:
             print 'and binning your samples separately.'
             print
             print 'If you notice "clouds" of contigs then congratulations! You have found a bug.'
-            print 'Please let me know at "%s or via github.com/minillinim/GroopM' % __email__
+            print 'Please let me know at "%s or via github.com/ecogenomics/GroopM' % __email__
             print
             print 'GroopM is aborting... sorry'
             print

@@ -70,12 +70,12 @@ except ImportError:
 BamM is not installed properly or not in your PYTHONPATH. Installation
 instructions for BamM are located at:
 
-    http://minillinim.github.io/BamM
+    http://ecogenomics.github.io/BamM
 
 If you're sure that BamM is installed (properly) then check your PYTHONPATH. If
 you still encounter this error. Please lodge a bug report at:
 
-    http://githum.com/minillinim/BamM/issues
+    http://github.com/ecogenomics/BamM/issues
 
 Exiting...
 --------------------------------------------------------------------------------

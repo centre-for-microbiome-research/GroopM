@@ -20,7 +20,7 @@ extract population genomes from multi-sample metagenomic datasets.
 
 GroopM is largely parameter-free. Use: groopm -h for more info.
 
-For installation and usage instructions see : http://minillinim.github.io/GroopM/
+For installation and usage instructions see : http://ecogenomics.github.io/GroopM/
 
 Data preparation and running GroopM
 =========
@@ -36,12 +36,12 @@ Before running GroopM you need to prep your data. A typical workflow looks like 
 Licence and referencing
 =========
 
-Project home page, info on the source tree, documentation, issues and how to contribute, see http://github.com/minillinim/GroopM
+Project home page, info on the source tree, documentation, issues and how to contribute, see http://github.com/ecogenomics/GroopM
 
 If you use this software then we'd love you to cite us.
 Our paper is now available at https://peerj.com/articles/603. The DOI is http://dx.doi.org/10.7717/peerj.603
 
-Copyright © 2012-2014 Michael Imelfort.
+Copyright © 2012-2015 Michael Imelfort.
 
 GroopM is licensed under the GNU GPL v3
 See LICENSE.txt for further details.
