@@ -102,6 +102,34 @@ def printHelp():
 
 #    groopm import       -> Import data from csv
 
+class CustomHelpFormatter(argparse.HelpFormatter):
+    def _split_lines(self, text, width):
+        return text.splitlines()
+
+    def _get_help_string(self, action):
+        h = action.help
+        if '%(default)' not in action.help:
+            if action.default != '' and \
+               action.default != [] and \
+               action.default != None \
+               and action.default != False:
+                if action.default is not argparse.SUPPRESS:
+                    defaulting_nargs = [argparse.OPTIONAL,
+                                        argparse.ZERO_OR_MORE]
+
+                    if action.option_strings or action.nargs in defaulting_nargs:
+
+                        if '\n' in h:
+                            lines = h.splitlines()
+                            lines[0] += ' (default: %(default)s)'
+                            h = '\n'.join(lines)
+                        else:
+                            h += ' (default: %(default)s)'
+        return h
+
+    def _fill_text(self, text, width, indent):
+        return ''.join([indent + line for line in text.splitlines(True)])
+
 if __name__ == '__main__':
 
     #-------------------------------------------------
@@ -168,7 +196,7 @@ if __name__ == '__main__':
     #-------------------------------------------------
     # extract reads and contigs from saved
     bin_extractor = subparsers.add_parser('extract',
-                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                        formatter_class=CustomHelpFormatter,
                                         help='extract contigs or reads based on bin affiliations',
                                         description='Extract contigs or reads based on bin affiliations',
                                         epilog='''Example usage:
@@ -177,9 +205,9 @@ if __name__ == '__main__':
 
   $ groopm extract my_db.gm my_contigs.fasta --bids 33
   
- Extract reads from bin 35:
+ Extract reads mapping to contigs in bin 35:
   
-  $ groopm extract my_db.gm my.bam -bids 33 --mode reads
+  $ groopm extract my_db.gm my.bam -bids 35 --mode reads
   
 ''')
     bin_extractor.add_argument('dbname', help="name of the database to open")
