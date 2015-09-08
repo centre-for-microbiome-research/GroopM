@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='GroopM',
-    version='0.3.4',
+    version='0.3.5',
     author='Michael Imelfort',
     author_email='mike@mikeimelfort.com',
     packages=['groopm'],
@@ -13,7 +13,7 @@ setup(
     long_description=open('README.txt').read(),
     install_requires=[
         "numpy >= 1.6.1",
-        "scipy >= 0.10.1",
+        "scipy >= 0.15.0",
         "matplotlib >= 1.1.0",
         "tables >= 2.3"
     ],
