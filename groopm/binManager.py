@@ -37,6 +37,7 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
+from __future__ import print_function
 
 __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
@@ -52,25 +53,19 @@ from operator import itemgetter
 
 
 import matplotlib.pyplot as plt
-from pylab import show
-from numpy import (abs as np_abs,
-                   append as np_append,
+
+from numpy import (append as np_append,
                    arange as np_arange,
                    arccos as np_arccos,
-                   argmax as np_argmax,
                    argsort as np_argsort,
-                   around as np_around,
                    array as np_array,
-                   bincount as np_bincount,
                    ceil as np_ceil,
                    concatenate as np_concatenate,
                    dot as np_dot,
-                   log10 as np_log10,
                    max as np_max,
                    mean as np_mean,
                    median as np_median,
                    min as np_min,
-                   ones as np_ones,
                    reshape as np_reshape,
                    seterr as np_seterr,
                    size as np_size,
@@ -78,11 +73,10 @@ from numpy import (abs as np_abs,
                    sqrt as np_sqrt,
                    std as np_std,
                    sum as np_sum,
-                   where as np_where,
                    zeros as np_zeros)
 
 from scipy.stats import f_oneway, distributions
-from scipy.cluster.vq import kmeans,vq
+from scipy.cluster.vq import kmeans, vq
 
 # GroopM imports
 from profileManager import ProfileManager
@@ -182,15 +176,15 @@ class BinManager:
                 if self.PM.numStoits == 3:
                     self.PM.transformedCP = self.PM.covProfiles
                 else:
-                    print "Number of stoits != 3. You need to transform"
+                    print("Number of stoits != 3. You need to transform")
                     self.PM.transformCP(timer, silent=silent)
             if not silent:
-                print "    Making bin objects"
+                print("    Making bin objects")
             self.makeBins(self.getBinMembers())
             if not silent:
-                print "    Loaded %d bins from database" % len(self.bins)
+                print("    Loaded %d bins from database" % len(self.bins))
         if not silent:
-            print "    %s" % timer.getTimeStamp()
+            print("    %s" % timer.getTimeStamp())
             sys_stdout.flush()
 
     def getBinMembers(self):
@@ -224,8 +218,8 @@ class BinManager:
                     self.bins[bid] = Bin(np_array(binMembers[bid]), bid, self.PM.scaleFactor-1)
                     self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.kmerPCs, self.PM.contigGCs, self.PM.contigLengths)
         if len(invalid_bids) != 0:
-            print "MT bins!"
-            print invalid_bids
+            print("MT bins!")
+            print(invalid_bids)
             exit(-1)
 
     def saveBins(self, binAssignments={}, nuke=False):
@@ -339,23 +333,23 @@ class BinManager:
         bin2count = {}
         for row_index in bin.rowIndices:
             try:
-                #print row_index, len(self.PM.links[row_index]), self.PM.links[row_index], "===",
+                #print(row_index, len(self.PM.links[row_index]), self.PM.links[row_index], "===",)
                 for link in self.PM.links[row_index]:
-                    #print "{{{",link,"}}}",
+                    #print("{{{",link,"}}}",)
                     try:
                         link_bid = self.PM.binIds[link[0]]
-                        #print ";;", link_bid, bid ,
+                        #print(";;", link_bid, bid ,)
                         if link_bid != bid and link_bid != 0:
                             try:
                                 bin2count[link_bid] += 1.0
                             except KeyError:
                                 bin2count[link_bid] = 1.0
                     except KeyError:
-                        pass#print "****\n\n"
-                #print "[[[[\n\n"
+                        pass#print("****\n\n")
+                #print("[[[[\n\n")
             except KeyError:
                 pass
-        #print bin2count
+        #print(bin2count)
         return bin2count
 
     def getConnectedBins(self, rowIndex):
@@ -468,7 +462,7 @@ class BinManager:
         (bin_assignment_update, bids) = self.getSplitties(bid, n, mode)
 
         if(auto and saveBins):
-            print 'here!!!!'
+            print('here!!!!')
             # charge on through
             self.deleteBins([bids[0]], force=True)  # delete the combined bin
             # save new bins
@@ -538,10 +532,10 @@ class BinManager:
                 try:
                     parts = int(raw_input("Enter new number of parts:"))
                 except ValueError:
-                    print "You need to enter an integer value!"
+                    print("You need to enter an integer value!")
                     parts = 0
                 if(1 == parts):
-                    print "Don't be a silly sausage!"
+                    print("Don't be a silly sausage!")
                 elif(0 != parts):
                     not_got_parts = False
                     self.split(bid,
@@ -664,7 +658,7 @@ class BinManager:
         F_cutoff =  distributions.f.ppf(confidence, 2, len(dist1)+len(dist2)-2)
         F_value = f_oneway(dist1,dist2)[0]
         if tag != "":
-            print "%s [V: %f, C: %f]" % (tag, F_value, F_cutoff)
+            print("%s [V: %f, C: %f]" % (tag, F_value, F_cutoff))
         return F_value < F_cutoff
 
     def merge(self, bids, auto=False, manual=False, newBid=False, saveBins=False, verbose=False, printInstructions=True, use_elipses=True):
@@ -715,11 +709,11 @@ class BinManager:
                 self.deleteBins([tmp_bin.id], force=True)
                 user_option = self.promptOnMerge(bids=[parent_bin.id,dead_bin.id])
                 if(user_option == "N"):
-                    print "Merge skipped"
+                    print("Merge skipped")
                     ret_val = 1
                     continue_merge=False
                 elif(user_option == "Q"):
-                    print "All mergers skipped"
+                    print("All mergers skipped")
                     return 0
                 else:
                     ret_val = 2
@@ -799,7 +793,7 @@ class BinManager:
                         try:
                             del self.PM.binnedRowIndices[row_index]
                         except KeyError:
-                            print bid, row_index, "FUNG"
+                            print(bid, row_index, "FUNG")
                         self.PM.binIds[row_index] = 0
 
                         bin_assignment_update[row_index] = 0
@@ -836,7 +830,7 @@ class BinManager:
                    " to continue with the merging operation.\n"
                    " The image on the far right shows the bins after merging\n"
                    " Press any key to produce plots...")
-        print "****************************************************************"
+        print("****************************************************************")
 
     def printSplitInstructions(self):
         raw_input( "****************************************************************\n"
@@ -848,7 +842,7 @@ class BinManager:
                    " be split. Look carefully at each plot and then close the plot\n"
                    " to continue with the splitting operation.\n\n"
                    " Press any key to produce plots...")
-        print "****************************************************************"
+        print("****************************************************************")
 
     def getPlotterMergeIds(self):
         """Prompt the user for ids to be merged and check that it's all good"""
@@ -866,13 +860,13 @@ class BinManager:
                     i_bid = int(bid)
                     # check that it's in the bins list
                     if(i_bid not in self.bins):
-                        print "**Error: bin",bid,"not found"
+                        print("**Error: bin",bid,"not found")
                         input_not_ok = True
                         break
                     input_not_ok = False
                     ret_bids.append(i_bid)
                 except ValueError:
-                    print "**Error: invalid value:", bid
+                    print("**Error: invalid value:", bid)
                     input_not_ok = True
                     break
         return ret_bids
@@ -898,10 +892,10 @@ class BinManager:
                                    " y = yes, n = no, q = no and quit merging\n" \
                                    " Merge? ("+vrs+") : ")
             if(option.upper() in valid_responses):
-                print "****************************************************************"
+                print("****************************************************************")
                 return option.upper()
             else:
-                print "Error, unrecognised choice '"+option.upper()+"'"
+                print("Error, unrecognised choice '"+option.upper()+"'")
                 minimal = True
 
     def promptOnSplit(self, parts, mode, minimal=False):
@@ -923,13 +917,13 @@ class BinManager:
                                    " Split? ("+vrs+") : ")
             if(option.upper() in valid_responses):
                 if(option.upper() == 'K' and mode.upper() == 'KMER' or option.upper() == 'C' and mode.upper() == 'COV' or option.upper() == 'L' and mode.upper() == 'LEN'):
-                    print "Error, you are already using that profile to split!"
+                    print("Error, you are already using that profile to split!")
                     minimal=True
                 else:
-                    print "****************************************************************"
+                    print("****************************************************************")
                     return option.upper()
             else:
-                print "Error, unrecognised choice '"+option.upper()+"'"
+                print("Error, unrecognised choice '"+option.upper()+"'")
                 minimal = True
 
     def promptOnDelete(self, bids, minimal=False):
@@ -949,10 +943,10 @@ class BinManager:
                                    " y = yes, n = no\n"\
                                    " Delete? ("+vrs+") : ")
             if(option.upper() in valid_responses):
-                print "****************************************************************"
+                print("****************************************************************")
                 return option.upper()
             else:
-                print "Error, unrecognised choice '"+option.upper()+"'"
+                print("Error, unrecognised choice '"+option.upper()+"'")
                 minimal = True
 
 #------------------------------------------------------------------------------
@@ -1054,7 +1048,7 @@ class BinManager:
 
         return a list of potentially confounding kmer indices
         """
-        print "    Measuring kmer type variances"
+        print("    Measuring kmer type variances")
         means = np_array([])
         stdevs = np_array([])
         bids = np_array([])
@@ -1094,12 +1088,12 @@ class BinManager:
                 return_indices.append(sort_within_indices[i])
 
         if(plot):
-            print "BETWEEN"
+            print("BETWEEN")
             for i in range(0,number_to_trim):
-                print names[sort_between_indices[i]]
-            print "WITHIN"
+                print(names[sort_between_indices[i]])
+            print("WITHIN")
             for i in range(0,number_to_trim):
-                print names[sort_within_indices[i]]
+                print(names[sort_within_indices[i]])
 
             plt.figure(1)
             plt.subplot(211)
@@ -1119,20 +1113,20 @@ class BinManager:
 # IO and IMAGE RENDERING
 
     def printBins(self, outFormat, fileName=""):
-        """Wrapper for print handles piping to file or stdout"""
+        """Wrapper for print(handles piping to file or stdout"""
         if("" != fileName):
             try:
                 # redirect stdout to a file
                 stdout = open(fileName, 'w')
                 self.printInner(outFormat, stdout)
             except:
-                print "Error diverting stout to file:", fileName, exc_info()[0]
+                print("Error diverting stout to file:", fileName, exc_info()[0])
                 raise
         else:
             self.printInner(outFormat)
 
     def printInner(self, outFormat, stream=sys_stdout):
-        """Print bin information to STDOUT"""
+        """Print(bin information to STDOUT"""
         # handle the headers first
         separator = "\t"
         if(outFormat == 'contigs'):
@@ -1146,7 +1140,7 @@ class BinManager:
         elif(outFormat == 'full'):
             pass
         else:
-            print "Error: Unrecognised format:", outFormat
+            print("Error: Unrecognised format:", outFormat)
             return
 
         for bid in self.getBids():
@@ -1224,13 +1218,13 @@ class BinManager:
             try:
                 plt.savefig(fileName,dpi=300)
             except:
-                print "Error saving image:", fileName, exc_info()[0]
+                print("Error saving image:", fileName, exc_info()[0])
                 raise
         else:
             try:
                 plt.show()
             except:
-                print "Error showing image:", exc_info()[0]
+                print("Error showing image:", exc_info()[0])
                 raise
 
         plt.close(fig)
@@ -1344,7 +1338,7 @@ class BinManager:
         try:
             plt.show()
         except:
-            print "Error showing image:", exc_info()[0]
+            print("Error showing image:", exc_info()[0])
             raise
 
         plt.close(fig)
@@ -1369,10 +1363,10 @@ class BinManager:
             self.bins[bid].makeBinDist(self.PM.transformedCP, self.PM.averageCoverages, self.PM.kmerNormPC1, self.PM.kmerPCs, self.PM.contigGCs, self.PM.contigLengths)
 
         if(sideBySide):
-            print "Plotting side by side"
+            print("Plotting side by side")
             self.plotSideBySide(self.bins.keys(), tag=FNPrefix, ignoreContigLengths=ignoreContigLengths)
         else:
-            print "Plotting bins"
+            print("Plotting bins")
             for bid in self.getBids():
                 if folder != '':
                     self.bins[bid].plotBin(self.PM.transformedCP, self.PM.contigGCs, self.PM.kmerNormPC1,
@@ -1387,7 +1381,7 @@ class BinManager:
     def plotBinCoverage(self, plotEllipses=False, plotContigLengs=False, printID=False):
         """Make plots of all the bins"""
 
-        print "Plotting first 3 stoits in untransformed coverage space"
+        print("Plotting first 3 stoits in untransformed coverage space")
 
         # plot contigs in coverage space
         fig = plt.figure()
@@ -1452,7 +1446,7 @@ class BinManager:
             plt.show()
             plt.close(fig)
         except:
-            print "Error showing image", exc_info()[0]
+            print("Error showing image", exc_info()[0])
             raise
 
         del fig
@@ -1504,13 +1498,13 @@ class BinManager:
                 fig.set_size_inches(12,6)
                 plt.savefig(fileName,dpi=300)
             except:
-                print "Error saving image:", fileName, exc_info()[0]
+                print("Error saving image:", fileName, exc_info()[0])
                 raise
-        elif(show):
+        else:
             try:
                 plt.show()
             except:
-                print "Error showing image:", exc_info()[0]
+                print("Error showing image:", exc_info()[0])
                 raise
         plt.close(fig)
         del fig
@@ -1554,7 +1548,7 @@ class BinManager:
             plt.show()
             plt.close(fig)
         except:
-            print "Error showing image", exc_info()[0]
+            print("Error showing image", exc_info()[0])
             raise
         del fig
 
@@ -1563,7 +1557,7 @@ class BinManager:
         (bin_centroid_points, _bin_centroid_colors, bin_centroid_gc, _bids) = self.findCoreCentres(processChimeric=showChimeric)
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        print bin_centroid_gc
+        print(bin_centroid_gc)
         sc = ax.scatter(bin_centroid_points[:,0], bin_centroid_points[:,1], bin_centroid_points[:,2], edgecolors='k', c=bin_centroid_gc, cmap=self.PM.colorMapGC, vmin=0.0, vmax=1.0)
         sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
@@ -1588,7 +1582,7 @@ class BinManager:
             plt.show()
             plt.close(fig)
         except:
-            print "Error showing image", exc_info()[0]
+            print("Error showing image", exc_info()[0])
             raise
         del fig
 

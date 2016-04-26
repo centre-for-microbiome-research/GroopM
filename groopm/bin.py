@@ -37,7 +37,7 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
-
+from __future__ import print_function
 __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
 __credits__ = ["Michael Imelfort"]
@@ -50,7 +50,6 @@ __email__ = "mike@mikeimelfort.com"
 import sys
 
 import matplotlib.pyplot as plt
-from pylab import show
 
 import numpy as np
 from numpy import (around as np_around,
@@ -70,6 +69,7 @@ np.seterr(all='raise')
 ###############################################################################
 
 # matplotlib hates me
+
 
 def mungeCbar(cbar):
     '''Set dims of the colorbar by hacking the mainframe and coping with
@@ -155,7 +155,7 @@ class Bin:
         """Combine the contigs of another bin with this one"""
         # consume all the other bins rowIndices
         if(verbose):
-            print "    BIN:",deadBin.id,"will be consumed by BIN:",self.id
+            print("    BIN:",deadBin.id,"will be consumed by BIN:",self.id)
         self.rowIndices = np.concatenate([self.rowIndices, deadBin.rowIndices])
         self.binSize  = self.rowIndices.shape[0]
 
@@ -167,7 +167,7 @@ class Bin:
 
         This is the norm of the vector containing z distances for both profiles
         """
-        #print self.covStdevs, self.binSize
+        #print(self.covStdevs, self.binSize)
         covZ = np.abs(np.mean(np.abs(transformedCP - self.covMedians)/self.covStdevs))
         merZ = np.abs(kmerVal - self.kValMeanNormPC1)/self.kValStdevNormPC1
         return (covZ,merZ)
@@ -211,7 +211,7 @@ class Bin:
 
         The distribution is largely normal, except at the boundaries.
         """
-        #print "MBD", self.id, self.binSize
+        #print("MBD", self.id, self.binSize)
         self.binSize = self.rowIndices.shape[0]
         if(0 == np.size(self.rowIndices)):
             return
@@ -326,7 +326,7 @@ class Bin:
             try:
                 return ET.getMinVolEllipse(bin_points, retA=retA)
             except:
-                print bin_points
+                print(bin_points)
                 raise
         else: # minimum bounding ellipse of a point is 0
             if retA:
@@ -474,16 +474,15 @@ class Bin:
                 fig.set_size_inches(10,4)
                 plt.savefig(fileName,dpi=300)
             except:
-                print "Error saving image:", fileName, sys.exc_info()[0]
+                print("Error saving image:", fileName, sys.exc_info()[0])
                 raise
         else:
             try:
                 plt.show()
             except:
-                print "Error showing image:", sys.exc_info()[0]
+                print("Error showing image:", sys.exc_info()[0])
                 raise
         del fig
-
 
     def plotBin(self, transformedCP, contigGCs, kmerNormPC1, contigLengths, colorMapGC, isLikelyChimeric, fileName="", ignoreContigLengths=False, ET=None):
         """Plot a single bin"""
@@ -504,13 +503,13 @@ class Bin:
                 fig.set_size_inches(6,6)
                 plt.savefig(fileName+".png",dpi=300)
             except:
-                print "Error saving image:", fileName, sys.exc_info()[0]
+                print("Error saving image:", fileName, sys.exc_info()[0])
                 raise
-        elif(show):
+        else:
             try:
                 plt.show()
             except:
-                print "Error showing image:", sys.exc_info()[0]
+                print("Error showing image:", sys.exc_info()[0])
                 raise
         plt.close(fig)
         del fig
@@ -665,7 +664,7 @@ class Bin:
                 ET.plotEllipse(center, radii, rotation, ax=ax, plotAxes=False, cageColor=centroid_color)
 
     def printBin(self, contigNames, covProfiles, contigGCs, contigLengths, isLikelyChimeric, outFormat="summary", separator="\t", stream=sys.stdout):
-        """print this bin info in csvformat"""
+        """print(this bin info in csvformat"""
         kvm_str = "%.4f" % self.kValMeanNormPC1
         kvs_str = "%.4f" % self.kValStdevNormPC1
         cvm_str = "%.4f" % self.cValMedian
