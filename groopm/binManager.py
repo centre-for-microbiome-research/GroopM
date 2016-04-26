@@ -53,25 +53,19 @@ from operator import itemgetter
 
 
 import matplotlib.pyplot as plt
-from pylab import show
-from numpy import (abs as np_abs,
-                   append as np_append,
+
+from numpy import (append as np_append,
                    arange as np_arange,
                    arccos as np_arccos,
-                   argmax as np_argmax,
                    argsort as np_argsort,
-                   around as np_around,
                    array as np_array,
-                   bincount as np_bincount,
                    ceil as np_ceil,
                    concatenate as np_concatenate,
                    dot as np_dot,
-                   log10 as np_log10,
                    max as np_max,
                    mean as np_mean,
                    median as np_median,
                    min as np_min,
-                   ones as np_ones,
                    reshape as np_reshape,
                    seterr as np_seterr,
                    size as np_size,
@@ -79,11 +73,10 @@ from numpy import (abs as np_abs,
                    sqrt as np_sqrt,
                    std as np_std,
                    sum as np_sum,
-                   where as np_where,
                    zeros as np_zeros)
 
 from scipy.stats import f_oneway, distributions
-from scipy.cluster.vq import kmeans,vq
+from scipy.cluster.vq import kmeans, vq
 
 # GroopM imports
 from profileManager import ProfileManager
@@ -1507,7 +1500,7 @@ class BinManager:
             except:
                 print("Error saving image:", fileName, exc_info()[0])
                 raise
-        elif(show):
+        else:
             try:
                 plt.show()
             except:
