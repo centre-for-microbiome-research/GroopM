@@ -37,6 +37,7 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
+from __future__ import print_function
 
 __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
@@ -179,7 +180,7 @@ class ProfileManager:
         if(silent):
             verbose=False
         if verbose:
-            print "Loading data from:", self.dbFileName
+            print("Loading data from:", self.dbFileName)
 
         try:
             self.numStoits = self.getNumStoits()
@@ -188,19 +189,19 @@ class ProfileManager:
                                                                   condition=condition,
                                                                   silent=silent)
             if(verbose):
-                print "    Loaded indices with condition:", condition
+                print("    Loaded indices with condition:", condition)
             self.numContigs = len(self.indices)
 
             if self.numContigs == 0:
-                print "    ERROR: No contigs loaded using condition:", condition
+                print("    ERROR: No contigs loaded using condition:", condition)
                 return
 
             if(not silent):
-                print "    Working with: %d contigs" % self.numContigs
+                print("    Working with: %d contigs" % self.numContigs)
 
             if(loadCovProfiles):
                 if(verbose):
-                    print "    Loading coverage profiles"
+                    print("    Loading coverage profiles")
                 self.covProfiles = self.dataManager.getCoverageProfiles(self.dbFileName, indices=self.indices)
                 self.normCoverages = self.dataManager.getNormalisedCoverageProfiles(self.dbFileName, indices=self.indices)
 
@@ -209,14 +210,14 @@ class ProfileManager:
 
             if loadRawKmers:
                 if(verbose):
-                    print "    Loading RAW kmer sigs"
+                    print("    Loading RAW kmer sigs")
                 self.kmerSigs = self.dataManager.getKmerSigs(self.dbFileName, indices=self.indices)
 
             if(loadKmerPCs):
                 self.kmerPCs = self.dataManager.getKmerPCAs(self.dbFileName, indices=self.indices)
 
                 if(verbose):
-                    print "    Loading PCA kmer sigs (" + str(len(self.kmerPCs[0])) + " dimensional space)"
+                    print("    Loading PCA kmer sigs (" + str(len(self.kmerPCs[0])) + " dimensional space)")
 
                 self.kmerNormPC1 = np_copy(self.kmerPCs[:,0])
                 self.kmerNormPC1 -= np_min(self.kmerNormPC1)
@@ -226,26 +227,26 @@ class ProfileManager:
                 self.kmerVarPC = self.dataManager.getKmerVarPC(self.dbFileName, indices=self.indices)
 
                 if(verbose):
-                    print "    Loading PCA kmer variance (total variance: %.2f" % np_sum(self.kmerVarPC) + ")"
+                    print("    Loading PCA kmer variance (total variance: %.2f" % np_sum(self.kmerVarPC) + ")")
 
             if(loadContigNames):
                 if(verbose):
-                    print "    Loading contig names"
+                    print("    Loading contig names")
                 self.contigNames = self.dataManager.getContigNames(self.dbFileName, indices=self.indices)
 
             if(loadContigLengths):
                 self.contigLengths = self.dataManager.getContigLengths(self.dbFileName, indices=self.indices)
                 if(verbose):
-                    print "    Loading contig lengths (Total: %d BP)" % ( sum(self.contigLengths) )
+                    print("    Loading contig lengths (Total: %d BP)" % ( sum(self.contigLengths) ))
 
             if(loadContigGCs):
                 self.contigGCs = self.dataManager.getContigGCs(self.dbFileName, indices=self.indices)
                 if(verbose):
-                    print "    Loading contig GC ratios (Average GC: %0.3f)" % ( np_mean(self.contigGCs) )
+                    print("    Loading contig GC ratios (Average GC: %0.3f)" % ( np_mean(self.contigGCs) ))
 
             if(makeColors):
                 if(verbose):
-                    print "    Creating color map"
+                    print("    Creating color map")
 
                 # use HSV to RGB to generate colors
                 S = 1       # SAT and VAL remain fixed at 1. Reduce to make
@@ -254,7 +255,7 @@ class ProfileManager:
 
             if(loadBins):
                 if(verbose):
-                    print "    Loading bin assignments"
+                    print("    Loading bin assignments")
 
                 self.binIds = self.dataManager.getBins(self.dbFileName, indices=self.indices)
 
@@ -289,7 +290,7 @@ class ProfileManager:
             self.stoitColNames = self.getStoitColNames()
 
         except:
-            print "Error loading DB:", self.dbFileName, exc_info()[0]
+            print("Error loading DB:", self.dbFileName, exc_info()[0])
             raise
 
     def reduceIndices(self, deadRowIndices):
@@ -497,7 +498,7 @@ class ProfileManager:
     def transformCP(self, timer, silent=False, nolog=False):
         """Do the main transformation on the coverage profile data"""
         if(not silent):
-            print "    Reticulating splines"
+            print("    Reticulating splines")
         self.transformedCP = self.dataManager.getTransformedCoverageProfiles(self.dbFileName, indices=self.indices)
         self.corners = self.dataManager.getTransformedCoverageCorners(self.dbFileName)
         self.TCentre = np_mean(self.corners, axis=0)
@@ -617,7 +618,7 @@ class ProfileManager:
             if self.numStoits == 3:
                 self.transformedCP = self.covProfiles
             else:
-                print "Number of stoits != 3. You need to transform"
+                print("Number of stoits != 3. You need to transform")
                 self.transformCP(timer)
 
         fig = plt.figure()
@@ -633,7 +634,7 @@ class ProfileManager:
             plt.show()
             plt.close(fig)
         except:
-            print "Error showing image", exc_info()[0]
+            print("Error showing image", exc_info()[0])
             raise
         del fig
 
@@ -646,7 +647,7 @@ class ProfileManager:
             if self.numStoits == 3:
                 self.transformedCP = self.covProfiles
             else:
-                print "Number of stoits != 3. You need to transform"
+                print("Number of stoits != 3. You need to transform")
                 self.transformCP(timer)
 
         fig = plt.figure()
@@ -691,7 +692,7 @@ class ProfileManager:
             plt.show()
             plt.close(fig)
         except:
-            print "Error showing image", exc_info()[0]
+            print("Error showing image", exc_info()[0])
             raise
         del fig
 
@@ -801,7 +802,7 @@ class ProfileManager:
             ax = fig.add_subplot(111, projection='3d')
             if len(restrictedBids) == 0:
                 if highlight is None:
-                    print "BF:", np_shape(self.transformedCP)
+                    print("BF:", np_shape(self.transformedCP))
                     if ignoreContigLengths:
                         sc = ax.scatter(self.transformedCP[:,0],
                                    self.transformedCP[:,1],
@@ -895,7 +896,7 @@ class ProfileManager:
                                     marker='.')
                     sc.set_edgecolors = sc.set_facecolors = lambda *args:None # disable depth transparency effect
 
-                    print np_shape(disp_vals), np_shape(hide_vals), np_shape(self.transformedCP)
+                    print(np_shape(disp_vals), np_shape(hide_vals), np_shape(self.transformedCP))
 
                 # render color bar
                 cbar = plt.colorbar(sc, shrink=0.5)
@@ -914,7 +915,7 @@ class ProfileManager:
                         r_cols = np_append(r_cols, self.contigGCs[i])
                         num_added += 1
                 r_trans = np_reshape(r_trans, (num_added,3))
-                print np_shape(r_trans)
+                print(np_shape(r_trans))
                 #r_cols = np_reshape(r_cols, (num_added,3))
                 sc = ax.scatter(r_trans[:,0],
                                 r_trans[:,1],
@@ -958,13 +959,13 @@ class ProfileManager:
                     fig.set_size_inches(primaryWidth,primaryWidth)
                 plt.savefig(fileName,dpi=dpi,format=format)
             except:
-                print "Error saving image",fileName, exc_info()[0]
+                print("Error saving image",fileName, exc_info()[0])
                 raise
         elif(show):
             try:
                 plt.show()
             except:
-                print "Error showing image", exc_info()[0]
+                print("Error showing image", exc_info()[0])
                 raise
         if del_fig:
             plt.close(fig)
@@ -1075,13 +1076,13 @@ class ProfileManager:
                 fig.set_size_inches(primaryWidth,primaryWidth)
                 plt.savefig(fileName,dpi=dpi,format=format)
             except:
-                print "Error saving image",fileName, exc_info()[0]
+                print("Error saving image",fileName, exc_info()[0])
                 raise
         else:
             try:
                 plt.show()
             except:
-                print "Error showing image", exc_info()[0]
+                print("Error showing image", exc_info()[0])
                 raise
 
 ###############################################################################
