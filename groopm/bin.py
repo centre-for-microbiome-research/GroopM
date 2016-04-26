@@ -50,7 +50,6 @@ __email__ = "mike@mikeimelfort.com"
 import sys
 
 import matplotlib.pyplot as plt
-from pylab import show
 
 import numpy as np
 from numpy import (around as np_around,
@@ -70,6 +69,7 @@ np.seterr(all='raise')
 ###############################################################################
 
 # matplotlib hates me
+
 
 def mungeCbar(cbar):
     '''Set dims of the colorbar by hacking the mainframe and coping with
@@ -484,7 +484,6 @@ class Bin:
                 raise
         del fig
 
-
     def plotBin(self, transformedCP, contigGCs, kmerNormPC1, contigLengths, colorMapGC, isLikelyChimeric, fileName="", ignoreContigLengths=False, ET=None):
         """Plot a single bin"""
         fig = plt.figure()
@@ -506,7 +505,7 @@ class Bin:
             except:
                 print "Error saving image:", fileName, sys.exc_info()[0]
                 raise
-        elif(show):
+        else:
             try:
                 plt.show()
             except:
