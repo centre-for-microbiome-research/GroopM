@@ -37,6 +37,7 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
+from __future__ import print_function
 
 __author__ = "Michael Imelfort"
 __copyright__ = "Copyright 2012/2013"
@@ -164,16 +165,16 @@ class ClusterEngine:
                                            " If you continue you *MAY* overwrite existing bins!\n" \
                                            " Overwrite? ("+vrs+") : ")
                     if(option.upper() in valid_responses):
-                        print "****************************************************************"
+                        print("****************************************************************")
                         if(option.upper() == "N"):
-                            print "Operation cancelled"
+                            print("Operation cancelled")
                             return False
                         else:
                             break
                     else:
-                        print "Error, unrecognised choice '"+option.upper()+"'"
+                        print("Error, unrecognised choice '"+option.upper()+"'")
                         minimal = True
-            print "Will Overwrite database",self.PM.dbFileName
+            print("Will Overwrite database",self.PM.dbFileName)
         return True
 
 #------------------------------------------------------------------------------
@@ -187,10 +188,10 @@ class ClusterEngine:
 
         # get some data
         self.PM.loadData(self.timer, "length >= "+str(coreCut))
-        print "    %s" % self.timer.getTimeStamp()
+        print("    %s" % self.timer.getTimeStamp())
 
         # transform the data
-        print "    Loading transformed data"
+        print("    Loading transformed data")
         self.PM.transformCP(self.timer)
         # plot the transformed space (if we've been asked to...)
         #if(self.debugPlots >= 3):
@@ -199,15 +200,15 @@ class ClusterEngine:
         # now we can make this guy
         self.TSpan = np_mean([np_norm(self.PM.corners[i] - self.PM.TCentre) for i in range(self.PM.numStoits)])
 
-        print "    %s" % self.timer.getTimeStamp()
+        print("    %s" % self.timer.getTimeStamp())
 
         # cluster and bin!
-        print "Create cores"
+        print("Create cores")
         self.initialiseCores(kmerThreshold, coverageThreshold)
-        print "    %s" % self.timer.getTimeStamp()
+        print("    %s" % self.timer.getTimeStamp())
 
         # condense cores
-        print "Refine cores [begin: %d]" % len(self.BM.bins)
+        print("Refine cores [begin: %d]" % len(self.BM.bins))
         if self.finalPlot:
             prfx = "CORE"
         else:
@@ -215,9 +216,9 @@ class ClusterEngine:
         self.RE.refineBins(self.timer, auto=True, saveBins=False, plotFinal=prfx, gf=gf)
 
         # Now save all the stuff to disk!
-        print "Saving bins"
+        print("Saving bins")
         self.BM.saveBins(nuke=True)
-        print "    %s" % self.timer.getTimeStamp()
+        print("    %s" % self.timer.getTimeStamp())
 
     def initialiseCores(self, kmerThreshold, coverageThreshold):
         """Process contigs and form CORE bins"""
@@ -228,8 +229,8 @@ class ClusterEngine:
         # We can make a heat map and look for hot spots
         self.populateImageMaps()
         sub_counter = 0
-        print "     .... .... .... .... .... .... .... .... .... ...."
-        print "%4d" % sub_counter,
+        print("     .... .... .... .... .... .... .... .... .... ....")
+        print("%4d" % sub_counter,)
         new_line_counter = 0
         num_bins = 0
 
@@ -301,13 +302,13 @@ class ClusterEngine:
                         self.updatePostBin(bin)
 
                         new_line_counter += 1
-                        print "% 4d" % bin.binSize,
+                        print("% 4d" % bin.binSize,)
 
                         # make the printing prettier
                         if(new_line_counter > 9):
                             new_line_counter = 0
                             sub_counter += 10
-                            print "\n%4d" % sub_counter,
+                            print("\n%4d" % sub_counter,)
 
                         if(self.debugPlots >= 1):
                             #***slow plot!
@@ -315,7 +316,7 @@ class ClusterEngine:
 
                     except BinNotFoundException: pass
 
-        print "\n     .... .... .... .... .... .... .... .... .... ...."
+        print("\n     .... .... .... .... .... .... .... .... .... ....")
 
     def findNewClusterCenters(self, kmerThreshold, coverageThreshold):
         """Find a putative cluster"""
@@ -496,32 +497,32 @@ class ClusterEngine:
                 k_dist_matrix = squareform(pdist(k_dat, 'cityblock'))
                 k_radius = np_median(np_sort(k_dist_matrix)[:,eps_neighbours])
             except MemoryError:
-                print "\n"
-                print '*******************************************************************************'
-                print '*********************************    ERROR    *********************************'
-                print '*******************************************************************************'
-                print 'GroopM is attempting to do some maths on a putative bin which contains:'
-                print
-                print '\t\t%d contigs'  % (len(rowIndices))
-                print
-                print 'This has caused your machine to run out of memory.'
-                print 'The most likely cause is that your samples are very different from each other.'
-                print 'You can confirm this by running:'
-                print
-                print '\t\tgroopm explore -m allcontigs %s' % self.PM.dbFileName
-                print
-                print 'If you notice only vertical "spears" of contigs at the corners of the plot then'
-                print 'this means that your samples are very different and you are not getting a good'
-                print 'mapping from all samples to all contigs. You may get more mileage by assembling'
-                print 'and binning your samples separately.'
-                print
-                print 'If you notice "clouds" of contigs then congratulations! You have found a bug.'
-                print 'Please let me know at "%s or via github.com/ecogenomics/GroopM' % __email__
-                print
-                print 'GroopM is aborting... sorry'
-                print
-                print '*******************************************************************************'
-                print "\n"
+                print("\n")
+                print('*******************************************************************************')
+                print('*********************************    ERROR    *********************************')
+                print('*******************************************************************************')
+                print('GroopM is attempting to do some maths on a putative bin which contains:')
+                print()
+                print('\t\t%d contigs'  % (len(rowIndices)))
+                print()
+                print('This has caused your machine to run out of memory.')
+                print('The most likely cause is that your samples are very different from each other.')
+                print('You can confirm this by running:')
+                print()
+                print('\t\tgroopm explore -m allcontigs %s' % self.PM.dbFileName)
+                print()
+                print('If you notice only vertical "spears" of contigs at the corners of the plot then')
+                print('this means that your samples are very different and you are not getting a good')
+                print('mapping from all samples to all contigs. You may get more mileage by assembling')
+                print('and binning your samples separately.')
+                print()
+                print('If you notice "clouds" of contigs then congratulations! You have found a bug.')
+                print('Please let me know at "%s or via github.com/ecogenomics/GroopM' % __email__)
+                print()
+                print('GroopM is aborting... sorry')
+                print()
+                print('*******************************************************************************')
+                print("\n")
                 exit(-1)
 
             # find nearest neighbours to each point in whitened coverage space,
@@ -606,7 +607,7 @@ class ClusterEngine:
                 l_dat = np_delete(l_dat, noise, axis = 0)
                 row_indices = np_delete(row_indices, noise, axis = 0)
                 if self.debugPlots >= 2:
-                    #print "Noise deleting_%d_%d:\n" % (self.cluster_num, iter), n_dat[noise]
+                    #print("Noise deleting_%d_%d:\n" % (self.cluster_num, iter), n_dat[noise])
                     n_dat = np_delete(n_dat, noise, axis = 0)
 
             if len(row_indices) == 0:
@@ -1730,31 +1731,31 @@ class HoughPartitioner:
         try:
             flat_indices = Rs * cols + Cs
         except ValueError:
-            print "\n"
-            print '*******************************************************************************'
-            print '*********************************    ERROR    *********************************'
-            print '*******************************************************************************'
-            print 'GroopM is attempting to do some maths on a putative bin which contains'
-            print 'too many contigs.'
-            print
-            print 'This has resulted in a buffer overflow in the numpy library... oops.'
-            print 'The most likely cause is that your samples are very different from each other.'
-            print 'You can confirm this by running:'
-            print
-            print '\t\tgroopm explore -c 0 -m allcontigs <dbfilename>'
-            print
-            print 'If you notice only vertical "spears" of contigs at the corners of the plot then'
-            print 'this means that your samples are very different and you are not getting a good'
-            print 'mapping from all samples to all contigs. You may get more mileage by assembling'
-            print 'and binning your samples separately.'
-            print
-            print 'If you notice "clouds" of contigs then congratulations! You have found a bug.'
-            print 'Please let me know at "%s or via github.com/ecogenomics/GroopM' % __email__
-            print
-            print 'GroopM is aborting... sorry'
-            print
-            print '*******************************************************************************'
-            print "\n"
+            print("\n")
+            print('*******************************************************************************')
+            print('*********************************    ERROR    *********************************')
+            print('*******************************************************************************')
+            print('GroopM is attempting to do some maths on a putative bin which contains')
+            print('too many contigs.')
+            print()
+            print('This has resulted in a buffer overflow in the numpy library... oops.')
+            print('The most likely cause is that your samples are very different from each other.')
+            print('You can confirm this by running:')
+            print()
+            print('\t\tgroopm explore -c 0 -m allcontigs <dbfilename>')
+            print()
+            print('If you notice only vertical "spears" of contigs at the corners of the plot then')
+            print('this means that your samples are very different and you are not getting a good')
+            print('mapping from all samples to all contigs. You may get more mileage by assembling')
+            print('and binning your samples separately.')
+            print()
+            print('If you notice "clouds" of contigs then congratulations! You have found a bug.')
+            print('Please let me know at "%s or via github.com/ecogenomics/GroopM' % __email__)
+            print()
+            print('GroopM is aborting... sorry')
+            print()
+            print('*******************************************************************************')
+            print("\n")
             exit(-1)
 
         # update the accumulator with integer decrements
