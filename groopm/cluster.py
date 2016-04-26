@@ -52,7 +52,7 @@ from sys import stdout, exit
 
 from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
-from pylab import show
+
 from numpy import (abs as np_abs,
                    allclose as np_allclose,
                    append as np_append,
@@ -1125,7 +1125,7 @@ class ClusterEngine:
         if(fileName != ""):
             fig.set_size_inches(6,6)
             plt.savefig(fileName,dpi=300)
-        elif(show):
+        else:
             plt.show()
 
         plt.close(fig)
@@ -1186,7 +1186,7 @@ class ClusterEngine:
         if(fileName != ""):
             fig.set_size_inches(6,6)
             plt.savefig(fileName,dpi=300)
-        elif(show):
+        else:
             plt.show()
 
         plt.close(fig)
@@ -1236,7 +1236,7 @@ class ClusterEngine:
                 fig.set_size_inches(18,18)
 
             plt.savefig(fileName,dpi=300)
-        elif(show):
+        else:
             plt.show()
 
         plt.close(fig)
