@@ -54,8 +54,7 @@ from colorsys import hsv_to_rgb as htr
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.cm import get_cmap
-from mpl_toolkits.mplot3d import axes3d, Axes3D
-from pylab import plot,subplot,axis,stem,show,figure
+
 from numpy import (abs as np_abs,
                    amax as np_amax,
                    amin as np_amin,
